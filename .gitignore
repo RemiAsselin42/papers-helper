@@ -35,3 +35,10 @@ dist/
 # OS
 .DS_Store
 Thumbs.db
+
+# Graphify — artefacts générés localement
+graphify-out/
+
+# Claude Code — config locale non-versionnée
+CLAUDE.md
+mempalace.yaml
