@@ -1,0 +1,37 @@
+.claude
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+.ruff_cache/
+
+# SQLite / DB
+*.db
+*.sqlite
+*.sqlite3
+
+# ChromaDB / vectors
+chroma_db/
+data/pdfs/
+data/vectors/
+data/*.db
+
+# Node
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
