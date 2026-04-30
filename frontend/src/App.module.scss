@@ -1,0 +1,33 @@
+.root {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+  text-align: center;
+}
+
+.icon {
+  color: var(--color-emphasis);
+  width: 3rem;
+  height: 3rem;
+}
+
+.title {
+  font-size: var(--font-size-heading-xl);
+  font-weight: 700;
+  line-height: var(--line-height-heading-xl);
+  letter-spacing: var(--letter-spacing-heading-xl);
+}
+
+.subtitle {
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  color: var(--color-text-muted);
+}
