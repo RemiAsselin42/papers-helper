@@ -1,0 +1,6 @@
+// Publishes --inner-radius so nested elements can consume it without knowing
+// the parent's radius/gap. Rule: innerRadius + gap = outerRadius.
+@mixin container-radius($radius, $gap) {
+  border-radius: $radius;
+  --inner-radius: calc(#{$radius} - #{$gap});
+}
