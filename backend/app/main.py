@@ -1,11 +1,12 @@
 import os
-from pathlib import Path
 from typing import Literal
 
 import ollama
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
+from app.config import DATA_DIR
 
 app = FastAPI(title="Papers Helper API")
 
@@ -20,13 +21,16 @@ app.add_middleware(
     allow_headers=_cors_headers,
 )
 
-DATA_DIR = Path(os.getenv("DATA_DIR", str(Path(__file__).parent.parent.parent / "data")))
-
 
 class HealthResponse(BaseModel):
     status: Literal["ok"]
     ollama: Literal["connected", "unavailable"]
     storage: Literal["accessible", "inaccessible"]
+
+
+from app.routes import papers as papers_router
+
+app.include_router(papers_router.router)
 
 
 @app.get("/health")
