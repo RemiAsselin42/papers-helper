@@ -1,0 +1,127 @@
+@use '../styles/mixins' as *;
+
+.sidebar {
+  position: fixed;
+  left: var(--space-md);
+  top: var(--space-md);
+  height: calc(100vh - 2 * var(--space-md));
+  width: 48px;
+  background: var(--color-surface);
+  border: var(--border);
+  @include container-radius(var(--radius-lg), var(--space-xs));
+
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  z-index: 50;
+  overflow: hidden;
+  transition: width 200ms ease;
+
+  &:hover {
+    width: 240px;
+  }
+
+  &.pinned {
+    width: 240px;
+
+    &:hover {
+      width: 240px;
+    }
+  }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: var(--space-xs);
+  border-bottom: var(--border);
+  flex-shrink: 0;
+}
+
+.toggleBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--color-text);
+  cursor: pointer;
+  border-radius: var(--inner-radius);
+  padding: 0;
+  width: 100%;
+  max-width: 38px;
+  transition:
+    color 150ms,
+    background-color 150ms;
+
+  &:hover {
+    color: var(--color-background);
+    background: var(--color-emphasis);
+  }
+}
+
+.top {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: var(--space-xs) var(--space-xs) 0;
+  gap: 2px;
+  flex: 1;
+}
+
+.bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0 var(--space-xs) var(--space-xs);
+  gap: 2px;
+}
+
+.tab {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs);
+  background: transparent;
+  border-radius: var(--inner-radius);
+  border: none;
+  color: var(--color-text);
+  cursor: pointer;
+  transition:
+    color 150ms,
+    background-color 150ms;
+  width: 100%;
+
+  &:hover {
+    color: var(--color-background);
+    background: var(--color-emphasis);
+  }
+}
+
+.tabActive {
+  color: var(--color-background);
+  background: var(--color-emphasis);
+
+  &:hover {
+    color: var(--color-background);
+    background: var(--color-emphasis);
+  }
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.label {
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  font-weight: 400;
+  white-space: nowrap;
+}

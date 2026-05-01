@@ -1,0 +1,125 @@
+.empty {
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text-muted);
+}
+
+.networkError {
+  font-size: var(--font-size-body-sm);
+  color: var(--color-error);
+}
+
+.list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.card {
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-sm);
+}
+
+.fileIcon {
+  color: var(--color-emphasis);
+  flex-shrink: 0;
+}
+
+.meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.title {
+  font-size: var(--font-size-body-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.details {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.detail {
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sep {
+  font-size: var(--font-size-label);
+  color: var(--color-border);
+  flex-shrink: 0;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-shrink: 0;
+}
+
+.iconBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  color: var(--color-text-muted);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0;
+  cursor: pointer;
+  transition:
+    color 150ms,
+    opacity 150ms;
+
+  &:hover:not(:disabled) {
+    color: var(--color-text);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+.deleteBtn {
+  &:hover:not(:disabled) {
+    color: var(--color-error);
+  }
+}
+
+.viewer {
+  border-top: var(--border);
+  background: var(--color-background);
+}
+
+.iframe {
+  display: block;
+  width: 100%;
+  height: 680px;
+  border: none;
+}

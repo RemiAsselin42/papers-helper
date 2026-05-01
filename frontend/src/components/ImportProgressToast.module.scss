@@ -1,0 +1,145 @@
+@use '../styles/mixins' as *;
+
+.toast {
+  position: fixed;
+  bottom: var(--space-md);
+  right: var(--space-md);
+  z-index: 100;
+  width: 320px;
+  max-height: 400px;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border: var(--border);
+  @include container-radius(var(--radius-lg), var(--space-xs));
+
+  overflow: hidden;
+  animation: slideUp 200ms ease-out;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-sm) var(--space-sm);
+  border-bottom: var(--border);
+  flex-shrink: 0;
+}
+
+.title {
+  font-size: var(--font-size-body-sm);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.dismiss {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 0;
+  transition: color 150ms;
+
+  &:hover {
+    color: var(--color-text);
+  }
+}
+
+.list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow-y: auto;
+  padding: var(--space-xs);
+  background: var(--color-background);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--inner-radius);
+  font-size: var(--font-size-body-sm);
+  transition: opacity 150ms;
+}
+
+.icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text);
+}
+
+.meta {
+  flex-shrink: 0;
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.status_queued {
+  opacity: 0.45;
+  .icon {
+    color: var(--color-text-muted);
+  }
+}
+
+.status_processing {
+  .icon {
+    color: var(--color-emphasis);
+  }
+}
+
+.status_done {
+  .icon {
+    color: #4a9e6e;
+  }
+}
+
+.status_error {
+  .icon {
+    color: #b85c38;
+  }
+  .meta {
+    color: #b85c38;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
