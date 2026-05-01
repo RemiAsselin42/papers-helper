@@ -8,22 +8,22 @@ Organise tes PDFs, citations, auteurs et thématiques par projet — avec recher
 ## Architecture
 
 ```
-                ┌─────────────────────┐
-                │  Browser (Vite SPA) │  :5173
-                │   React + SCSS  │
-                └──────────┬──────────┘
-                           │ HTTP /api/*
-                ┌──────────▼──────────┐
-                │   FastAPI backend   │  :8000
-                │   Python + SQLite   │
-                └───┬─────────────┬───┘
-                    │             │
-           ┌────────▼─────┐ ┌─────▼──────────┐
-           │   ChromaDB   │ │  Ollama        │
-           │  (vecteurs)  │ │  llama3:8b     │
-           └───────┬──────┘ └────────────────┘
-                   │   
-           ┌───────▼──────────────┐
+           ┌─────────────────────┐
+           │  Browser (Vite SPA) │  :5173
+           │    React + SCSS     │
+           └──────────┬──────────┘
+                      │ HTTP /api/*
+           ┌──────────▼──────────┐
+           │   FastAPI backend   │  :8000
+           │   Python + SQLite   │
+           └──────┬────────────┬─┘
+                  │            │
+           ┌──────▼───────┐  ┌─▼────────────┐
+           │   ChromaDB   │  │    Ollama    │
+           │  (vecteurs)  │  │  llama3:8b   │
+           └──────┬───────┘  └──────────────┘
+                  │   
+           ┌──────▼───────────────┐
            │  liteparse CLI (lit) │
            │  OCR + texte PDF     │
            └──────────────────────┘

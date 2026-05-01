@@ -5,9 +5,10 @@ description: Design system for a local academic research tool. Light theme, past
 colors:
   background: "#fefae0"
   surface: "#faedcd"
-  border: "#e9edc9"
+  border: "#2c2416"
   accent: "#ccd5ae"
-  emphasis: "#d4a373"
+  emphasis: "#2c2416"
+  emphasis-2: "#d4a373"
   text: "#2c2416"
   text-muted: "#7a6e5f"
 typography:
@@ -87,8 +88,8 @@ components:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.text}"
   nav-item-active:
-    backgroundColor: "{colors.accent}"
-    textColor: "{colors.text}"
+    backgroundColor: "{colors.emphasis}"
+    textColor: "{colors.background}"
     rounded: "{rounded.sm}"
 ---
 
@@ -105,8 +106,8 @@ The palette draws from dried botanicals and aged paper — five tones that shift
 - **Background (#fefae0 — Cornsilk):** The page ground. Used for the outermost surface and reading areas. Warm, never stark.
 - **Surface (#faedcd — Papaya Whip):** Cards, panels, sidebars. Slightly denser than the background, creates quiet layering without shadows.
 - **Border (#e9edc9 — Beige):** All borders and dividers. 1px solid only. Thin and unobtrusive.
-- **Accent (#ccd5ae — Tea Green):** Active states, selected items, tag backgrounds, progress indicators. The only cool-leaning tone — provides contrast without asserting itself.
-- **Emphasis (#d4a373 — Light Bronze):** Primary actions, links, and heading highlights. The warmest and most saturated tone; used sparingly.
+- **Accent (#ccd5ae — Tea Green):** Tag backgrounds, progress indicators. The only cool-leaning tone — provides contrast without asserting itself.
+- **Emphasis (#d4a373 — Light Bronze):** Active states, selected items, primary actions, links, and heading highlights. The warmest and most saturated tone; used sparingly.
 - **Text (#2c2416):** Body text and headings. A deep warm brown derived from the palette spirit — avoids pure black.
 - **Text Muted (#7a6e5f):** Secondary labels, metadata, captions. Recedes naturally on both background and surface tones.
 
@@ -196,7 +197,7 @@ Compact label for themes, keywords, and author affiliations. `{colors.accent}` f
 
 ### Sidebar Navigation
 
-`{colors.surface}` background, full viewport height. Items are `{typography.body}` weight 400, spaced at `{spacing.sm}`. Active item: `{colors.accent}` background fill at `{rounded.sm}`, weight remains 400 — no bold on active state.
+`{colors.surface}` background, full viewport height. Items are `{typography.body}` weight 400, spaced at `{spacing.sm}`. Active item: `{colors.emphasis}` background fill at `{rounded.sm}`, `{colors.background}` text, weight remains 400 — no bold on active state.
 
 Project switcher sits at the top. Settings link at the bottom.
 
@@ -207,6 +208,7 @@ Project switcher sits at the top. Settings link at the bottom.
 - Use `{colors.emphasis}` only for the single most important interactive element per view.
 - Keep borders at 1px solid `{colors.border}`. Never thicker, never dashed.
 - Let content typography (PDF text, quotes, citations) breathe — keep surrounding UI minimal.
+- Use Fontawesome icons for common actions (delete, edit, download) but only when the meaning is universally clear. Otherwise, use a button with text.
 
 **Don't:**
 - Use gradients anywhere.
@@ -215,3 +217,5 @@ Project switcher sits at the top. Settings link at the bottom.
 - Add shadows, glows, or blur effects.
 - Use emojis in the interface.
 - Put more than one primary button in the same view.
+- Never put text links in the interface. Always use a button for interactive elements.
+- When a button can be represented by an icon (e.g. delete, edit), use an icon centered and NO text. Icon color is `{colors.text}`. I.e. the delete button is a trash can icon in `{colors.text}` with no label, not a button with "Supprimer" text.
