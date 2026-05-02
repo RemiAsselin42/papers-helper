@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { Bug, Files, PanelLeftClose, PanelLeftOpen, Upload } from 'lucide-react'
+import { Bug, Files, PanelLeftClose, PanelLeftOpen, Target, Upload } from 'lucide-react'
 import { type ProjectInfo } from '../api/projects'
 import { ProjectSwitcher } from './ProjectSwitcher'
 import styles from './Sidebar.module.scss'
 
-export type View = 'import' | 'papers' | 'debug' | 'new-project' | 'all-projects'
+export type View = 'import' | 'papers' | 'problematique' | 'debug' | 'new-project' | 'all-projects'
 
 interface SidebarProps {
   activeView: View
@@ -66,6 +66,15 @@ export function Sidebar({
         >
           <span className={styles.icon}><Files size={20} /></span>
           <span className={styles.label}>Papers</span>
+        </button>
+        <button
+          className={`${styles.tab} ${activeView === 'problematique' ? styles.tabActive : ''}`}
+          onClick={() => onViewChange('problematique')}
+          aria-label="Problématique"
+          title="Problématique & hypothèses"
+        >
+          <span className={styles.icon}><Target size={20} /></span>
+          <span className={styles.label}>Problématique</span>
         </button>
       </div>
 

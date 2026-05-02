@@ -20,7 +20,7 @@
   &::-webkit-scrollbar {
     display: none;
   }
-  transition: width 200ms ease;
+  transition: var(--transition);
 
   &:hover {
     width: 240px;

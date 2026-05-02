@@ -9,6 +9,7 @@ import { ImportProgressToast } from './components/ImportProgressToast'
 import { NewProjectView } from './components/NewProjectView'
 import { NoProjectState } from './components/NoProjectState'
 import { PaperList } from './components/PaperList'
+import { ProblematiqueView } from './components/ProblematiqueView'
 import { Sidebar, type View } from './components/Sidebar'
 
 const STORAGE_KEY = 'currentProjectId'
@@ -95,11 +96,12 @@ export default function App() {
     if (projects.length === 0 || currentProjectId === null) {
       return <NoProjectState onCreateProject={() => setActiveView('new-project')} />
     }
+    const projectId: string = currentProjectId
     if (activeView === 'all-projects') {
       return (
         <AllProjectsView
           projects={projects}
-          currentProjectId={currentProjectId}
+          currentProjectId={projectId}
           onProjectDeleted={handleProjectDeleted}
         />
       )
@@ -113,14 +115,17 @@ export default function App() {
               <h1 className={styles.importTitle}>Papers Helper</h1>
               <p className={styles.importSubtitle}>Ton outil local de recherche académique</p>
             </div>
-            <DropZone projectId={currentProjectId} onSuccess={bump} onProgress={setImportStates} />
+            <DropZone projectId={projectId} onSuccess={bump} onProgress={setImportStates} />
           </div>
         )}
         {activeView === 'papers' && (
-          <PaperList projectId={currentProjectId} refreshKey={refreshKey} onDelete={bump} />
+          <PaperList projectId={projectId} refreshKey={refreshKey} onDelete={bump} />
+        )}
+        {activeView === 'problematique' && (
+          <ProblematiqueView projectId={projectId} />
         )}
         {activeView === 'debug' && (
-          <DebugPanel projectId={currentProjectId} refreshKey={refreshKey} />
+          <DebugPanel projectId={projectId} refreshKey={refreshKey} />
         )}
       </>
     )
