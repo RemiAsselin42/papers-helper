@@ -43,7 +43,7 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  transition: transform 150ms ease;
+  transition: var(--transition-short);
 }
 
 // ── Content-area buttons ────────────────────────────────────────────────────
@@ -61,7 +61,7 @@
   font-size: var(--font-size-button);
   cursor: pointer;
   white-space: nowrap;
-  transition: opacity 150ms;
+  transition: var(--transition-short);
 
   &:disabled {
     opacity: 0.5;
@@ -82,7 +82,7 @@
   font-size: var(--font-size-button);
   cursor: pointer;
   white-space: nowrap;
-  transition: color 150ms;
+  transition: var(--transition-short);
 
   &:disabled {
     opacity: 0.5;
@@ -106,9 +106,7 @@
   border-radius: var(--radius-sm);
   padding: 0;
   cursor: pointer;
-  transition:
-    color 150ms,
-    opacity 150ms;
+  transition: var(--transition-short);
 
   &:hover:not(:disabled) {
     color: var(--color-text);

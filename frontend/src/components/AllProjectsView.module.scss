@@ -1,9 +1,5 @@
 @use '../styles/mixins' as *;
 
-.root {
-  padding: var(--space-lg);
-}
-
 .heading {
   font-size: var(--font-size-heading-lg);
   font-weight: 700;
@@ -51,13 +47,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.currentTag {
-  font-size: var(--font-size-label);
-  color: var(--color-emphasis-2);
-  white-space: nowrap;
-  flex-shrink: 0;
 }
 
 .date {

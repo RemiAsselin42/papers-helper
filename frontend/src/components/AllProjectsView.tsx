@@ -53,7 +53,7 @@ export function AllProjectsView({
             >
               <div className={styles.cardBody}>
                 <span className={styles.name}>{p.name}</span>
-                {p.id === currentProjectId && <span className={styles.currentTag}>current</span>}
+                {p.id === currentProjectId}
                 <span className={styles.date}>{formatDate(p.created_at)}</span>
               </div>
 

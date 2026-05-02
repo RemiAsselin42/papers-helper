@@ -1,9 +1,5 @@
 @use '../styles/mixins' as *;
 
-.root {
-  padding: var(--space-lg);
-}
-
 .title {
   font-size: var(--font-size-heading-lg);
   font-weight: 700;
@@ -23,7 +19,7 @@
   color: var(--color-text);
   border: var(--border);
   border-radius: var(--radius-sm);
-  padding: 10px 14px;
+  padding: var(--padding-input);
   font-family: var(--font);
   font-size: var(--font-size-body);
   width: 100%;

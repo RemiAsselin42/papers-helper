@@ -44,7 +44,7 @@
   color: var(--color-text);
   cursor: pointer;
   padding: 0;
-  transition: color 150ms;
+  transition: var(--transition-short);
 
   &:hover {
     background: var(--color-surface-hover);
@@ -68,7 +68,7 @@
   padding: var(--space-xs) var(--space-sm);
   border-radius: var(--inner-radius);
   font-size: var(--font-size-body-sm);
-  transition: opacity 150ms;
+  transition: var(--transition-short);
 }
 
 .icon {
