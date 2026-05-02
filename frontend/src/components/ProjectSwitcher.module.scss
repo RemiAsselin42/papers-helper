@@ -1,0 +1,105 @@
+@use '../styles/mixins' as *;
+
+.switcher {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: var(--space-xs) var(--space-xs) 0;
+  gap: var(--space-xs);
+  border-bottom: var(--border);
+  flex-shrink: 0;
+}
+
+.trigger {
+  @include sidebar-btn;
+
+  &:hover .chevron {
+    color: var(--color-background);
+  }
+}
+
+.icon {
+  @include sidebar-icon;
+}
+
+.label {
+  flex: 1;
+  font-size: var(--font-size-body);
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
+.noProject {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.chevron {
+  @include chevron;
+  color: var(--color-text);
+  margin-right: var(--space-xs);
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+.ordinal {
+  font-size: var(--font-size-body-sm);
+  font-weight: 700;
+}
+
+.ordinalEmpty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+}
+
+.list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  max-height: 160px;
+  overflow-y: auto;
+  border-left: var(--border-thick);
+  margin-left: var(--space-md);
+}
+
+.projectBtn {
+  @include sidebar-btn;
+  margin-left: var(--space-xs);
+  width: calc(100% - var(--space-xs));
+}
+
+.projectName {
+  font-size: var(--font-size-body);
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.newProjectBtn {
+  @include sidebar-btn;
+}
+
+.allProjectsBtn {
+  @include sidebar-btn;
+  margin-bottom: var(--space-xs);
+}
+
+.btnActive {
+  color: var(--color-background);
+  background: var(--color-emphasis);
+}
+
+.btnLabel {
+  font-size: var(--font-size-body);
+  font-weight: 400;
+  white-space: nowrap;
+}

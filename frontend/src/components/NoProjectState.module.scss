@@ -1,0 +1,19 @@
+@use '../styles/mixins' as *;
+
+.root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 60vh;
+  gap: var(--space-md);
+}
+
+.message {
+  font-size: var(--font-size-body);
+  color: var(--color-text-muted);
+}
+
+.btnPrimary {
+  @include btn-primary;
+}

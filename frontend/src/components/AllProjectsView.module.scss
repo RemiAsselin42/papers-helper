@@ -1,0 +1,91 @@
+@use '../styles/mixins' as *;
+
+.root {
+  padding: var(--space-lg);
+}
+
+.heading {
+  font-size: var(--font-size-heading-lg);
+  font-weight: 700;
+  line-height: var(--line-height-heading-lg);
+  margin-bottom: var(--space-lg);
+}
+
+.empty {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-body);
+}
+
+.list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+}
+
+.cardCurrent {
+  border-color: var(--color-emphasis-2);
+}
+
+.cardBody {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.name {
+  font-size: var(--font-size-body);
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.currentTag {
+  font-size: var(--font-size-label);
+  color: var(--color-emphasis-2);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.date {
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-shrink: 0;
+}
+
+.iconBtn {
+  @include btn-icon;
+}
+
+.cancelBtn {
+  &:hover:not(:disabled) {
+    color: var(--color-success);
+  }
+}
+
+.deleteBtn {
+  &:hover:not(:disabled) {
+    color: var(--color-error);
+  }
+}
