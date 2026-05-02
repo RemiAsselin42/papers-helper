@@ -1,27 +1,38 @@
 from __future__ import annotations
 
-import os
-from pathlib import Path
+from typing import Any
 
 import chromadb
 from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
 
+from app.config import PROJECTS_DIR
+
 COLLECTION_NAME = "papers"
 
-_DATA_DIR = Path(os.getenv("DATA_DIR", str(Path(__file__).parent.parent.parent / "data")))
-_VECTORS_DIR = _DATA_DIR / "vectors"
-
-_client: chromadb.PersistentClient | None = None
-_collection: chromadb.Collection | None = None
+_cache: dict[str, tuple[Any, chromadb.Collection]] = {}
 
 
-def get_collection() -> chromadb.Collection:
-    global _client, _collection
-    if _collection is None:
-        _VECTORS_DIR.mkdir(parents=True, exist_ok=True)
-        _client = chromadb.PersistentClient(path=str(_VECTORS_DIR))
-        _collection = _client.get_or_create_collection(
+def get_collection(project_id: str) -> chromadb.Collection:
+    if project_id not in _cache:
+        vectors_dir = PROJECTS_DIR / project_id / "vectors"
+        vectors_dir.mkdir(parents=True, exist_ok=True)
+        client = chromadb.PersistentClient(path=str(vectors_dir))
+        collection = client.get_or_create_collection(
             COLLECTION_NAME,
-            embedding_function=DefaultEmbeddingFunction(),
+            embedding_function=DefaultEmbeddingFunction(),  # type: ignore[arg-type]
         )
-    return _collection
+        _cache[project_id] = (client, collection)
+    return _cache[project_id][1]
+
+
+def evict_collection(project_id: str) -> None:
+    entry = _cache.pop(project_id, None)
+    if entry is None:
+        return
+    client, _ = entry
+    try:
+        # Explicitly stop the internal system to close the SQLite connection
+        # before the caller attempts shutil.rmtree on Windows.
+        client._system.stop()
+    except Exception:
+        pass

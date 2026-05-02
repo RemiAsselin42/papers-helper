@@ -6,7 +6,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from app.config import DATA_DIR
+from app.config import PROJECTS_DIR
+from app.routes import papers as papers_router
+from app.routes import projects as projects_router
 
 app = FastAPI(title="Papers Helper API")
 
@@ -28,8 +30,7 @@ class HealthResponse(BaseModel):
     storage: Literal["accessible", "inaccessible"]
 
 
-from app.routes import papers as papers_router
-
+app.include_router(projects_router.router)
 app.include_router(papers_router.router)
 
 
@@ -44,9 +45,7 @@ async def health() -> HealthResponse:
 
     storage_status: Literal["accessible", "inaccessible"] = "inaccessible"
     try:
-        pdfs = DATA_DIR / "pdfs"
-        vectors = DATA_DIR / "vectors"
-        if pdfs.exists() and vectors.exists():
+        if PROJECTS_DIR.parent.exists():
             storage_status = "accessible"
     except Exception:
         pass

@@ -16,7 +16,7 @@ venv/
 
 # ChromaDB / vectors
 chroma_db/
-data/pdfs/
+data/projects/
 data/vectors/
 data/*.db
 
