@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from app.chroma import evict_collection
 from app.config import PROJECTS_DIR
@@ -24,6 +24,37 @@ class ProjectInfo(BaseModel):
 
 class CreateProjectRequest(BaseModel):
     name: str
+
+
+class Hypothesis(BaseModel):
+    text: str = ""
+    sub_hypotheses: list[str] = []
+
+
+class Approach(BaseModel):
+    title: str = ""
+    text: str = ""
+
+
+class Problematique(BaseModel):
+    research_problem: str = ""
+    sub_research_problem: str = ""
+    hypotheses: list[Hypothesis] = []
+    planned_approaches: list[Approach] = []
+    expected_outcomes: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_legacy(cls, data: object) -> object:
+        if not isinstance(data, dict):
+            return data
+        if isinstance(data.get("hypotheses"), str):
+            text = data["hypotheses"]
+            data["hypotheses"] = [{"text": text, "sub_hypotheses": []}] if text else []
+        if isinstance(data.get("planned_approach"), str) and "planned_approaches" not in data:
+            text = data["planned_approach"]
+            data["planned_approaches"] = [{"title": "", "text": text}] if text else []
+        return data
 
 
 def _read_project(project_id: str) -> ProjectInfo | None:
@@ -75,6 +106,40 @@ async def create_project(body: CreateProjectRequest) -> ProjectInfo:
         return info
 
     return await asyncio.to_thread(_create)
+
+
+def _problematique_path(project_id: str):
+    return PROJECTS_DIR / project_id / "problematique.json"
+
+
+@router.get("/{project_id}/problematique", response_model=Problematique)
+async def get_problematique(project_id: str) -> Problematique:
+    if not (PROJECTS_DIR / project_id).exists():
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    def _read() -> Problematique:
+        path = _problematique_path(project_id)
+        if not path.exists():
+            return Problematique()
+        return Problematique(**json.loads(path.read_text(encoding="utf-8")))
+
+    return await asyncio.to_thread(_read)
+
+
+@router.put("/{project_id}/problematique", response_model=Problematique)
+async def save_problematique(project_id: str, body: Problematique) -> Problematique:
+    if not (PROJECTS_DIR / project_id).exists():
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    def _write() -> Problematique:
+        path = _problematique_path(project_id)
+        path.write_text(
+            json.dumps(body.model_dump(), ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return body
+
+    return await asyncio.to_thread(_write)
 
 
 @router.delete("/{project_id}", status_code=204)
