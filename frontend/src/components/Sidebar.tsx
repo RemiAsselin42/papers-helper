@@ -1,15 +1,26 @@
 import { useState } from 'react'
-import { Upload, Files, Bug, PanelLeftOpen, PanelLeftClose } from 'lucide-react'
+import { Bug, Files, PanelLeftClose, PanelLeftOpen, Upload } from 'lucide-react'
+import { type ProjectInfo } from '../api/projects'
+import { ProjectSwitcher } from './ProjectSwitcher'
 import styles from './Sidebar.module.scss'
 
-export type Tab = 'import' | 'papers' | 'debug'
+export type View = 'import' | 'papers' | 'debug' | 'new-project' | 'all-projects'
 
 interface SidebarProps {
-  activeTab: Tab
-  onTabChange: (tab: Tab) => void
+  activeView: View
+  onViewChange: (view: View) => void
+  projects: ProjectInfo[]
+  currentProjectId: string | null
+  onProjectSelect: (id: string) => void
 }
 
-export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
+export function Sidebar({
+  activeView,
+  onViewChange,
+  projects,
+  currentProjectId,
+  onProjectSelect,
+}: SidebarProps) {
   const [pinned, setPinned] = useState(false)
 
   return (
@@ -27,10 +38,20 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
         </button>
       </div>
 
+      <ProjectSwitcher
+        projects={projects}
+        currentProjectId={currentProjectId}
+        onSelect={onProjectSelect}
+        onShowNewProject={() => onViewChange('new-project')}
+        onShowAllProjects={() => onViewChange('all-projects')}
+        newProjectActive={activeView === 'new-project'}
+        allProjectsActive={activeView === 'all-projects'}
+      />
+
       <div className={styles.top}>
         <button
-          className={`${styles.tab} ${activeTab === 'import' ? styles.tabActive : ''}`}
-          onClick={() => onTabChange('import')}
+          className={`${styles.tab} ${activeView === 'import' ? styles.tabActive : ''}`}
+          onClick={() => onViewChange('import')}
           aria-label="Import"
           title="Import"
         >
@@ -38,8 +59,8 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
           <span className={styles.label}>Import</span>
         </button>
         <button
-          className={`${styles.tab} ${activeTab === 'papers' ? styles.tabActive : ''}`}
-          onClick={() => onTabChange('papers')}
+          className={`${styles.tab} ${activeView === 'papers' ? styles.tabActive : ''}`}
+          onClick={() => onViewChange('papers')}
           aria-label="Papers"
           title="Papers"
         >
@@ -50,8 +71,8 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
 
       <div className={styles.bottom}>
         <button
-          className={`${styles.tab} ${activeTab === 'debug' ? styles.tabActive : ''}`}
-          onClick={() => onTabChange('debug')}
+          className={`${styles.tab} ${activeView === 'debug' ? styles.tabActive : ''}`}
+          onClick={() => onViewChange('debug')}
           aria-label="Debug"
           title="ChromaDB debug"
         >

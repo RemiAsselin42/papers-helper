@@ -14,51 +14,34 @@
   flex-direction: column;
   align-items: stretch;
   z-index: 50;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
   transition: width 200ms ease;
 
   &:hover {
     width: 240px;
   }
-
   &.pinned {
     width: 240px;
-
-    &:hover {
-      width: 240px;
-    }
   }
 }
 
 .header {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
   padding: var(--space-xs);
   border-bottom: var(--border);
   flex-shrink: 0;
 }
 
 .toggleBtn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  color: var(--color-text);
-  cursor: pointer;
-  border-radius: var(--inner-radius);
-  padding: 0;
-  width: 100%;
+  @include sidebar-btn;
   max-width: 38px;
-  transition:
-    color 150ms,
-    background-color 150ms;
-
-  &:hover {
-    color: var(--color-background);
-    background: var(--color-emphasis);
-  }
+  justify-content: center;
 }
 
 .top {
@@ -66,7 +49,7 @@
   flex-direction: column;
   align-items: stretch;
   padding: var(--space-xs) var(--space-xs) 0;
-  gap: 2px;
+  gap: var(--space-xs);
   flex: 1;
 }
 
@@ -75,48 +58,20 @@
   flex-direction: column;
   align-items: stretch;
   padding: 0 var(--space-xs) var(--space-xs);
-  gap: 2px;
+  gap: var(--space-xs);
 }
 
 .tab {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-xs);
-  background: transparent;
-  border-radius: var(--inner-radius);
-  border: none;
-  color: var(--color-text);
-  cursor: pointer;
-  transition:
-    color 150ms,
-    background-color 150ms;
-  width: 100%;
-
-  &:hover {
-    color: var(--color-background);
-    background: var(--color-emphasis);
-  }
+  @include sidebar-btn;
 }
 
 .tabActive {
   color: var(--color-background);
   background: var(--color-emphasis);
-
-  &:hover {
-    color: var(--color-background);
-    background: var(--color-emphasis);
-  }
 }
 
 .icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  flex-shrink: 0;
+  @include sidebar-icon;
 }
 
 .label {

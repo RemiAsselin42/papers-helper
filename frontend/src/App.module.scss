@@ -14,7 +14,6 @@
   flex-direction: column;
   align-items: center;
   gap: var(--space-lg);
-  max-width: 560px;
   margin: 0 auto;
 }
 
@@ -24,6 +23,7 @@
   align-items: center;
   gap: var(--space-sm);
   text-align: center;
+  margin-top: var(--space-2xl);
 }
 
 .importIcon {
@@ -42,7 +42,7 @@
 }
 
 .importSubtitle {
-  font-size: var(--font-size-body);
-  line-height: var(--line-height-body);
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-body-sm);
   color: var(--color-text-muted);
 }
