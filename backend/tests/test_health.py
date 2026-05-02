@@ -50,14 +50,9 @@ def test_health_storage_inaccessible_when_dirs_missing(client: TestClient) -> No
 
 
 def test_health_storage_accessible_when_dirs_present(client: TestClient, tmp_path: Path) -> None:
-    """Reports accessible when both pdfs/ and vectors/ directories exist."""
-    pdfs = tmp_path / "pdfs"
-    vectors = tmp_path / "vectors"
-    pdfs.mkdir()
-    vectors.mkdir()
-
+    """Reports accessible when the projects directory parent exists."""
     with (
-        patch("app.main.DATA_DIR", tmp_path),
+        patch("app.main.PROJECTS_DIR", tmp_path / "projects"),
         patch("app.main.ollama.list", return_value=MagicMock()),
     ):
         response = client.get("/health")

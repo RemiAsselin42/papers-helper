@@ -1,7 +1,5 @@
 """Tests for normalize_text and chunk_text pure functions."""
 
-import pytest
-
 from app.routes.papers import chunk_text, normalize_text
 
 

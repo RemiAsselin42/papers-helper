@@ -1,37 +1,26 @@
+from __future__ import annotations
+
 import asyncio
 import json
 import re
+from collections.abc import AsyncGenerator
 from io import BytesIO
 from pathlib import Path
-from typing import AsyncGenerator
+from typing import Any
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+import chromadb
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from pypdf import PdfReader
 
 from app.chroma import get_collection
-from app.config import DATA_DIR
+from app.config import PROJECTS_DIR
 
-router = APIRouter(prefix="/papers", tags=["papers"])
+router = APIRouter(prefix="/projects/{project_id}/papers", tags=["papers"])
 
 MAX_PDF_SIZE = 50 * 1024 * 1024  # 50 MB
 
-
-class PaperResult(BaseModel):
-    filename: str
-    chunks_indexed: int
-    already_existed: bool
-
-
-class UploadError(BaseModel):
-    filename: str
-    error: str
-
-
-class UploadResponse(BaseModel):
-    results: list[PaperResult]
-    errors: list[UploadError]
 
 
 def normalize_text(text: str) -> str:
@@ -69,7 +58,7 @@ def chunk_text(text: str, target_words: int = 500) -> list[str]:
 
 def _extract_pdf_metadata(reader: PdfReader) -> tuple[str, str, str]:
     """Returns (pdf_title, author, year) as strings, empty string if unknown."""
-    meta = reader.metadata or {}
+    meta: Any = reader.metadata or {}
 
     title = str(meta.get("/Title") or meta.get("title") or "").strip()
     author = str(meta.get("/Author") or meta.get("author") or "").strip()
@@ -95,10 +84,26 @@ class PaperInfo(BaseModel):
     year: str
 
 
+class ChunkInfo(BaseModel):
+    id: str
+    chunk_index: int
+    word_count: int
+    text: str
+
+
+def _get_pdfs_dir(project_id: str) -> Path:
+    project_dir = PROJECTS_DIR / project_id
+    if not project_dir.exists():
+        raise HTTPException(status_code=404, detail="Project not found")
+    pdfs_dir = project_dir / "pdfs"
+    pdfs_dir.mkdir(exist_ok=True)
+    return pdfs_dir
+
+
 @router.get("/", response_model=list[PaperInfo])
-async def list_papers() -> list[PaperInfo]:
+async def list_papers(project_id: str) -> list[PaperInfo]:
     def _fetch() -> list[PaperInfo]:
-        collection = get_collection()
+        collection = get_collection(project_id)
         result = collection.get(include=["metadatas"])
         papers: dict[str, PaperInfo] = {}
         for meta in result["metadatas"] or []:
@@ -107,7 +112,7 @@ async def list_papers() -> list[PaperInfo]:
                 papers[stem] = PaperInfo(
                     stem=stem,
                     filename=str(meta["source_filename"]),
-                    chunk_total=int(meta["chunk_total"]),
+                    chunk_total=int(meta["chunk_total"]),  # type: ignore[arg-type]
                     pdf_title=str(meta.get("pdf_title", "")),
                     author=str(meta.get("author", "")),
                     year=str(meta.get("year", "")),
@@ -117,115 +122,59 @@ async def list_papers() -> list[PaperInfo]:
     return await asyncio.to_thread(_fetch)
 
 
-class ChunkInfo(BaseModel):
-    id: str
-    chunk_index: int
-    word_count: int
-    text: str
-
-
 @router.get("/{stem}/chunks", response_model=list[ChunkInfo])
-async def get_paper_chunks(stem: str) -> list[ChunkInfo]:
+async def get_paper_chunks(project_id: str, stem: str) -> list[ChunkInfo]:
     def _fetch() -> list[ChunkInfo]:
-        collection = get_collection()
+        collection = get_collection(project_id)
         result = collection.get(
             where={"source_stem": stem},
             include=["documents", "metadatas"],
         )
         chunks = []
-        for id_, doc, meta in zip(result["ids"], result["documents"] or [], result["metadatas"] or []):
-            chunks.append(ChunkInfo(
-                id=id_,
-                chunk_index=int(meta["chunk_index"]),
-                word_count=int(meta["word_count"]),
-                text=doc,
-            ))
+        for id_, doc, meta in zip(
+            result["ids"], result["documents"] or [], result["metadatas"] or []
+        ):
+            chunks.append(
+                ChunkInfo(
+                    id=id_,
+                    chunk_index=int(meta["chunk_index"]),  # type: ignore[arg-type]
+                    word_count=int(meta["word_count"]),  # type: ignore[arg-type]
+                    text=doc,
+                )
+            )
         return sorted(chunks, key=lambda c: c.chunk_index)
 
     return await asyncio.to_thread(_fetch)
 
 
 @router.get("/{stem}/file")
-async def get_paper_file(stem: str) -> FileResponse:
+async def get_paper_file(
+    project_id: str,
+    stem: str,
+    pdfs_dir: Path = Depends(_get_pdfs_dir),
+) -> FileResponse:
     def _get_filename() -> str | None:
-        collection = get_collection()
+        collection = get_collection(project_id)
         result = collection.get(where={"source_stem": stem}, include=["metadatas"])
         if not result["ids"]:
             return None
+        assert result["metadatas"] is not None
         return str(result["metadatas"][0]["source_filename"])
 
     filename = await asyncio.to_thread(_get_filename)
     if not filename:
         raise HTTPException(status_code=404, detail="Paper not found")
 
-    pdf_path = DATA_DIR / "pdfs" / filename
+    pdf_path = pdfs_dir / filename
     if not pdf_path.exists():
         raise HTTPException(status_code=404, detail="File not found on disk")
 
     return FileResponse(str(pdf_path), media_type="application/pdf")
 
 
-@router.post("/upload", response_model=UploadResponse)
-async def upload_papers(files: list[UploadFile] = File(...)) -> UploadResponse:
-    pdfs_dir = DATA_DIR / "pdfs"
-    pdfs_dir.mkdir(parents=True, exist_ok=True)
-
-    collection = get_collection()
-
-    results: list[PaperResult] = []
-    errors: list[UploadError] = []
-
-    for upload in files:
-        filename = upload.filename or "unknown.pdf"
-
-        if not filename.lower().endswith(".pdf"):
-            errors.append(UploadError(filename=filename, error="Not a PDF file"))
-            continue
-
-        pdf_path = pdfs_dir / filename
-        already_existed = pdf_path.exists()
-
-        content = await upload.read()
-
-        if len(content) > MAX_PDF_SIZE:
-            errors.append(UploadError(filename=filename, error=f"File too large (max {MAX_PDF_SIZE // 1024 // 1024} MB)"))
-            continue
-
-        pdf_path.write_bytes(content)
-
-        try:
-            reader = PdfReader(BytesIO(content))
-            pdf_title, author, year = _extract_pdf_metadata(reader)
-            raw = "\n\n".join(page.extract_text() or "" for page in reader.pages)
-            text = normalize_text(raw)
-        except Exception as exc:
-            errors.append(UploadError(filename=filename, error=f"PDF parse error: {exc}"))
-            continue
-
-        if not text:
-            errors.append(UploadError(filename=filename, error="PDF returned empty text"))
-            continue
-
-        chunks = chunk_text(text)
-        stem = Path(filename).stem
-
-        chunk_total = await asyncio.to_thread(
-            _index_chunks, collection, stem, filename, chunks, pdf_title, author, year
-        )
-
-        results.append(
-            PaperResult(
-                filename=filename,
-                chunks_indexed=chunk_total,
-                already_existed=already_existed,
-            )
-        )
-
-    return UploadResponse(results=results, errors=errors)
-
 
 def _index_chunks(
-    collection,
+    collection: chromadb.Collection,
     stem: str,
     filename: str,
     chunks: list[str],
@@ -258,6 +207,7 @@ def _index_chunks(
 
 
 async def _stream_upload(
+    project_id: str,
     files: list[UploadFile],
     pdfs_dir: Path,
 ) -> AsyncGenerator[str, None]:
@@ -267,7 +217,9 @@ async def _stream_upload(
         yield f"data: {json.dumps({'type': 'start', 'filename': filename})}\n\n"
 
         if not filename.lower().endswith(".pdf"):
-            yield f"data: {json.dumps({'type': 'error', 'filename': filename, 'error': 'Not a PDF file'})}\n\n"
+            err_msg = "Not a PDF file"
+            payload = json.dumps({"type": "error", "filename": filename, "error": err_msg})
+            yield f"data: {payload}\n\n"
             continue
 
         pdf_path = pdfs_dir / filename
@@ -275,7 +227,10 @@ async def _stream_upload(
         content = await upload.read()
 
         if len(content) > MAX_PDF_SIZE:
-            yield f"data: {json.dumps({'type': 'error', 'filename': filename, 'error': f'File too large (max {MAX_PDF_SIZE // 1024 // 1024} MB)'})}\n\n"
+            max_mb = MAX_PDF_SIZE // 1024 // 1024
+            err_msg = f"File too large (max {max_mb} MB)"
+            payload = json.dumps({"type": "error", "filename": filename, "error": err_msg})
+            yield f"data: {payload}\n\n"
             continue
 
         pdf_path.write_bytes(content)
@@ -286,55 +241,83 @@ async def _stream_upload(
             raw = "\n\n".join(page.extract_text() or "" for page in reader.pages)
             text = normalize_text(raw)
         except Exception as exc:
-            yield f"data: {json.dumps({'type': 'error', 'filename': filename, 'error': f'PDF parse error: {exc}'})}\n\n"
+            err_msg = f"PDF parse error: {exc}"
+            payload = json.dumps({"type": "error", "filename": filename, "error": err_msg})
+            yield f"data: {payload}\n\n"
             continue
 
         if not text:
-            yield f"data: {json.dumps({'type': 'error', 'filename': filename, 'error': 'PDF returned empty text'})}\n\n"
+            err_msg = "PDF returned empty text"
+            payload = json.dumps({"type": "error", "filename": filename, "error": err_msg})
+            yield f"data: {payload}\n\n"
             continue
 
         chunks = chunk_text(text)
         stem = Path(filename).stem
 
         try:
-            chunk_total = await asyncio.to_thread(
-                lambda s=stem, f=filename, c=chunks, t=pdf_title, a=author, y=year: (
-                    _index_chunks(get_collection(), s, f, c, t, a, y)
-                )
-            )
+
+            def _do_index(
+                pid: str = project_id,
+                s: str = stem,
+                f: str = filename,
+                c: list[str] = chunks,
+                t: str = pdf_title,
+                a: str = author,
+                y: str = year,
+            ) -> int:
+                return _index_chunks(get_collection(pid), s, f, c, t, a, y)
+
+            chunk_total = await asyncio.to_thread(_do_index)
         except Exception as exc:
-            yield f"data: {json.dumps({'type': 'error', 'filename': filename, 'error': f'Indexation error: {exc}'})}\n\n"
+            err_msg = f"Indexation error: {exc}"
+            payload = json.dumps({"type": "error", "filename": filename, "error": err_msg})
+            yield f"data: {payload}\n\n"
             continue
 
-        yield f"data: {json.dumps({'type': 'result', 'filename': filename, 'stem': stem, 'chunks_indexed': chunk_total, 'already_existed': already_existed})}\n\n"
+        result_data = {
+            "type": "result",
+            "filename": filename,
+            "stem": stem,
+            "chunks_indexed": chunk_total,
+            "already_existed": already_existed,
+        }
+        yield f"data: {json.dumps(result_data)}\n\n"
 
     yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
 
 @router.post("/upload/stream")
-async def upload_papers_stream(files: list[UploadFile] = File(...)) -> StreamingResponse:
-    pdfs_dir = DATA_DIR / "pdfs"
-    pdfs_dir.mkdir(parents=True, exist_ok=True)
+async def upload_papers_stream(
+    project_id: str,
+    files: list[UploadFile] = File(...),
+    pdfs_dir: Path = Depends(_get_pdfs_dir),
+) -> StreamingResponse:
     return StreamingResponse(
-        _stream_upload(files, pdfs_dir),
+        _stream_upload(project_id, files, pdfs_dir),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
 @router.delete("/{stem}", status_code=204)
-async def delete_paper(stem: str) -> None:
+async def delete_paper(
+    project_id: str,
+    stem: str,
+    pdfs_dir: Path = Depends(_get_pdfs_dir),
+) -> None:
     def _delete() -> str | None:
-        collection = get_collection()
+        collection = get_collection(project_id)
         existing = collection.get(where={"source_stem": stem}, include=["metadatas"])
         if not existing["ids"]:
             return None
-        filename = existing["metadatas"][0]["source_filename"]
+        assert existing["metadatas"] is not None
+        filename = str(existing["metadatas"][0]["source_filename"])
         collection.delete(ids=existing["ids"])
         return filename
 
     filename = await asyncio.to_thread(_delete)
     if filename:
-        pdf_path = DATA_DIR / "pdfs" / filename
+        pdf_path = pdfs_dir / filename
         if pdf_path.exists():
             pdf_path.unlink()
