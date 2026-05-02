@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import styles from './DebugPanel.module.scss'
 
@@ -15,10 +15,11 @@ interface ChunkInfo {
 }
 
 interface DebugPanelProps {
+  projectId: string
   refreshKey?: number
 }
 
-export function DebugPanel({ refreshKey }: DebugPanelProps) {
+export function DebugPanel({ projectId, refreshKey }: DebugPanelProps) {
   const [papers, setPapers] = useState<PaperInfo[]>([])
   const [loading, setLoading] = useState(false)
   const [networkError, setNetworkError] = useState<string | null>(null)
@@ -27,11 +28,11 @@ export function DebugPanel({ refreshKey }: DebugPanelProps) {
   const [chunksLoading, setChunksLoading] = useState(false)
   const [chunksError, setChunksError] = useState<string | null>(null)
 
-  async function fetchPapers() {
+  const fetchPapers = useCallback(async () => {
     setLoading(true)
     setNetworkError(null)
     try {
-      const res = await fetch('/api/papers/')
+      const res = await fetch(`/api/projects/${projectId}/papers/`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data: PaperInfo[] = await res.json()
       setPapers(data)
@@ -40,7 +41,7 @@ export function DebugPanel({ refreshKey }: DebugPanelProps) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [projectId])
 
   async function fetchChunks(stem: string) {
     if (selectedStem === stem) {
@@ -52,7 +53,9 @@ export function DebugPanel({ refreshKey }: DebugPanelProps) {
     setChunksLoading(true)
     setChunksError(null)
     try {
-      const res = await fetch(`/api/papers/${encodeURIComponent(stem)}/chunks`)
+      const res = await fetch(
+        `/api/projects/${projectId}/papers/${encodeURIComponent(stem)}/chunks`
+      )
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data: ChunkInfo[] = await res.json()
       setChunks(data)
@@ -63,14 +66,18 @@ export function DebugPanel({ refreshKey }: DebugPanelProps) {
     }
   }
 
-  useEffect(() => { fetchPapers() }, [refreshKey])
+  useEffect(() => {
+    fetchPapers()
+  }, [refreshKey, fetchPapers])
 
   return (
     <div className={styles.panel}>
       <div className={styles.header}>
         <span className={styles.headerTitle}>ChromaDB debug</span>
         {papers.length > 0 && (
-          <span className={styles.count}>{papers.length} paper{papers.length > 1 ? 's' : ''}</span>
+          <span className={styles.count}>
+            {papers.length} paper{papers.length > 1 ? 's' : ''}
+          </span>
         )}
         <button
           className={styles.refreshBtn}
@@ -78,25 +85,24 @@ export function DebugPanel({ refreshKey }: DebugPanelProps) {
           disabled={loading}
           aria-label="Rafraîchir"
         >
-          <RefreshCw size={14} className={loading ? styles.spinning : undefined} />
+          <RefreshCw size={16} className={loading ? styles.spinning : undefined} />
         </button>
       </div>
 
       <div className={styles.body}>
-        {papers.length === 0 && !loading && (
-          <p className={styles.empty}>Aucun paper indexé.</p>
-        )}
+        {networkError && <p className={styles.error}>{networkError}</p>}
+        {papers.length === 0 && !loading && !networkError && <p className={styles.empty}>Aucun paper indexé.</p>}
 
         {papers.length > 0 && (
           <div className={styles.paperList}>
-            {papers.map(p => (
+            {papers.map((p) => (
               <div key={p.stem} className={styles.paperCard}>
                 <div
                   className={styles.paperHeader}
                   onClick={() => fetchChunks(p.stem)}
                   role="button"
                   tabIndex={0}
-                  onKeyDown={e => e.key === 'Enter' && fetchChunks(p.stem)}
+                  onKeyDown={(e) => e.key === 'Enter' && fetchChunks(p.stem)}
                 >
                   <span className={styles.paperName}>{p.filename}</span>
                   <span className={styles.paperMeta}>{p.chunk_total} chunks</span>
@@ -106,8 +112,10 @@ export function DebugPanel({ refreshKey }: DebugPanelProps) {
                   <div className={styles.chunkList}>
                     {chunksLoading ? (
                       <p className={styles.chunkLoading}>Chargement…</p>
+                    ) : chunksError ? (
+                      <p className={styles.error}>{chunksError}</p>
                     ) : (
-                      chunks.map(c => (
+                      chunks.map((c) => (
                         <details key={c.id} className={styles.chunk}>
                           <summary className={styles.chunkSummary}>
                             chunk {c.chunk_index} — {c.word_count} mots

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { ChevronDown, ChevronUp, FileText, Trash2 } from 'lucide-react'
 import styles from './PaperList.module.scss'
 
@@ -12,19 +12,20 @@ interface PaperInfo {
 }
 
 interface PaperListProps {
+  projectId: string
   refreshKey?: number
   onDelete?: () => void
 }
 
-export function PaperList({ refreshKey, onDelete }: PaperListProps) {
+export function PaperList({ projectId, refreshKey, onDelete }: PaperListProps) {
   const [papers, setPapers] = useState<PaperInfo[]>([])
   const [deleting, setDeleting] = useState<string | null>(null)
   const [openStem, setOpenStem] = useState<string | null>(null)
   const [networkError, setNetworkError] = useState<string | null>(null)
 
-  async function fetchPapers() {
+  const fetchPapers = useCallback(async () => {
     try {
-      const res = await fetch('/api/papers/')
+      const res = await fetch(`/api/projects/${projectId}/papers/`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data: PaperInfo[] = await res.json()
       setPapers(data)
@@ -32,13 +33,15 @@ export function PaperList({ refreshKey, onDelete }: PaperListProps) {
     } catch (err) {
       setNetworkError(err instanceof Error ? err.message : 'Erreur réseau')
     }
-  }
+  }, [projectId])
 
   async function handleDelete(stem: string) {
     setDeleting(stem)
     try {
-      await fetch(`/api/papers/${encodeURIComponent(stem)}`, { method: 'DELETE' })
-      setPapers(p => p.filter(x => x.stem !== stem))
+      await fetch(`/api/projects/${projectId}/papers/${encodeURIComponent(stem)}`, {
+        method: 'DELETE',
+      })
+      setPapers((p) => p.filter((x) => x.stem !== stem))
       if (openStem === stem) setOpenStem(null)
       onDelete?.()
     } finally {
@@ -46,26 +49,24 @@ export function PaperList({ refreshKey, onDelete }: PaperListProps) {
     }
   }
 
-  useEffect(() => { fetchPapers() }, [refreshKey])
+  useEffect(() => {
+    fetchPapers()
+  }, [refreshKey, fetchPapers])
 
-  if (networkError) return (
-    <p className={styles.networkError}>{networkError}</p>
-  )
+  if (networkError) return <p className={styles.networkError}>{networkError}</p>
 
-  if (papers.length === 0) return (
-    <p className={styles.empty}>Aucun paper importé.</p>
-  )
+  if (papers.length === 0) return <p className={styles.empty}>Aucun paper importé.</p>
 
   return (
     <ul className={styles.list}>
-      {papers.map(p => {
+      {papers.map((p) => {
         const displayName = p.pdf_title || p.filename
         const isOpen = openStem === p.stem
 
         return (
           <li key={p.stem} className={styles.card}>
             <div className={styles.cardHeader}>
-              <FileText size={16} className={styles.fileIcon} />
+              <FileText size={20} className={styles.fileIcon} />
               <div className={styles.meta}>
                 <span className={styles.title}>{displayName}</span>
                 <div className={styles.details}>
@@ -83,7 +84,7 @@ export function PaperList({ refreshKey, onDelete }: PaperListProps) {
                   aria-label={isOpen ? 'Fermer le lecteur' : 'Ouvrir le lecteur PDF'}
                   title={isOpen ? 'Fermer' : 'Lire le PDF'}
                 >
-                  {isOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                  {isOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                 </button>
                 <button
                   className={`${styles.iconBtn} ${styles.deleteBtn}`}
@@ -92,7 +93,7 @@ export function PaperList({ refreshKey, onDelete }: PaperListProps) {
                   aria-label={`Supprimer ${p.filename}`}
                   title="Supprimer"
                 >
-                  {deleting === p.stem ? '…' : <Trash2 size={14} />}
+                  {deleting === p.stem ? '…' : <Trash2 size={20} />}
                 </button>
               </div>
             </div>
@@ -100,7 +101,7 @@ export function PaperList({ refreshKey, onDelete }: PaperListProps) {
             {isOpen && (
               <div className={styles.viewer}>
                 <iframe
-                  src={`/api/papers/${encodeURIComponent(p.stem)}/file`}
+                  src={`/api/projects/${projectId}/papers/${encodeURIComponent(p.stem)}/file`}
                   className={styles.iframe}
                   title={displayName}
                 />

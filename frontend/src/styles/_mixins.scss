@@ -4,3 +4,118 @@
   border-radius: $radius;
   --inner-radius: calc(#{$radius} - #{$gap});
 }
+
+// Shared style for all sidebar clickable rows (tabs, project switcher buttons).
+@mixin sidebar-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs);
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-radius: var(--inner-radius);
+  color: var(--color-text);
+  cursor: pointer;
+  transition:
+    color 150ms,
+    background-color 150ms;
+
+  &:hover {
+    color: var(--color-background);
+    background: var(--color-emphasis);
+  }
+}
+
+// Fixed 32×32 icon slot used inside sidebar-btn rows.
+@mixin sidebar-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+// Chevron indicator with rotation transition.
+// Apply .chevronOpen (transform: rotate(180deg)) to trigger the rotation.
+@mixin chevron {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  transition: transform 150ms ease;
+}
+
+// ── Content-area buttons ────────────────────────────────────────────────────
+
+@mixin btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-emphasis);
+  color: var(--color-background);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 10px 20px;
+  font-family: var(--font);
+  font-size: var(--font-size-button);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 150ms;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+@mixin btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--color-text-muted);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 16px;
+  font-family: var(--font);
+  font-size: var(--font-size-button);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 150ms;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  &:hover:not(:disabled) {
+    color: var(--color-text);
+  }
+}
+
+@mixin btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  color: var(--color-text-muted);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0;
+  cursor: pointer;
+  transition:
+    color 150ms,
+    opacity 150ms;
+
+  &:hover:not(:disabled) {
+    color: var(--color-text);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+}

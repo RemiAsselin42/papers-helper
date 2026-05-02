@@ -21,7 +21,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-sm) var(--space-sm);
+  padding: var(--space-sm) var(--space-sm) var(--space-sm) var(--space-md);
   border-bottom: var(--border);
   flex-shrink: 0;
 }
@@ -41,13 +41,13 @@
   background: transparent;
   border: none;
   border-radius: var(--radius-sm);
-  color: var(--color-text-muted);
+  color: var(--color-text);
   cursor: pointer;
   padding: 0;
   transition: color 150ms;
 
   &:hover {
-    color: var(--color-text);
+    background: var(--color-surface-hover);
   }
 }
 

@@ -12,11 +12,12 @@ export interface FileState {
 }
 
 interface DropZoneProps {
+  projectId: string
   onSuccess?: () => void
   onProgress?: (states: FileState[]) => void
 }
 
-export function DropZone({ onSuccess, onProgress }: DropZoneProps) {
+export function DropZone({ projectId, onSuccess, onProgress }: DropZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const fileStatesRef = useRef<FileState[]>([])
@@ -63,7 +64,7 @@ export function DropZone({ onSuccess, onProgress }: DropZoneProps) {
     for (const file of target) body.append('files', file)
 
     try {
-      const res = await fetch('/api/papers/upload/stream', {
+      const res = await fetch(`/api/projects/${projectId}/papers/upload/stream`, {
         method: 'POST',
         body,
         signal: abort.signal,

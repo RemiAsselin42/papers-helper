@@ -8,6 +8,7 @@
 .header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-sm);
   border-bottom: var(--border);
@@ -15,7 +16,7 @@
 
 .headerTitle {
   font-size: var(--font-size-body-sm);
-  color: var(--color-text-muted);
+  color: var(--color-text);
   font-weight: 500;
 }
 
@@ -55,11 +56,17 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
+  background: var(--color-background);
 }
 
 .empty {
   font-size: var(--font-size-body-sm);
   color: var(--color-text-muted);
+}
+
+.error {
+  font-size: var(--font-size-body-sm);
+  color: var(--color-error, #e53e3e);
 }
 
 .paperList {
@@ -71,7 +78,7 @@
 .paperCard {
   border: var(--border);
   border-radius: var(--radius-md);
-  background: var(--color-background);
+  background: var(--color-surface);
   overflow: hidden;
 }
 
@@ -89,6 +96,10 @@
     .paperName {
       color: var(--color-background);
     }
+
+    .paperMeta {
+      color: var(--color-background);
+    }
   }
 }
 
@@ -96,6 +107,7 @@
   font-size: var(--font-size-body-sm);
   font-weight: 700;
   color: var(--color-text);
+  width: calc(100% - 100px);
 }
 
 .paperMeta {
@@ -109,6 +121,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
+  background: var(--color-background);
 }
 
 .chunkLoading {
@@ -121,12 +134,12 @@
   border: var(--border);
   border-radius: var(--radius-sm);
   overflow: hidden;
+  background: var(--color-surface);
 }
 
 .chunkSummary {
   display: block;
   padding: var(--space-xs) var(--space-sm);
-  font-family: monospace;
   font-size: var(--font-size-label);
   color: var(--color-text-muted);
   cursor: pointer;
@@ -139,8 +152,12 @@
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .spinning {
