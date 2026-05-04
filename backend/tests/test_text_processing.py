@@ -1,6 +1,6 @@
 """Tests for normalize_text and chunk_text pure functions."""
 
-from app.routes.papers import chunk_text, normalize_text
+from app.ingestion import chunk_text, normalize_text
 
 
 class TestNormalizeText:
