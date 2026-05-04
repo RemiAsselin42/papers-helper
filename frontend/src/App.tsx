@@ -88,24 +88,24 @@ export default function App() {
   }
 
   function renderMain() {
-    // 'new-project' est toujours accessible
+    // 'new-project' et 'all-projects' sont accessibles sans projet courant
     if (activeView === 'new-project') {
       return <NewProjectView onCreated={handleProjectCreated} />
+    }
+    if (activeView === 'all-projects') {
+      return (
+        <AllProjectsView
+          projects={projects}
+          currentProjectId={currentProjectId}
+          onProjectDeleted={handleProjectDeleted}
+        />
+      )
     }
     // Toutes les autres vues nécessitent au moins un projet
     if (projects.length === 0 || currentProjectId === null) {
       return <NoProjectState onCreateProject={() => setActiveView('new-project')} />
     }
     const projectId: string = currentProjectId
-    if (activeView === 'all-projects') {
-      return (
-        <AllProjectsView
-          projects={projects}
-          currentProjectId={projectId}
-          onProjectDeleted={handleProjectDeleted}
-        />
-      )
-    }
     return (
       <>
         {activeView === 'import' && (
