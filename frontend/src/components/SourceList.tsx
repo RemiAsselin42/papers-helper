@@ -10,6 +10,7 @@ import {
   X,
 } from 'lucide-react'
 import { deleteSource, listSources, type SourceInfo } from '../api/projects'
+import { stripBibtexBraces } from '../utils'
 import { EXT_TO_TYPE, IFRAME_PREVIEWABLE_TYPES } from '../constants/acceptedFormats'
 import { MetadataModal } from './MetadataModal'
 import styles from './SourceList.module.scss'
@@ -142,7 +143,7 @@ export function SourceList({ projectId, refreshKey, onDelete }: SourceListProps)
     <>
       <ul className={styles.list}>
         {sources.map((s) => {
-          const displayName = s.pdf_title || s.filename
+          const displayName = stripBibtexBraces(s.pdf_title || s.filename)
           const isOpen = openStem === s.stem
           const isConfirming = confirmStem === s.stem
           const isDeleting = deletingStem === s.stem
@@ -156,7 +157,7 @@ export function SourceList({ projectId, refreshKey, onDelete }: SourceListProps)
                 <div className={styles.meta}>
                   <span className={styles.title}>{displayName}</span>
                   <div className={styles.details}>
-                    {s.author && <span className={styles.detail}>{s.author}</span>}
+                    {s.author && <span className={styles.detail}>{stripBibtexBraces(s.author)}</span>}
                     {s.author && s.year && <span className={styles.sep}>·</span>}
                     {s.year && <span className={styles.detail}>{s.year}</span>}
                     {(s.author || s.year) && <span className={styles.sep}>·</span>}
