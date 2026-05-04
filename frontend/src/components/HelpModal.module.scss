@@ -1,0 +1,117 @@
+@use '../styles/mixins' as *;
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(44, 36, 22, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--space-lg);
+}
+
+.dialog {
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 480px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-md) var(--space-md) var(--space-lg);
+  border-bottom: var(--border);
+  flex-shrink: 0;
+}
+
+.headerTitle {
+  font-size: var(--font-size-heading-md);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.closeBtn {
+  @include btn-icon;
+}
+
+.body {
+  padding: var(--space-lg);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  background-color: var(--color-background);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.sectionTitle {
+  font-size: var(--font-size-label);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  letter-spacing: var(--letter-spacing-label);
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.list {
+  margin: 0;
+  padding-left: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text);
+  line-height: var(--line-height-body);
+
+  strong {
+    font-weight: 600;
+  }
+
+  code {
+    font-family: monospace;
+    font-size: 0.8125rem;
+    background: var(--color-surface);
+    border: var(--border);
+    border-radius: 2px;
+    padding: 1px 4px;
+  }
+}
+
+.text {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text);
+  line-height: var(--line-height-body);
+
+  em {
+    font-style: normal;
+    color: var(--color-text);
+    font-weight: 500;
+  }
+
+  strong {
+    font-weight: 600;
+  }
+
+  code {
+    font-family: monospace;
+    font-size: 0.8125rem;
+    background: var(--color-surface);
+    border: var(--border);
+    border-radius: 2px;
+    padding: 1px 4px;
+  }
+}

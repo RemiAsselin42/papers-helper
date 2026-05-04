@@ -1,0 +1,203 @@
+@use '../styles/mixins' as *;
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(44, 36, 22, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--space-lg);
+}
+
+.dialog {
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 560px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-md) var(--space-md) var(--space-lg);
+  border-bottom: var(--border);
+  flex-shrink: 0;
+}
+
+.headerTitle {
+  font-size: var(--font-size-heading-md);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.closeBtn {
+  @include btn-icon;
+}
+
+.body {
+  padding: var(--space-lg);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.fieldGrow {
+  flex: 1;
+}
+
+.row {
+  display: flex;
+  gap: var(--space-md);
+  align-items: flex-start;
+
+  // Year field stays compact
+  > .field:first-child {
+    flex: 0 0 90px;
+  }
+}
+
+.label {
+  font-size: var(--font-size-label);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  letter-spacing: var(--letter-spacing-label);
+  text-transform: uppercase;
+}
+
+.input {
+  font-family: var(--font);
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text);
+  background: var(--color-background);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--padding-input);
+  width: 100%;
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-emphasis-2);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+  }
+
+  &::placeholder {
+    color: var(--color-text-muted);
+  }
+}
+
+.textarea {
+  font-family: var(--font);
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-body);
+  color: var(--color-text);
+  background: var(--color-background);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--padding-input);
+  width: 100%;
+  resize: vertical;
+  min-height: 80px;
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-emphasis-2);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+  }
+
+  &::placeholder {
+    color: var(--color-text-muted);
+  }
+}
+
+// Authors section
+.authorsList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.authorRow {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+
+  .input {
+    flex: 1;
+  }
+}
+
+.removeAuthorBtn {
+  @include btn-icon;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+
+  &:hover:not(:disabled) {
+    color: var(--color-error);
+  }
+}
+
+.addAuthorBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) 0;
+  background: none;
+  border: none;
+  font-family: var(--font);
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: var(--transition-short);
+
+  &:hover:not(:disabled) {
+    color: var(--color-emphasis-2);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+.error {
+  font-size: var(--font-size-body-sm);
+  color: var(--color-error);
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  border-top: var(--border);
+  flex-shrink: 0;
+}
+
+.cancelBtn {
+  @include btn-secondary;
+}
+
+.saveBtn {
+  @include btn-primary;
+}
