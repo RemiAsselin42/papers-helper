@@ -6,8 +6,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import bibtexparser
-from bibtexparser.bparser import BibTexParser
-from bibtexparser.customization import convert_to_unicode
 
 
 @dataclass
@@ -124,18 +122,16 @@ def parse_bibtex(content: bytes) -> list[BibtexEntry]:
     except UnicodeDecodeError:
         text = content.decode("latin-1")
 
-    parser = BibTexParser(common_strings=True)
-    parser.customization = convert_to_unicode
-    parser.ignore_nonstandard_types = False
-
     try:
-        bib_db = bibtexparser.loads(text, parser=parser)
+        library = bibtexparser.parse_string(text)
     except Exception as e:
         raise ValueError(f"Erreur de parsing BibTeX : {e}") from e
 
     entries: list[BibtexEntry] = []
 
-    for raw in bib_db.entries:
+    for entry in library.entries:
+        raw = {f.key: f.value for f in entry.fields}
+
         title = _get(raw, "title")
         if not title:
             continue
@@ -162,7 +158,7 @@ def parse_bibtex(content: bytes) -> list[BibtexEntry]:
 
         entries.append(
             BibtexEntry(
-                key=raw.get("ID", ""),
+                key=entry.key,
                 title=title,
                 author=author_flat,
                 authors_json=authors_json_str,

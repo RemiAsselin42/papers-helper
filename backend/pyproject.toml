@@ -16,7 +16,7 @@ dependencies = [
     "odfpy>=1.4.0",
     "striprtf>=0.0.26",
     "ebooklib>=0.18",
-    "bibtexparser>=1.4.0",
+    "bibtexparser==2.0.0b9",
 ]
 
 [dependency-groups]

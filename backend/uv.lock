@@ -115,12 +115,15 @@ wheels = [
 
 [[package]]
 name = "bibtexparser"
-version = "1.4.4"
+version = "2.0.0b9"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyparsing" },
+    { name = "pylatexenc" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/44/1c/577d3ce406e88f370e80a6ebf76ae52a2866521e0b585e8ec612759894f1/bibtexparser-1.4.4.tar.gz", hash = "sha256:093b6c824f7a71d3a748867c4057b71f77c55b8dbc07efc993b781771520d8fb", size = 55594, upload-time = "2026-01-29T18:58:01.366Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f4/37/e21f79f5116ad1fb92a8eb0e8a005cad59eb24660003982840daa6b9fafd/bibtexparser-2.0.0b9.tar.gz", hash = "sha256:bcddf796cfe321bb92c17c844ca65d81731fb753a1dd0e82bc76a9947aa0f360", size = 40435, upload-time = "2026-01-29T19:47:52.605Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/60/8e/5a3726bd421d4977262cee94a3660da4b9ca94397f951499c7d31ec0e863/bibtexparser-2.0.0b9-py3-none-any.whl", hash = "sha256:c30c73a9b4e2e8a4669c8c4d726e2d285990553f60612d8c952786af3cf766ca", size = 41407, upload-time = "2026-01-29T19:47:51.608Z" },
+]
 
 [[package]]
 name = "build"
@@ -1252,7 +1255,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "bibtexparser", specifier = ">=1.4.0" },
+    { name = "bibtexparser", specifier = "==2.0.0b9" },
     { name = "chromadb", specifier = ">=0.6.0" },
     { name = "ebooklib", specifier = ">=0.18" },
     { name = "fastapi", specifier = ">=0.115.0" },
@@ -1540,13 +1543,10 @@ wheels = [
 ]
 
 [[package]]
-name = "pyparsing"
-version = "3.3.2"
+name = "pylatexenc"
+version = "2.10"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/f3/91/9c6ee907786a473bf81c5f53cf703ba0957b23ab84c264080fb5a450416f/pyparsing-3.3.2.tar.gz", hash = "sha256:c777f4d763f140633dcb6d8a3eda953bf7a214dc4eff598413c070bcdc117cbc", size = 6851574, upload-time = "2026-01-21T03:57:59.36Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/10/bd/c038d7cc38edc1aa5bf91ab8068b63d4308c66c4c8bb3cbba7dfbc049f9c/pyparsing-3.3.2-py3-none-any.whl", hash = "sha256:850ba148bd908d7e2411587e247a1e4f0327839c40e2e5e6d05a007ecc69911d", size = 122781, upload-time = "2026-01-21T03:57:55.912Z" },
-]
+sdist = { url = "https://files.pythonhosted.org/packages/5d/ab/34ec41718af73c00119d0351b7a2531d2ebddb51833a36448fc7b862be60/pylatexenc-2.10.tar.gz", hash = "sha256:3dd8fd84eb46dc30bee1e23eaab8d8fb5a7f507347b23e5f38ad9675c84f40d3", size = 162597, upload-time = "2021-04-06T07:56:07.854Z" }
 
 [[package]]
 name = "pypdf"
