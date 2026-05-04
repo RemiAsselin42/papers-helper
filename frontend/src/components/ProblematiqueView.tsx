@@ -293,7 +293,7 @@ export function ProblematiqueView({ projectId }: Props) {
                   disabled={isSaving}
                   type="button"
                 >
-                  <Plus size={11} /> Sous-hypothèse
+                  <Plus size={20} /> Sous-hypothèse
                 </button>
               </div>
             ))}

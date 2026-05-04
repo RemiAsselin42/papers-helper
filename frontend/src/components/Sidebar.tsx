@@ -4,7 +4,7 @@ import { type ProjectInfo } from '../api/projects'
 import { ProjectSwitcher } from './ProjectSwitcher'
 import styles from './Sidebar.module.scss'
 
-export type View = 'import' | 'papers' | 'problematique' | 'debug' | 'new-project' | 'all-projects'
+export type View = 'import' | 'sources' | 'problematique' | 'debug' | 'new-project' | 'all-projects'
 
 interface SidebarProps {
   activeView: View
@@ -59,13 +59,13 @@ export function Sidebar({
           <span className={styles.label}>Import</span>
         </button>
         <button
-          className={`${styles.tab} ${activeView === 'papers' ? styles.tabActive : ''}`}
-          onClick={() => onViewChange('papers')}
-          aria-label="Papers"
-          title="Papers"
+          className={`${styles.tab} ${activeView === 'sources' ? styles.tabActive : ''}`}
+          onClick={() => onViewChange('sources')}
+          aria-label="Sources"
+          title="Sources"
         >
           <span className={styles.icon}><Files size={20} /></span>
-          <span className={styles.label}>Papers</span>
+          <span className={styles.label}>Sources</span>
         </button>
         <button
           className={`${styles.tab} ${activeView === 'problematique' ? styles.tabActive : ''}`}

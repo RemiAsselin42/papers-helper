@@ -14,6 +14,6 @@ describe('App', () => {
     render(<App />)
     expect(screen.getByRole('navigation')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /import/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /papers/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /sources/i })).toBeInTheDocument()
   })
 })

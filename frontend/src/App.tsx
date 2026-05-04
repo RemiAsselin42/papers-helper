@@ -8,7 +8,7 @@ import { DropZone, type FileState } from './components/DropZone'
 import { ImportProgressToast } from './components/ImportProgressToast'
 import { NewProjectView } from './components/NewProjectView'
 import { NoProjectState } from './components/NoProjectState'
-import { PaperList } from './components/PaperList'
+import { SourceList } from './components/SourceList'
 import { ProblematiqueView } from './components/ProblematiqueView'
 import { Sidebar, type View } from './components/Sidebar'
 
@@ -118,8 +118,8 @@ export default function App() {
             <DropZone projectId={projectId} onSuccess={bump} onProgress={setImportStates} />
           </div>
         )}
-        {activeView === 'papers' && (
-          <PaperList projectId={projectId} refreshKey={refreshKey} onDelete={bump} />
+        {activeView === 'sources' && (
+          <SourceList projectId={projectId} refreshKey={refreshKey} onDelete={bump} />
         )}
         {activeView === 'problematique' && (
           <ProblematiqueView projectId={projectId} />

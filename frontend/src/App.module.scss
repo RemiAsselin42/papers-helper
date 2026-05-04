@@ -6,7 +6,8 @@
   margin: 0 auto;
   padding: var(--space-2xl) var(--space-xl);
   padding-left: calc(var(--space-sm) + 48px + var(--space-xl));
-  max-width: calc(var(--space-sm) + 48px + 660px + 2 * var(--space-xl));
+  max-width: 992px;
+  width: 100%;
 }
 
 .importSection {
