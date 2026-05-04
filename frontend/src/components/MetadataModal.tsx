@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Plus, Trash2, X } from 'lucide-react'
 import { updateSourceMetadata, type SourceInfo, type UpdateMetadataPayload } from '../api/projects'
+import { extractBibtexCategories } from '../utils'
 import styles from './MetadataModal.module.scss'
 
 interface AuthorEntry {
@@ -148,6 +149,17 @@ export function MetadataModal({ projectId, source, onSave, onClose }: MetadataMo
               disabled={saving}
             />
           </div>
+
+          {extractBibtexCategories(source.pdf_title).length > 0 && (
+            <div className={styles.field}>
+              <label className={styles.label}>Catégories</label>
+              <div className={styles.categories}>
+                {extractBibtexCategories(source.pdf_title).map((cat) => (
+                  <span key={cat} className={styles.categoryTag}>{cat}</span>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className={styles.field}>
             <label className={styles.label}>Auteurs</label>

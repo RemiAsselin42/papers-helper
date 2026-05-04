@@ -130,6 +130,23 @@
   }
 }
 
+// Categories
+.categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.categoryTag {
+  font-size: var(--font-size-label);
+  color: var(--color-emphasis-2);
+  background: color-mix(in srgb, var(--color-emphasis-2) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-emphasis-2) 30%, transparent);
+  border-radius: var(--radius-sm);
+  padding: 2px var(--space-sm);
+  white-space: nowrap;
+}
+
 // Authors section
 .authorsList {
   display: flex;
