@@ -6,6 +6,7 @@ import json
 import shutil
 import uuid
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, model_validator
@@ -108,7 +109,7 @@ async def create_project(body: CreateProjectRequest) -> ProjectInfo:
     return await asyncio.to_thread(_create)
 
 
-def _problematique_path(project_id: str):
+def _problematique_path(project_id: str) -> Path:
     return PROJECTS_DIR / project_id / "problematique.json"
 
 
