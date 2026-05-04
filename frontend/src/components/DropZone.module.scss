@@ -1,3 +1,5 @@
+@use '../styles/mixins' as *;
+
 .wrapper {
   width: 100%;
   display: flex;
@@ -7,6 +9,7 @@
 }
 
 .zone {
+  position: relative;
   width: 100%;
   min-height: 200px;
   border: 2px dashed var(--color-border);
@@ -40,6 +43,30 @@
   display: none;
 }
 
+.helpBtn {
+  position: absolute;
+  top: var(--space-sm);
+  right: var(--space-sm);
+  display: inline-flex;
+  align-items: center;
+  flex-direction: row-reverse;
+  gap: 5px;
+  padding: 4px 10px 4px 8px;
+  background: var(--color-background);
+  color: var(--color-text-muted);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: var(--font-size-label);
+  cursor: pointer;
+  transition: var(--transition-short);
+
+  &:hover {
+    color: var(--color-text);
+    border-color: var(--color-emphasis-2);
+  }
+}
+
 .hint {
   font-size: var(--font-size-body);
   line-height: var(--line-height-body);
@@ -51,4 +78,51 @@
 .errorMsg {
   font-size: var(--font-size-body-sm);
   color: var(--color-error);
+}
+
+.urlSection {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.urlLabel {
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+}
+
+.urlRow {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+}
+
+.urlInput {
+  flex: 1;
+  font-family: var(--font);
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--padding-input);
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-emphasis-2);
+  }
+
+  &::placeholder {
+    color: var(--color-text-muted);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+  }
+}
+
+.urlBtn {
+  @include btn-secondary;
+  white-space: nowrap;
 }
