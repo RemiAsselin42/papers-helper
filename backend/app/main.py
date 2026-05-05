@@ -48,7 +48,7 @@ async def health() -> HealthResponse:
     try:
         list_resp = await asyncio.to_thread(ollama.list)
         ollama_status = "connected"
-        pulled = {m.model for m in list_resp.models}
+        pulled = {m.model for m in list_resp.models if m.model is not None}
         for name in (OLLAMA_EMBED_MODEL, OLLAMA_GENERATION_MODEL):
             base = name.split(":")[0]
             available = any(p == name or p.startswith(base + ":") for p in pulled)

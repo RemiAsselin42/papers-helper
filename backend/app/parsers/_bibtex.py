@@ -123,7 +123,7 @@ def parse_bibtex(content: bytes) -> list[BibtexEntry]:
         text = content.decode("latin-1")
 
     try:
-        library = bibtexparser.parse_string(text)
+        library = bibtexparser.parse_string(text)  # type: ignore[attr-defined]
     except Exception as e:
         raise ValueError(f"Erreur de parsing BibTeX : {e}") from e
 
