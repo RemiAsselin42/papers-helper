@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from app.chroma import get_collection
 from app.config import PROJECTS_DIR
-from app.ingestion import _stream_upload, _stream_url_import
+from app.ingestion import _stream_reindex, _stream_upload, _stream_url_import
 
 router = APIRouter(prefix="/projects/{project_id}/papers", tags=["papers"])
 
@@ -268,6 +268,18 @@ async def update_paper_metadata(
         )
 
     return await asyncio.to_thread(_update)
+
+
+@router.post("/reindex")
+async def reindex_papers(
+    project_id: str,
+    files_dir: Path = Depends(_get_files_dir),
+) -> StreamingResponse:
+    return StreamingResponse(
+        _stream_reindex(project_id, files_dir),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/url")

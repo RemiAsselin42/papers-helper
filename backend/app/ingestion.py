@@ -8,13 +8,14 @@ import time
 import zipfile
 from collections.abc import AsyncGenerator
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse
 
 import chromadb
 import httpx
 from fastapi import UploadFile
 
-from app.chroma import get_collection
+from app.chroma import evict_collection, get_collection
 from app.parsers import (
     MANIFEST_EXTENSIONS,
     MAX_FILE_SIZE,
@@ -401,3 +402,99 @@ async def _stream_url_import(
     }
     yield _sse(result_data)
     yield _sse({"type": "done"})
+
+
+_RESTORABLE_META = frozenset({
+    "pdf_title", "author", "year", "authors_json",
+    "publication", "doi", "abstract", "notes", "categories",
+})
+
+
+async def _stream_reindex(project_id: str, files_dir: Path) -> AsyncGenerator[str, None]:
+    # 1. Export per-stem metadata before dropping the collection.
+    def _export() -> dict[str, dict[str, Any]]:
+        col = get_collection(project_id)
+        result = col.get(include=["metadatas"])
+        by_stem: dict[str, dict[str, Any]] = {}
+        for meta in result["metadatas"] or []:
+            stem = str(meta["source_stem"])
+            by_stem.setdefault(stem, dict(meta))
+        return by_stem
+
+    saved_meta = await asyncio.to_thread(_export)
+
+    # 2. Drop + recreate the collection so the new embed model is applied.
+    def _reset() -> None:
+        evict_collection(project_id)
+        get_collection(project_id)
+
+    await asyncio.to_thread(_reset)
+
+    # 3. Collect source files from both legacy and current directories.
+    project_dir = files_dir.parent
+    source_files: list[Path] = []
+    for subdir in ("files", "pdfs"):
+        d = project_dir / subdir
+        if d.exists():
+            source_files.extend(
+                f for f in d.iterdir()
+                if f.is_file()
+                and not f.name.startswith(".")
+                and Path(f.name).suffix.lower() in SUPPORTED_EXTENSIONS
+            )
+
+    yield _sse({"type": "start_reindex", "total": len(source_files)})
+
+    indexed = 0
+    failed = 0
+    # Collect patches to apply in a single post-loop update.
+    pending_patches: dict[str, dict[str, Any]] = {}
+
+    for file_path in source_files:
+        filename = file_path.name
+        yield _sse({"type": "start", "filename": filename})
+
+        try:
+            content = file_path.read_bytes()
+        except Exception as exc:
+            yield _sse({"type": "error", "filename": filename, "error": str(exc)})
+            failed += 1
+            continue
+
+        index_result, index_err = await _parse_and_index_file(
+            project_id, filename, content, file_path, already_existed=True,
+        )
+        if index_result is None:
+            assert index_err is not None
+            yield _sse({"type": "error", "filename": filename, "error": index_err})
+            failed += 1
+            continue
+
+        stem = Path(filename).stem
+        if stem in saved_meta:
+            patch = {k: v for k, v in saved_meta[stem].items() if k in _RESTORABLE_META}
+            if patch:
+                pending_patches[stem] = patch
+
+        indexed += 1
+        yield _sse({
+            "type": "result",
+            "filename": filename,
+            "stem": stem,
+            "chunks_indexed": index_result.chunk_total,
+            "already_existed": True,
+        })
+
+    # 4. Restore user-edited metadata (notes, BibTeX fields, categories) in a single pass.
+    if pending_patches:
+        def _restore_all(patches: dict[str, dict[str, Any]] = pending_patches) -> None:
+            col = get_collection(project_id)
+            for stem, patch in patches.items():
+                res = col.get(where={"source_stem": stem}, include=["metadatas"])
+                if res["ids"]:
+                    updated = [{**m, **patch} for m in (res["metadatas"] or [])]
+                    col.update(ids=res["ids"], metadatas=updated)  # type: ignore[arg-type]
+
+        await asyncio.to_thread(_restore_all)
+
+    yield _sse({"type": "done", "total": indexed, "failed": failed})
