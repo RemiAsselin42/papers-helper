@@ -46,3 +46,6 @@ graphify-out/
 
 # TODOs
 TODO.md
+
+# Logs
+*.log
