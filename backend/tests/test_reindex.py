@@ -24,7 +24,7 @@ def _parse_sse(raw: str) -> list[dict[str, Any]]:
     for line in raw.splitlines():
         line = line.strip()
         if line.startswith("data:"):
-            payload = line[len("data:"):].strip()
+            payload = line[len("data:") :].strip()
             events.append(json.loads(payload))
     return events
 
@@ -70,7 +70,7 @@ class _FakeCollection:
             stem = where["source_stem"]
             metas = self._docs.get(stem, [])
             ids = [f"{stem}__chunk_{i:04d}" for i in range(len(metas))]
-            return {"ids": ids, "metadatas": metas, "documents": [""]*len(metas)}
+            return {"ids": ids, "metadatas": metas, "documents": [""] * len(metas)}
         # Full scan (export)
         all_metas: list[dict[str, Any]] = []
         for metas in self._docs.values():
@@ -149,9 +149,7 @@ class TestReindexEndpoint:
         assert resp.status_code == 200
         return _parse_sse(resp.text)
 
-    def test_empty_project_returns_done(
-        self, client: TestClient, project_dir: Path
-    ) -> None:
+    def test_empty_project_returns_done(self, client: TestClient, project_dir: Path) -> None:
         col = _FakeCollection()
         events = self._run_reindex(client, project_dir, col)
         done = next(e for e in events if e["type"] == "done")
@@ -197,9 +195,7 @@ class TestReindexEndpoint:
         assert restored, "No metadata found after reindex"
         assert restored[0].get("notes") == "My important note"
 
-    def test_unreadable_file_counts_as_failed(
-        self, client: TestClient, project_dir: Path
-    ) -> None:
+    def test_unreadable_file_counts_as_failed(self, client: TestClient, project_dir: Path) -> None:
         txt = project_dir / "files" / "bad.txt"
         txt.write_text("dummy")
 
@@ -219,9 +215,7 @@ class TestReindexEndpoint:
         assert done["failed"] == 1
         assert done["total"] == 0
 
-    def test_done_event_includes_failed_field(
-        self, client: TestClient, project_dir: Path
-    ) -> None:
+    def test_done_event_includes_failed_field(self, client: TestClient, project_dir: Path) -> None:
         """done SSE event always carries a 'failed' key even with zero failures."""
         col = _FakeCollection()
         events = self._run_reindex(client, project_dir, col)

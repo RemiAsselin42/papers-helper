@@ -90,16 +90,12 @@ class TestExtractFileHints:
         assert "paper.pdf" in hints
 
     def test_multiple_files_separated_by_semicolon(self) -> None:
-        hints = _extract_file_hints(
-            ":C:\\a.pdf:application/pdf;:C:\\b.pdf:application/pdf"
-        )
+        hints = _extract_file_hints(":C:\\a.pdf:application/pdf;:C:\\b.pdf:application/pdf")
         assert "a.pdf" in hints
         assert "b.pdf" in hints
 
     def test_deduplicates(self) -> None:
-        hints = _extract_file_hints(
-            ":C:\\a.pdf:application/pdf;:D:\\a.pdf:application/pdf"
-        )
+        hints = _extract_file_hints(":C:\\a.pdf:application/pdf;:D:\\a.pdf:application/pdf")
         assert hints.count("a.pdf") == 1
 
     def test_empty_string_returns_empty(self) -> None:

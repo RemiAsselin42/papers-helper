@@ -36,8 +36,7 @@ def _validate_url_ssrf(url: str) -> None:
         raise HTTPException(
             status_code=400,
             detail=(
-                f"Schéma d'URL non autorisé : {parsed.scheme!r}."
-                " Seuls http et https sont acceptés."
+                f"Schéma d'URL non autorisé : {parsed.scheme!r}. Seuls http et https sont acceptés."
             ),
         )
 
@@ -237,9 +236,16 @@ async def update_paper_metadata(
     stem: str,
     body: UpdateMetadataRequest,
 ) -> PaperInfo:
-    _PROTECTED_KEYS = frozenset({
-        "source_stem", "source_filename", "chunk_index", "chunk_total", "word_count", "source_type",
-    })
+    _PROTECTED_KEYS = frozenset(
+        {
+            "source_stem",
+            "source_filename",
+            "chunk_index",
+            "chunk_total",
+            "word_count",
+            "source_type",
+        }
+    )
 
     def _update() -> PaperInfo:
         collection = get_collection(project_id)

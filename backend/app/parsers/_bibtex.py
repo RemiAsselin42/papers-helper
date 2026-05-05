@@ -143,12 +143,7 @@ def parse_bibtex(content: bytes) -> list[BibtexEntry]:
         if year and "-" in year:
             year = year.split("-")[0]
 
-        publication = (
-            _get(raw, "journal")
-            or _get(raw, "booktitle")
-            or _get(raw, "publisher")
-            or ""
-        )
+        publication = _get(raw, "journal") or _get(raw, "booktitle") or _get(raw, "publisher") or ""
 
         doi = _get(raw, "doi")
         abstract = _get(raw, "abstract")

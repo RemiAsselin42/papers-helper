@@ -149,6 +149,7 @@ async def _parse_and_index_file(
     abstract = bib.abstract if bib else ""
 
     try:
+
         def _do_index(
             pid: str = project_id,
             s: str = stem,
@@ -164,9 +165,18 @@ async def _parse_and_index_file(
             abstr: str = abstract,
         ) -> int:
             return _index_chunks(
-                get_collection(pid), s, f, c,
-                pdf_title=pt, author=a, year=y, source_type=st,
-                authors_json=aj, publication=pub, doi=d, abstract=abstr,
+                get_collection(pid),
+                s,
+                f,
+                c,
+                pdf_title=pt,
+                author=a,
+                year=y,
+                source_type=st,
+                authors_json=aj,
+                publication=pub,
+                doi=d,
+                abstract=abstr,
             )
 
         chunk_total = await asyncio.to_thread(_do_index)
@@ -306,7 +316,11 @@ async def _stream_upload(
                 pass
 
         index_result, index_err = await _parse_and_index_file(
-            project_id, filename, content, file_path, already_existed,
+            project_id,
+            filename,
+            content,
+            file_path,
+            already_existed,
             bib=bib_hint,
         )
         if index_result is None:
@@ -384,7 +398,11 @@ async def _stream_url_import(
     file_path.write_bytes(raw_content)
 
     index_result, index_err = await _parse_and_index_file(
-        project_id, inferred_filename, raw_content, file_path, already_existed=False,
+        project_id,
+        inferred_filename,
+        raw_content,
+        file_path,
+        already_existed=False,
         pdf_title_fallback=url,
     )
     if index_result is None:
@@ -404,10 +422,19 @@ async def _stream_url_import(
     yield _sse({"type": "done"})
 
 
-_RESTORABLE_META = frozenset({
-    "pdf_title", "author", "year", "authors_json",
-    "publication", "doi", "abstract", "notes", "categories",
-})
+_RESTORABLE_META = frozenset(
+    {
+        "pdf_title",
+        "author",
+        "year",
+        "authors_json",
+        "publication",
+        "doi",
+        "abstract",
+        "notes",
+        "categories",
+    }
+)
 
 
 async def _stream_reindex(project_id: str, files_dir: Path) -> AsyncGenerator[str, None]:
@@ -437,7 +464,8 @@ async def _stream_reindex(project_id: str, files_dir: Path) -> AsyncGenerator[st
         d = project_dir / subdir
         if d.exists():
             source_files.extend(
-                f for f in d.iterdir()
+                f
+                for f in d.iterdir()
                 if f.is_file()
                 and not f.name.startswith(".")
                 and Path(f.name).suffix.lower() in SUPPORTED_EXTENSIONS
@@ -462,7 +490,11 @@ async def _stream_reindex(project_id: str, files_dir: Path) -> AsyncGenerator[st
             continue
 
         index_result, index_err = await _parse_and_index_file(
-            project_id, filename, content, file_path, already_existed=True,
+            project_id,
+            filename,
+            content,
+            file_path,
+            already_existed=True,
         )
         if index_result is None:
             assert index_err is not None
@@ -477,16 +509,19 @@ async def _stream_reindex(project_id: str, files_dir: Path) -> AsyncGenerator[st
                 pending_patches[stem] = patch
 
         indexed += 1
-        yield _sse({
-            "type": "result",
-            "filename": filename,
-            "stem": stem,
-            "chunks_indexed": index_result.chunk_total,
-            "already_existed": True,
-        })
+        yield _sse(
+            {
+                "type": "result",
+                "filename": filename,
+                "stem": stem,
+                "chunks_indexed": index_result.chunk_total,
+                "already_existed": True,
+            }
+        )
 
     # 4. Restore user-edited metadata (notes, BibTeX fields, categories) in a single pass.
     if pending_patches:
+
         def _restore_all(patches: dict[str, dict[str, Any]] = pending_patches) -> None:
             col = get_collection(project_id)
             for stem, patch in patches.items():
