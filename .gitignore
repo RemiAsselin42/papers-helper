@@ -45,5 +45,8 @@ mempalace.yaml
 # TODOs
 TODO.md
 
+# Logs
+*.log
+
 # Graphify — locally generated artifacts
 graphify-out/
