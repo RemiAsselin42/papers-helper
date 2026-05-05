@@ -47,6 +47,12 @@ else
   FAILED=$((FAILED + 1))
 fi
 
+if uv run ruff format --check .; then
+  PASSED=$((PASSED + 1))
+else
+  FAILED=$((FAILED + 1))
+fi
+
 echo ""
 echo "=== Backend Type Check ==="
 if uv run mypy app/; then
