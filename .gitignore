@@ -41,8 +41,9 @@ Thumbs.db
 CLAUDE.md
 mempalace.yaml
 
-# Graphify — artefacts générés localement
-graphify-out/
 
 # TODOs
 TODO.md
+
+# Graphify — locally generated artifacts
+graphify-out/
