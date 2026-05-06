@@ -2,6 +2,15 @@
 # dev.sh — démarre le backend (FastAPI) et le frontend (Vite) avec monitoring robuste
 set -euo pipefail
 
+# ── Arguments ────────────────────────────────────────────────────────────────
+VERBOSE=0
+for arg in "$@"; do
+  case "$arg" in
+    -v|--verbose) VERBOSE=1; export DEBUG=1 ;;
+    *) ;;
+  esac
+done
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND="$ROOT/backend"
 FRONTEND="$ROOT/frontend"
@@ -291,8 +300,19 @@ FRONTEND_LOG="$ROOT/frontend.log"
 : > "$FRONTEND_LOG"
 
 load "Starting backend (logs: $(cygpath -w "$BACKEND_LOG" 2>/dev/null || echo "$BACKEND_LOG"))"
-(cd "$BACKEND" && NO_COLOR=1 uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000) \
-  >>"$BACKEND_LOG" 2>&1 &
+if [[ "$VERBOSE" == "1" ]]; then
+  # No --reload in verbose mode: single-process uvicorn → all output (including
+  # startup errors) goes directly to backend.log instead of a subprocess we
+  # can't capture on Windows.
+  debug "verbose mode: --reload disabled so worker output is captured"
+  (cd "$BACKEND" && NO_COLOR=1 uv run uvicorn app.main:app \
+    --host 0.0.0.0 --port 8000 --log-level debug) \
+    >>"$BACKEND_LOG" 2>&1 &
+else
+  (cd "$BACKEND" && NO_COLOR=1 uv run uvicorn app.main:app \
+    --reload --host 0.0.0.0 --port 8000) \
+    >>"$BACKEND_LOG" 2>&1 &
+fi
 BACKEND_PID=$!
 register_process "backend" "$BACKEND_PID" "$BACKEND_LOG"
 
