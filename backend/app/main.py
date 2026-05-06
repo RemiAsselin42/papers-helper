@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from app.config import OLLAMA_EMBED_MODEL, OLLAMA_GENERATION_MODEL, PROJECTS_DIR
+from app.routes import chat as chat_router
 from app.routes import papers as papers_router
 from app.routes import projects as projects_router
 
@@ -39,6 +40,16 @@ class HealthResponse(BaseModel):
 
 app.include_router(projects_router.router)
 app.include_router(papers_router.router)
+app.include_router(chat_router.router)
+
+
+_OLLAMA_TIMEOUT = 5.0
+
+
+@app.get("/models")
+async def list_models() -> list[str]:
+    resp = await asyncio.wait_for(asyncio.to_thread(ollama.list), timeout=_OLLAMA_TIMEOUT)
+    return [m.model for m in resp.models if m.model]
 
 
 @app.get("/health")
@@ -46,7 +57,7 @@ async def health() -> HealthResponse:
     ollama_status: Literal["connected", "unavailable"] = "unavailable"
     model_statuses: list[OllamaModelStatus] = []
     try:
-        list_resp = await asyncio.to_thread(ollama.list)
+        list_resp = await asyncio.wait_for(asyncio.to_thread(ollama.list), timeout=_OLLAMA_TIMEOUT)
         ollama_status = "connected"
         pulled = {m.model for m in list_resp.models if m.model is not None}
         for name in (OLLAMA_EMBED_MODEL, OLLAMA_GENERATION_MODEL):
