@@ -46,5 +46,21 @@ class OllamaGenerationService:
             if chunk.message.content:
                 yield chunk.message.content
 
+    async def stream_generate_messages(
+        self, messages: list[dict[str, Any]]
+    ) -> AsyncGenerator[str, None]:
+        async for chunk in await self._client.chat(
+            model=self.model, messages=messages, stream=True
+        ):
+            if chunk.message.content:
+                yield chunk.message.content
 
-embed_fn = OllamaEmbeddingFunction()
+
+_embed_fn: OllamaEmbeddingFunction | None = None
+
+
+def get_embed_fn() -> OllamaEmbeddingFunction:
+    global _embed_fn
+    if _embed_fn is None:
+        _embed_fn = OllamaEmbeddingFunction()
+    return _embed_fn

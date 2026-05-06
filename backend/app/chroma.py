@@ -6,7 +6,7 @@ import chromadb
 from chromadb.errors import NotFoundError
 
 from app.config import PROJECTS_DIR
-from app.ollama_service import embed_fn
+from app.ollama_service import get_embed_fn
 
 COLLECTION_NAME = "papers"
 _EMBED_MODEL_META_KEY = "embed_model"
@@ -21,7 +21,8 @@ def get_collection(project_id: str) -> chromadb.Collection:
     vectors_dir = PROJECTS_DIR / project_id / "vectors"
     vectors_dir.mkdir(parents=True, exist_ok=True)
     client = chromadb.PersistentClient(path=str(vectors_dir))
-    current_model = embed_fn.model
+    fn = get_embed_fn()
+    current_model = fn.model
 
     try:
         existing = client.get_collection(COLLECTION_NAME)
@@ -35,7 +36,7 @@ def get_collection(project_id: str) -> chromadb.Collection:
 
     collection = client.get_or_create_collection(
         COLLECTION_NAME,
-        embedding_function=embed_fn,  # type: ignore[arg-type]
+        embedding_function=fn,  # type: ignore[arg-type]
         metadata={_EMBED_MODEL_META_KEY: current_model},
     )
     _cache[project_id] = (client, collection)
