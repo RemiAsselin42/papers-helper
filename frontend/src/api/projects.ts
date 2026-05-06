@@ -130,3 +130,28 @@ export async function saveProblematique(projectId: string, data: Problematique):
   }
   return res.json()
 }
+
+export async function listModels(): Promise<string[]> {
+  const res = await fetch('/api/models')
+  if (!res.ok) throw new Error(`Failed to list models: ${res.status}`)
+  return res.json()
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant' | 'system'
+  content: string
+}
+
+export function streamChat(
+  projectId: string,
+  model: string,
+  messages: ChatMessage[],
+  signal?: AbortSignal,
+): Promise<Response> {
+  return fetch(`/api/projects/${projectId}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model, messages }),
+    signal,
+  })
+}

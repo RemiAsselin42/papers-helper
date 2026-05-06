@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { Bug, Files, PanelLeftClose, PanelLeftOpen, Target, Upload } from 'lucide-react'
+import { Bug, Files, MessageSquare, PanelLeftClose, PanelLeftOpen, Target, Upload } from 'lucide-react'
 import { type ProjectInfo } from '../api/projects'
 import { ProjectSwitcher } from './ProjectSwitcher'
 import styles from './Sidebar.module.scss'
 
-export type View = 'import' | 'sources' | 'problematique' | 'debug' | 'new-project' | 'all-projects'
+export type View = 'import' | 'sources' | 'problematique' | 'chat' | 'debug' | 'new-project' | 'all-projects'
 
 interface SidebarProps {
   activeView: View
@@ -75,6 +75,15 @@ export function Sidebar({
         >
           <span className={styles.icon}><Target size={20} /></span>
           <span className={styles.label}>Problématique</span>
+        </button>
+        <button
+          className={`${styles.tab} ${activeView === 'chat' ? styles.tabActive : ''}`}
+          onClick={() => onViewChange('chat')}
+          aria-label="Chat"
+          title="Chat avec un modèle"
+        >
+          <span className={styles.icon}><MessageSquare size={20} /></span>
+          <span className={styles.label}>Chat</span>
         </button>
       </div>
 

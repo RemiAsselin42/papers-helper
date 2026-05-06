@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import styles from './App.module.scss'
 import { listProjects, type ProjectInfo } from './api/projects'
 import { AllProjectsView } from './components/AllProjectsView'
+import { ChatView } from './components/ChatView'
 import { DebugPanel } from './components/DebugPanel'
 import { DropZone, type FileState } from './components/DropZone'
 import { ImportProgressToast } from './components/ImportProgressToast'
@@ -123,6 +124,9 @@ export default function App() {
         )}
         {activeView === 'problematique' && (
           <ProblematiqueView projectId={projectId} />
+        )}
+        {activeView === 'chat' && (
+          <ChatView projectId={projectId} />
         )}
         {activeView === 'debug' && (
           <DebugPanel projectId={projectId} refreshKey={refreshKey} />
