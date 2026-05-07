@@ -6,7 +6,7 @@ from typing import Any
 import ollama
 from chromadb import Documents, EmbeddingFunction, Embeddings
 
-from app.config import OLLAMA_BASE_URL, OLLAMA_EMBED_MODEL, OLLAMA_GENERATION_MODEL
+from app.config import OLLAMA_BASE_URL, OLLAMA_EMBED_MODEL, OLLAMA_GENERATION_MODEL, get_ollama_url
 
 
 class OllamaEmbeddingFunction(EmbeddingFunction[Documents]):
@@ -22,10 +22,11 @@ class OllamaGenerationService:
     def __init__(
         self,
         model: str = OLLAMA_GENERATION_MODEL,
-        base_url: str = OLLAMA_BASE_URL,
+        base_url: str | None = None,
     ) -> None:
         self.model = model
-        self._client = ollama.AsyncClient(host=base_url)
+        effective_url = base_url if base_url is not None else get_ollama_url()
+        self._client = ollama.AsyncClient(host=effective_url)
 
     async def generate(self, prompt: str, system: str = "") -> str:
         messages: list[dict[str, Any]] = []
