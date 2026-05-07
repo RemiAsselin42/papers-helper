@@ -16,9 +16,21 @@ def client() -> Generator[TestClient, None, None]:
         yield c
 
 
+def _mock_client_unavailable() -> MagicMock:
+    mock = MagicMock()
+    mock.return_value.list.side_effect = Exception("connection refused")
+    return mock
+
+
+def _mock_client_connected() -> MagicMock:
+    mock = MagicMock()
+    mock.return_value.list.return_value = MagicMock(models=[])
+    return mock
+
+
 def test_health_ollama_unavailable(client: TestClient) -> None:
     """Returns storage status even when Ollama is unreachable."""
-    with patch("app.main.ollama.list", side_effect=Exception("connection refused")):
+    with patch("app.main.ollama.Client", _mock_client_unavailable()):
         response = client.get("/health")
 
     assert response.status_code == 200
@@ -30,7 +42,7 @@ def test_health_ollama_unavailable(client: TestClient) -> None:
 
 def test_health_ollama_connected(client: TestClient) -> None:
     """Reports connected when Ollama responds."""
-    with patch("app.main.ollama.list", return_value=MagicMock()):
+    with patch("app.main.ollama.Client", _mock_client_connected()):
         response = client.get("/health")
 
     assert response.status_code == 200
@@ -40,7 +52,7 @@ def test_health_ollama_connected(client: TestClient) -> None:
 def test_health_storage_inaccessible_when_dirs_missing(client: TestClient) -> None:
     """Reports inaccessible when data directories do not exist."""
     with (
-        patch("app.main.ollama.list", side_effect=Exception("offline")),
+        patch("app.main.ollama.Client", _mock_client_unavailable()),
         patch.object(Path, "exists", return_value=False),
     ):
         response = client.get("/health")
@@ -53,7 +65,7 @@ def test_health_storage_accessible_when_dirs_present(client: TestClient, tmp_pat
     """Reports accessible when the projects directory parent exists."""
     with (
         patch("app.main.PROJECTS_DIR", tmp_path / "projects"),
-        patch("app.main.ollama.list", return_value=MagicMock()),
+        patch("app.main.ollama.Client", _mock_client_connected()),
     ):
         response = client.get("/health")
 
