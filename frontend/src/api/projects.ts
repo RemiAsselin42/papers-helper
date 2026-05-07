@@ -1,3 +1,11 @@
+import { OLLAMA_URL_KEY } from './health'
+import { getStoredProvider, llmHeaders } from './llm'
+
+function ollamaHeaders(): HeadersInit {
+  const url = localStorage.getItem(OLLAMA_URL_KEY)
+  return url ? { 'X-Ollama-URL': url } : {}
+}
+
 export interface SourceInfo {
   stem: string
   filename: string
@@ -58,7 +66,7 @@ export async function updateSourceMetadata(
 export function addUrlSource(projectId: string, url: string, signal?: AbortSignal): Promise<Response> {
   return fetch(`/api/projects/${projectId}/papers/url`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...ollamaHeaders() },
     body: JSON.stringify({ url }),
     signal,
   })
@@ -132,7 +140,7 @@ export async function saveProblematique(projectId: string, data: Problematique):
 }
 
 export async function listModels(): Promise<string[]> {
-  const res = await fetch('/api/models')
+  const res = await fetch('/api/models', { headers: ollamaHeaders() })
   if (!res.ok) throw new Error(`Failed to list models: ${res.status}`)
   return res.json()
 }
@@ -148,9 +156,14 @@ export function streamChat(
   messages: ChatMessage[],
   signal?: AbortSignal,
 ): Promise<Response> {
+  const provider = getStoredProvider()
   return fetch(`/api/projects/${projectId}/chat`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...ollamaHeaders(),
+      ...llmHeaders(provider),
+    },
     body: JSON.stringify({ model, messages }),
     signal,
   })
