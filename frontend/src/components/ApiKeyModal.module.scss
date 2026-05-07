@@ -1,0 +1,131 @@
+@use '../styles/mixins' as *;
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(44, 36, 22, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+  padding: var(--space-lg);
+}
+
+.dialog {
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-md) var(--space-md) var(--space-lg);
+  border-bottom: var(--border);
+  min-height: 52px;
+}
+
+.title {
+  font-size: var(--font-size-heading-md);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.closeBtn {
+  @include btn-icon;
+}
+
+.body {
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  background: var(--color-background);
+}
+
+.hint {
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text-muted);
+  line-height: var(--line-height-body);
+  margin: 0;
+}
+
+.link {
+  color: var(--color-emphasis-2);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+
+  &:hover {
+    opacity: 0.8;
+  }
+}
+
+.label {
+  font-size: var(--font-size-label);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  letter-spacing: var(--letter-spacing-label);
+  text-transform: uppercase;
+}
+
+.input {
+  font-family: var(--font);
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text);
+  background: var(--color-background);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--padding-input);
+  width: 100%;
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-emphasis-2);
+  }
+
+  &::placeholder {
+    color: var(--color-text-muted);
+  }
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  border-top: var(--border);
+}
+
+.removeBtn {
+  @include btn-secondary;
+  margin-right: auto;
+  color: var(--color-error);
+
+  &:hover {
+    border-color: var(--color-error);
+  }
+}
+
+.cancelBtn {
+  @include btn-secondary;
+}
+
+.saveBtn {
+  @include btn-primary;
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+}

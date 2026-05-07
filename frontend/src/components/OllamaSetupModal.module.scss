@@ -1,0 +1,243 @@
+@use '../styles/mixins' as *;
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(44, 36, 22, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--space-lg);
+}
+
+.dialog {
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 480px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-md) var(--space-md) var(--space-lg);
+  border-bottom: var(--border);
+  flex-shrink: 0;
+  min-height: 52px;
+}
+
+.headerTitle {
+  font-size: var(--font-size-heading-md);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.closeBtn {
+  @include btn-icon;
+}
+
+.backBtn {
+  @include btn-icon;
+  width: auto;
+  gap: var(--space-xs);
+  padding: 0 var(--space-xs);
+  font-size: var(--font-size-body-sm);
+  font-family: var(--font);
+}
+
+.body {
+  padding: var(--space-lg);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  background-color: var(--color-background);
+}
+
+.statusRow {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-md);
+}
+
+.statusIcon {
+  color: var(--color-error);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.statusIconWarning {
+  color: var(--color-emphasis-2);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.statusText {
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text);
+  line-height: var(--line-height-body);
+  margin: 0;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.sectionTitle {
+  font-size: var(--font-size-label);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  letter-spacing: var(--letter-spacing-label);
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.text {
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text);
+  line-height: var(--line-height-body);
+  margin: 0;
+}
+
+.link {
+  color: var(--color-emphasis-2);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+
+  &:hover {
+    opacity: 0.8;
+  }
+}
+
+.modelList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.modelRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text);
+}
+
+.modelOk {
+  color: var(--color-success);
+  flex-shrink: 0;
+}
+
+.modelMiss {
+  color: var(--color-emphasis-2);
+  flex-shrink: 0;
+}
+
+.modelName {
+  font-family: monospace;
+  font-size: 0.8125rem;
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: 2px;
+  padding: 1px 4px;
+}
+
+.modelHint {
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+
+  code {
+    font-family: monospace;
+    font-size: 0.8125rem;
+    background: var(--color-surface);
+    border: var(--border);
+    border-radius: 2px;
+    padding: 1px 4px;
+  }
+}
+
+.customUrlBtn {
+  @include btn-secondary;
+  align-self: flex-start;
+}
+
+.urlField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.urlLabel {
+  font-size: var(--font-size-label);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  letter-spacing: var(--letter-spacing-label);
+  text-transform: uppercase;
+}
+
+.urlInput {
+  font-family: var(--font);
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text);
+  background: var(--color-background);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--padding-input);
+  width: 100%;
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-emphasis-2);
+  }
+
+  &::placeholder {
+    color: var(--color-text-muted);
+  }
+}
+
+.urlHint {
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+}
+
+.inlineError {
+  font-size: var(--font-size-body-sm);
+  color: var(--color-error);
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  border-top: var(--border);
+  flex-shrink: 0;
+}
+
+.retryBtn {
+  @include btn-primary;
+  gap: var(--space-xs);
+}
+
+.dismissBtn {
+  @include btn-secondary;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinning {
+  animation: spin 0.8s linear infinite;
+}
