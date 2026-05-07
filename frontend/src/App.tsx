@@ -1,6 +1,7 @@
-import { BookOpen } from 'lucide-react'
+import { AlertCircle, BookOpen } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import styles from './App.module.scss'
+import { checkHealth, getStoredOllamaUrl, type HealthData } from './api/health'
 import { listProjects, type ProjectInfo } from './api/projects'
 import { AllProjectsView } from './components/AllProjectsView'
 import { ChatView } from './components/ChatView'
@@ -9,6 +10,7 @@ import { DropZone, type FileState } from './components/DropZone'
 import { ImportProgressToast } from './components/ImportProgressToast'
 import { NewProjectView } from './components/NewProjectView'
 import { NoProjectState } from './components/NoProjectState'
+import { OllamaSetupModal } from './components/OllamaSetupModal'
 import { SourceList } from './components/SourceList'
 import { ProblematiqueView } from './components/ProblematiqueView'
 import { Sidebar, type View } from './components/Sidebar'
@@ -24,18 +26,37 @@ export default function App() {
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null)
   const [projectsLoaded, setProjectsLoaded] = useState(false)
 
+  type OllamaStatus = 'checking' | 'connected' | 'unavailable' | 'dismissed'
+  const [ollamaStatus, setOllamaStatus] = useState<OllamaStatus>('checking')
+  const [healthData, setHealthData] = useState<HealthData | null>(null)
+
   const bump = () => setRefreshKey(k => k + 1)
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY)
-    listProjects()
-      .then(list => {
+    const dismissed = sessionStorage.getItem('ollamaDismissed') === '1'
+    Promise.all([
+      listProjects(),
+      checkHealth(getStoredOllamaUrl() ?? undefined),
+    ])
+      .then(([list, health]) => {
         setProjects(list)
         if (stored && list.some(p => p.id === stored)) {
           setCurrentProjectId(stored)
         }
+        setHealthData(health)
+        const needsModal =
+          health.ollama === 'unavailable' ||
+          health.ollama_models.some(m => !m.available)
+        if (needsModal && !dismissed) {
+          setOllamaStatus('unavailable')
+        } else {
+          setOllamaStatus('connected')
+        }
       })
-      .catch(console.error)
+      .catch(() => {
+        setOllamaStatus('dismissed')
+      })
       .finally(() => setProjectsLoaded(true))
   }, [])
 
@@ -139,9 +160,26 @@ export default function App() {
     <div className={styles.root}>
       {sidebar}
       <main className={styles.content}>
+        {ollamaStatus === 'dismissed' && (
+          <div className={styles.ollamaBanner}>
+            <AlertCircle size={14} />
+            Ollama n'est pas disponible — certaines fonctionnalités ne fonctionneront pas.
+            <button onClick={() => setOllamaStatus('unavailable')}>Reconfigurer</button>
+          </div>
+        )}
         {renderMain()}
       </main>
       <ImportProgressToast fileStates={importStates} onDismiss={() => setImportStates([])} />
+      {ollamaStatus === 'unavailable' && (
+        <OllamaSetupModal
+          healthData={healthData}
+          onConnected={(health) => {
+            setHealthData(health)
+            setOllamaStatus('connected')
+          }}
+          onDismiss={() => setOllamaStatus('dismissed')}
+        />
+      )}
     </div>
   )
 }

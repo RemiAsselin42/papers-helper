@@ -1,3 +1,5 @@
+@use './styles/mixins' as *;
+
 .root {
   min-height: 100dvh;
 }
@@ -46,4 +48,24 @@
   font-size: var(--font-size-body-sm);
   line-height: var(--line-height-body-sm);
   color: var(--color-text-muted);
+}
+
+.ollamaBanner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-md);
+  margin-bottom: var(--space-md);
+  background: color-mix(in srgb, var(--color-emphasis-2) 12%, var(--color-background));
+  border: 1px solid var(--color-emphasis-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text);
+
+  button {
+    @include btn-secondary;
+    margin-left: auto;
+    padding: 4px 10px;
+    font-size: var(--font-size-label);
+  }
 }
