@@ -63,11 +63,21 @@ class TestChunkText:
         chunks = chunk_text(text, target_words=500)
         assert len(chunks) == 1
 
-    def test_oversized_single_para_stays_one_chunk(self) -> None:
-        big = " ".join(["word"] * 1000)
+    def test_oversized_single_para_is_hard_split(self) -> None:
+        """A single huge paragraph must be split so no chunk blows Ollama's
+        embedding context window (default 2048 tokens). Cap is target_words*2."""
+        big = " ".join(["word"] * 3000)
         chunks = chunk_text(big, target_words=500)
-        # A single paragraph that exceeds target — no split point, goes in as-is
-        assert len(chunks) == 1
+        # 3000 words / cap=1000 → at least 3 chunks
+        assert len(chunks) >= 3
+        for chunk in chunks:
+            assert len(chunk.split()) <= 500 * 2
+
+    def test_hard_cap_preserves_all_words(self) -> None:
+        big = " ".join(str(i) for i in range(2500))
+        chunks = chunk_text(big, target_words=500)
+        rejoined = " ".join(chunks).split()
+        assert rejoined == [str(i) for i in range(2500)]
 
     def test_chunk_contains_all_words(self) -> None:
         text = "foo bar\n\nbaz qux\n\nzap"

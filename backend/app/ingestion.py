@@ -42,8 +42,30 @@ def normalize_text(text: str) -> str:
     return text.strip()
 
 
+def _split_oversized_paragraph(para: str, max_words: int) -> list[str]:
+    """Split a paragraph that exceeds *max_words* into chunks of at most that
+    many words. Preserves word order; doesn't try to be sentence-aware.
+    Used as a safety net so no single chunk can blow Ollama's embedding
+    context window (default 2048 tokens ≈ a few hundred dense words).
+    """
+    words = para.split()
+    if len(words) <= max_words:
+        return [para]
+    return [" ".join(words[i : i + max_words]) for i in range(0, len(words), max_words)]
+
+
 def chunk_text(text: str, target_words: int = 500) -> list[str]:
-    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+    # Hard cap per chunk — slightly above target_words to keep paragraph-aware
+    # packing flexible, but well under any reasonable embedding context window.
+    max_words_per_chunk = target_words * 2
+
+    paragraphs: list[str] = []
+    for raw in text.split("\n\n"):
+        para = raw.strip()
+        if not para:
+            continue
+        paragraphs.extend(_split_oversized_paragraph(para, max_words_per_chunk))
+
     chunks: list[str] = []
     bucket: list[str] = []
     bucket_words = 0
