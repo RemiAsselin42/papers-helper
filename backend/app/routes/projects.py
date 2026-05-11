@@ -5,7 +5,7 @@ import gc
 import json
 import shutil
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -93,7 +93,7 @@ async def create_project(body: CreateProjectRequest) -> ProjectInfo:
         raise HTTPException(status_code=422, detail="Project name must be 80 characters or fewer")
 
     project_id = str(uuid.uuid4())
-    created_at = datetime.utcnow().isoformat()
+    created_at = datetime.now(UTC).isoformat()
 
     def _create() -> ProjectInfo:
         project_dir = PROJECTS_DIR / project_id
