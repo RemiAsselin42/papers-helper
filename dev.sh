@@ -306,11 +306,11 @@ if [[ "$VERBOSE" == "1" ]]; then
   # can't capture on Windows.
   debug "verbose mode: --reload disabled so worker output is captured"
   (cd "$BACKEND" && NO_COLOR=1 uv run uvicorn app.main:app \
-    --host 0.0.0.0 --port 8000 --log-level debug) \
+    --host 0.0.0.0 --port 8000 --log-level debug </dev/null) \
     >>"$BACKEND_LOG" 2>&1 &
 else
   (cd "$BACKEND" && NO_COLOR=1 uv run uvicorn app.main:app \
-    --reload --host 0.0.0.0 --port 8000) \
+    --reload --host 0.0.0.0 --port 8000 </dev/null) \
     >>"$BACKEND_LOG" 2>&1 &
 fi
 BACKEND_PID=$!
@@ -320,7 +320,37 @@ register_process "backend" "$BACKEND_PID" "$BACKEND_LOG"
 sleep 2
 
 load "Starting frontend (logs: $(cygpath -w "$FRONTEND_LOG" 2>/dev/null || echo "$FRONTEND_LOG"))"
-(cd "$FRONTEND" && NO_COLOR=1 pnpm dev) >>"$FRONTEND_LOG" 2>&1 &
+# Strip VS Code's JS-debug auto-attach env: NODE_OPTIONS injects a bootloader
+# that attaches a debugger to vite, and the session terminates the process
+# after a few seconds when run outside the VS Code terminal.
+# Detach stdin (</dev/null): vite binds CLI shortcuts on stdin (q=quit, r=restart).
+# Backgrounded under MSYS/Git Bash, the shared TTY can feed stray bytes that
+# silently kill vite after a random delay.
+# Invoke vite.js via node directly + `exec` so the captured PID is the actual
+# node process, not the pnpm.sh -> pnpm.exe -> node chain (which loses children
+# on MSYS and produces phantom deaths).
+FRONTEND_HEARTBEAT="$ROOT/frontend.heartbeat"
+: > "$FRONTEND_HEARTBEAT"
+(
+  trap 'echo "[trap] caught HUP at $(date +%T)" >> "'"$FRONTEND_LOG"'"' HUP
+  trap 'echo "[trap] caught INT at $(date +%T)" >> "'"$FRONTEND_LOG"'"' INT
+  trap 'echo "[trap] caught TERM at $(date +%T)" >> "'"$FRONTEND_LOG"'"; exit 143' TERM
+  trap 'echo "[trap] caught PIPE at $(date +%T)" >> "'"$FRONTEND_LOG"'"' PIPE
+  trap 'echo "[trap] caught QUIT at $(date +%T)" >> "'"$FRONTEND_LOG"'"' QUIT
+  cd "$FRONTEND" || exit 1
+  unset NODE_OPTIONS VSCODE_INSPECTOR_OPTIONS
+  (
+    while true; do
+      echo "$(date '+%H:%M:%S') alive" >> "$FRONTEND_HEARTBEAT"
+      sleep 5
+    done
+  ) &
+  HB_PID=$!
+  nohup env NO_COLOR=1 FORCE_COLOR=0 node node_modules/vite/bin/vite.js </dev/null
+  code=$?
+  kill "$HB_PID" 2>/dev/null || true
+  echo "[vite-exit] code=$code at $(date '+%H:%M:%S')" >> "$FRONTEND_LOG"
+) >>"$FRONTEND_LOG" 2>&1 &
 FRONTEND_PID=$!
 register_process "frontend" "$FRONTEND_PID" "$FRONTEND_LOG"
 
