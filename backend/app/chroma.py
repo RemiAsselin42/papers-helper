@@ -5,49 +5,89 @@ from typing import Any
 import chromadb
 from chromadb.errors import NotFoundError
 
-from app.config import PROJECTS_DIR
-from app.ollama_service import get_embed_fn
+from app.config import (
+    OLLAMA_BASE_URL,
+    OLLAMA_EMBED_MODEL,
+    PROJECTS_DIR,
+    get_request_embed_config,
+)
+from app.embeddings import EmbedConfig, EmbedProvider, build_embed_fn
 
 COLLECTION_NAME = "papers"
 _EMBED_MODEL_META_KEY = "embed_model"
+_EMBED_PROVIDER_META_KEY = "embed_provider"
 
-_cache: dict[str, tuple[Any, chromadb.Collection]] = {}
+# Chroma's PersistentClient() factory returns an instance whose concrete type
+# isn't directly exposed as a Type — store as Any to avoid mypy noise.
+_client_cache: dict[str, Any] = {}
+# (project_id, provider, model) → (embed_fn, collection). Caching the embed
+# function avoids constructing a new ollama.Client / OpenAI client on every
+# request — important since embed_fn is held by the Chroma collection too.
+_collection_cache: dict[tuple[str, str, str], tuple[Any, chromadb.Collection]] = {}
+
+
+def _default_config() -> EmbedConfig:
+    return EmbedConfig(
+        provider=EmbedProvider.OLLAMA,
+        model=OLLAMA_EMBED_MODEL,
+        api_key=None,
+        ollama_url=OLLAMA_BASE_URL,
+    )
+
+
+def _invalidate_project_collections(project_id: str) -> None:
+    for key in list(_collection_cache):
+        if key[0] == project_id:
+            _collection_cache.pop(key, None)
 
 
 def get_collection(project_id: str) -> chromadb.Collection:
-    if project_id in _cache:
-        return _cache[project_id][1]
+    config = get_request_embed_config() or _default_config()
+    cache_key = (project_id, config.provider.value, config.model)
 
-    vectors_dir = PROJECTS_DIR / project_id / "vectors"
-    vectors_dir.mkdir(parents=True, exist_ok=True)
-    client = chromadb.PersistentClient(path=str(vectors_dir))
-    fn = get_embed_fn()
-    current_model = fn.model
+    cached = _collection_cache.get(cache_key)
+    if cached is not None:
+        return cached[1]
+
+    if project_id in _client_cache:
+        client = _client_cache[project_id]
+    else:
+        vectors_dir = PROJECTS_DIR / project_id / "vectors"
+        vectors_dir.mkdir(parents=True, exist_ok=True)
+        client = chromadb.PersistentClient(path=str(vectors_dir))
+        _client_cache[project_id] = client
 
     try:
         existing = client.get_collection(COLLECTION_NAME)
-        stored = (existing.metadata or {}).get(_EMBED_MODEL_META_KEY, "")
-        if stored != current_model:
-            # Incompatible embedding space (or legacy collection without tag) —
-            # drop and let get_or_create recreate it.
+        meta = existing.metadata or {}
+        stored_provider = meta.get(_EMBED_PROVIDER_META_KEY, EmbedProvider.OLLAMA.value)
+        stored_model = meta.get(_EMBED_MODEL_META_KEY, "")
+        if stored_provider != config.provider.value or stored_model != config.model:
+            # Embedding space changed (provider or model) — drop and recreate so
+            # the new function can re-embed on next ingestion.
             client.delete_collection(COLLECTION_NAME)
+            _invalidate_project_collections(project_id)
     except NotFoundError:
         pass  # Collection doesn't exist yet
 
-    collection = client.get_or_create_collection(
+    embed_fn = build_embed_fn(config)
+    collection: chromadb.Collection = client.get_or_create_collection(
         COLLECTION_NAME,
-        embedding_function=fn,  # type: ignore[arg-type]
-        metadata={_EMBED_MODEL_META_KEY: current_model},
+        embedding_function=embed_fn,
+        metadata={
+            _EMBED_PROVIDER_META_KEY: config.provider.value,
+            _EMBED_MODEL_META_KEY: config.model,
+        },
     )
-    _cache[project_id] = (client, collection)
+    _collection_cache[cache_key] = (embed_fn, collection)
     return collection
 
 
 def evict_collection(project_id: str) -> None:
-    entry = _cache.pop(project_id, None)
-    if entry is None:
+    _invalidate_project_collections(project_id)
+    client = _client_cache.pop(project_id, None)
+    if client is None:
         return
-    client, _ = entry
     try:
         # Explicitly stop the internal system to close the SQLite connection
         # before the caller attempts shutil.rmtree on Windows.

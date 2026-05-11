@@ -39,7 +39,10 @@ async def chat(
             raise HTTPException(status_code=400, detail=f"Unknown LLM provider: {x_llm_provider}")
 
     if provider != LLMProvider.OLLAMA and not x_llm_api_key:
-        raise HTTPException(status_code=400, detail="X-LLM-API-Key header required for external providers")
+        raise HTTPException(
+            status_code=400,
+            detail="X-LLM-API-Key header required for external providers",
+        )
 
     raw_messages: list[dict[str, Any]] = [
         {"role": m.role, "content": m.content} for m in req.messages

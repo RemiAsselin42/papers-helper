@@ -40,6 +40,41 @@ def test_health_ollama_unavailable(client: TestClient) -> None:
     assert "storage" in body
 
 
+def test_health_advertises_required_models_when_unavailable(client: TestClient) -> None:
+    """The required-model list is always populated so the setup UI can show
+    `ollama pull <name>` commands even when Ollama itself isn't reachable."""
+    with patch("app.main.ollama.Client", _mock_client_unavailable()):
+        response = client.get("/health")
+
+    body = response.json()
+    assert body["ollama"] == "unavailable"
+    assert len(body["ollama_models"]) >= 1
+    for m in body["ollama_models"]:
+        assert m["available"] is False
+        assert m["name"]
+
+
+def test_health_surfaces_connection_error_for_diagnostics(client: TestClient) -> None:
+    """When Ollama fails, the response carries the URL tried and the error so the UI can
+    show a concrete diagnostic (rather than just 'unavailable')."""
+    with patch("app.main.ollama.Client", _mock_client_unavailable()):
+        response = client.get("/health")
+
+    body = response.json()
+    assert body["ollama_url"]
+    assert body["ollama_error"] is not None
+    assert "connection refused" in body["ollama_error"]
+
+
+def test_health_no_error_when_connected(client: TestClient) -> None:
+    with patch("app.main.ollama.Client", _mock_client_connected()):
+        response = client.get("/health")
+
+    body = response.json()
+    assert body["ollama_error"] is None
+    assert body["ollama_url"]
+
+
 def test_health_ollama_connected(client: TestClient) -> None:
     """Reports connected when Ollama responds."""
     with patch("app.main.ollama.Client", _mock_client_connected()):

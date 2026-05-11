@@ -1,15 +1,24 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class LLMProvider(str, Enum):
+class LLMProvider(StrEnum):
     OLLAMA = "ollama"
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     GEMINI = "gemini"
+    PERPLEXITY = "perplexity"
+    DEEPSEEK = "deepseek"
+
+
+_OPENAI_COMPATIBLE_BASE_URLS: dict[LLMProvider, str] = {
+    LLMProvider.GEMINI: "https://generativelanguage.googleapis.com/v1beta/openai/",
+    LLMProvider.PERPLEXITY: "https://api.perplexity.ai",
+    LLMProvider.DEEPSEEK: "https://api.deepseek.com",
+}
 
 
 class ExternalLLMService:
@@ -21,7 +30,12 @@ class ExternalLLMService:
     async def stream_generate_messages(
         self, messages: list[dict[str, Any]]
     ) -> AsyncGenerator[str, None]:
-        if self.provider in (LLMProvider.OPENAI, LLMProvider.GEMINI):
+        if self.provider in (
+            LLMProvider.OPENAI,
+            LLMProvider.GEMINI,
+            LLMProvider.PERPLEXITY,
+            LLMProvider.DEEPSEEK,
+        ):
             async for token in self._stream_openai_compatible(messages):
                 yield token
         elif self.provider == LLMProvider.ANTHROPIC:
@@ -34,8 +48,9 @@ class ExternalLLMService:
         from openai import AsyncOpenAI
 
         kwargs: dict[str, Any] = {"api_key": self.api_key}
-        if self.provider == LLMProvider.GEMINI:
-            kwargs["base_url"] = "https://generativelanguage.googleapis.com/v1beta/openai/"
+        base_url = _OPENAI_COMPATIBLE_BASE_URLS.get(self.provider)
+        if base_url is not None:
+            kwargs["base_url"] = base_url
 
         client = AsyncOpenAI(**kwargs)
         stream = await client.chat.completions.create(
@@ -43,7 +58,7 @@ class ExternalLLMService:
             messages=messages,  # type: ignore[arg-type]
             stream=True,
         )
-        async for chunk in stream:
+        async for chunk in stream:  # type: ignore[union-attr]
             token = chunk.choices[0].delta.content
             if token:
                 yield token

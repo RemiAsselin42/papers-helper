@@ -8,6 +8,12 @@ from chromadb import Documents, EmbeddingFunction, Embeddings
 
 from app.config import OLLAMA_BASE_URL, OLLAMA_EMBED_MODEL, OLLAMA_GENERATION_MODEL, get_ollama_url
 
+# Most Ollama embedding models (nomic-embed-text, mxbai-embed-large, bge-large)
+# support 8192-token context, but Ollama's per-request default is 2048. Bumping
+# this avoids 400 "input length exceeds context length" errors on dense chunks.
+# Ollama silently clamps to the model's actual maximum.
+_EMBED_NUM_CTX = 8192
+
 
 class OllamaEmbeddingFunction(EmbeddingFunction[Documents]):
     def __init__(self, model: str = OLLAMA_EMBED_MODEL, base_url: str = OLLAMA_BASE_URL) -> None:
@@ -15,7 +21,11 @@ class OllamaEmbeddingFunction(EmbeddingFunction[Documents]):
         self._client = ollama.Client(host=base_url)
 
     def __call__(self, input: Documents) -> Embeddings:
-        return self._client.embed(model=self.model, input=input).embeddings  # type: ignore[return-value]
+        return self._client.embed(  # type: ignore[return-value]
+            model=self.model,
+            input=input,
+            options={"num_ctx": _EMBED_NUM_CTX},
+        ).embeddings
 
 
 class OllamaGenerationService:
@@ -57,11 +67,3 @@ class OllamaGenerationService:
                 yield chunk.message.content
 
 
-_embed_fn: OllamaEmbeddingFunction | None = None
-
-
-def get_embed_fn() -> OllamaEmbeddingFunction:
-    global _embed_fn
-    if _embed_fn is None:
-        _embed_fn = OllamaEmbeddingFunction()
-    return _embed_fn
