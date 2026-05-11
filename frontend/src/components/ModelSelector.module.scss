@@ -1,0 +1,152 @@
+@use '../styles/mixins' as *;
+
+.selector {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  background: transparent;
+  color: var(--color-text);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: var(--font-size-body-sm);
+  white-space: nowrap;
+  transition: var(--transition-short);
+
+  &:hover {
+    color: var(--color-background);
+    background: var(--color-emphasis);
+  }
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.label {
+  font-weight: 600;
+}
+
+.chevron {
+  @include chevron;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+.list {
+  position: absolute;
+  top: calc(100% + var(--space-xs));
+  right: 0;
+  min-width: 200px;
+  list-style: none;
+  background: var(--color-surface);
+  border: var(--border);
+  @include container-radius(var(--radius-md), var(--space-xs));
+  padding: var(--space-xs);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 60;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: var(--space-xs) var(--space-sm);
+  background: transparent;
+  border: none;
+  border-radius: var(--inner-radius);
+  cursor: pointer;
+  color: var(--color-text);
+  font-family: var(--font);
+  font-size: var(--font-size-body-sm);
+  text-align: left;
+  transition: var(--transition-short);
+
+  &:hover {
+    color: var(--color-background);
+    background: var(--color-emphasis);
+  }
+}
+
+.itemActive {
+  background: color-mix(in srgb, var(--color-emphasis-2) 20%, transparent);
+}
+
+.itemMark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  flex-shrink: 0;
+}
+
+.itemLabel {
+  flex: 1;
+  white-space: nowrap;
+}
+
+.itemBadge {
+  display: flex;
+  align-items: center;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.item:hover .itemBadge {
+  color: var(--color-background);
+}
+
+// The Ollama row needs `position: relative` so the flyout anchors to it.
+.ollamaRow {
+  position: relative;
+}
+
+// Flyout sub-menu — same visual style as `.list`, anchored to the left of the
+// Ollama row in the main list. `right: 100%` makes it flush against the main
+// list so the cursor can travel from row → flyout without crossing a gap that
+// would fire mouseleave.
+.flyout {
+  position: absolute;
+  top: 0;
+  right: 100%;
+  min-width: 200px;
+  list-style: none;
+  background: var(--color-surface);
+  border: var(--border);
+  @include container-radius(var(--radius-md), var(--space-xs));
+  padding: var(--space-xs);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 61;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+}
+
+.flyoutInfo {
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.flyoutError {
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-label);
+  color: var(--color-error);
+}

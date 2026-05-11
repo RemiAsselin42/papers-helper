@@ -1,22 +1,34 @@
-export type LLMProvider = 'ollama' | 'openai' | 'anthropic' | 'gemini'
+export type LLMProvider =
+  | 'ollama'
+  | 'openai'
+  | 'anthropic'
+  | 'gemini'
+  | 'perplexity'
+  | 'deepseek'
 
 export const PROVIDER_LABELS: Record<LLMProvider, string> = {
   ollama: 'Ollama (local)',
   openai: 'OpenAI',
   anthropic: 'Anthropic',
   gemini: 'Google Gemini',
+  perplexity: 'Perplexity',
+  deepseek: 'DeepSeek',
 }
 
 export const DEFAULT_MODELS: Record<Exclude<LLMProvider, 'ollama'>, string> = {
   openai: 'gpt-4o',
   anthropic: 'claude-sonnet-4-6',
   gemini: 'gemini-2.0-flash',
+  perplexity: 'sonar',
+  deepseek: 'deepseek-chat',
 }
 
 export const API_KEY_LINKS: Record<Exclude<LLMProvider, 'ollama'>, string> = {
   openai: 'https://platform.openai.com/api-keys',
   anthropic: 'https://console.anthropic.com/settings/keys',
   gemini: 'https://aistudio.google.com/app/apikey',
+  perplexity: 'https://www.perplexity.ai/settings/api',
+  deepseek: 'https://platform.deepseek.com/api_keys',
 }
 
 const PROVIDER_STORAGE_KEY = 'llmProvider'
@@ -53,6 +65,17 @@ export function setStoredExternalModel(
   else localStorage.removeItem(`llmModel_${provider}`)
 }
 
+const OLLAMA_MODEL_STORAGE_KEY = 'ollamaModel'
+
+export function getStoredOllamaModel(): string | null {
+  return localStorage.getItem(OLLAMA_MODEL_STORAGE_KEY)
+}
+
+export function setStoredOllamaModel(model: string | null): void {
+  if (model) localStorage.setItem(OLLAMA_MODEL_STORAGE_KEY, model)
+  else localStorage.removeItem(OLLAMA_MODEL_STORAGE_KEY)
+}
+
 export function llmHeaders(provider: LLMProvider): Record<string, string> {
   if (provider === 'ollama') return {}
   const key = getStoredApiKey(provider)
@@ -60,4 +83,18 @@ export function llmHeaders(provider: LLMProvider): Record<string, string> {
     'X-LLM-Provider': provider,
     ...(key ? { 'X-LLM-API-Key': key } : {}),
   }
+}
+
+export function allLlmHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {}
+  // Inline read to avoid a circular import with ./health.
+  const ollamaUrl = localStorage.getItem('ollamaBaseUrl')
+  if (ollamaUrl) headers['X-Ollama-URL'] = ollamaUrl
+  return { ...headers, ...llmHeaders(getStoredProvider()) }
+}
+
+export function isActiveProviderReady(ollamaHealthy: boolean): boolean {
+  const provider = getStoredProvider()
+  if (provider === 'ollama') return ollamaHealthy
+  return !!getStoredApiKey(provider)
 }

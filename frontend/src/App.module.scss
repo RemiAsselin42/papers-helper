@@ -6,8 +6,8 @@
 
 .content {
   margin: 0 auto;
-  padding: var(--space-2xl) var(--space-xl);
-  padding-left: calc(var(--space-sm) + 48px + var(--space-xl));
+  padding: calc(var(--space-md) + 48px + var(--space-xl))
+    calc(var(--space-sm) + 48px + var(--space-xl)) 0 calc(var(--space-sm) + 48px + var(--space-xl));
   max-width: 992px;
   width: 100%;
 }

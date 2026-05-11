@@ -7,6 +7,8 @@ export interface HealthData {
   status: 'ok'
   ollama: 'connected' | 'unavailable'
   ollama_models: OllamaModelStatus[]
+  ollama_url: string
+  ollama_error: string | null
   storage: 'accessible' | 'inaccessible'
 }
 
@@ -26,7 +28,9 @@ export function setStoredOllamaUrl(url: string | null): void {
 
 export async function checkHealth(ollamaUrl?: string): Promise<HealthData> {
   const params = ollamaUrl ? `?ollama_url=${encodeURIComponent(ollamaUrl)}` : ''
-  const res = await fetch(`/health${params}`)
+  // Route through the /api proxy so this works regardless of whether the
+  // dev server forwards /health directly.
+  const res = await fetch(`/api/health${params}`)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }

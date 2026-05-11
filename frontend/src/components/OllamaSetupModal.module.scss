@@ -86,6 +86,31 @@
   margin: 0;
 }
 
+.statusContent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+  flex: 1;
+}
+
+.diagnostic {
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+  line-height: var(--line-height-body);
+  margin: 0;
+  padding: var(--space-xs) var(--space-sm);
+  background: color-mix(in srgb, var(--color-error) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-error) 30%, transparent);
+  border-radius: var(--radius-sm);
+  word-break: break-word;
+}
+
+.diagnosticError {
+  color: var(--color-error);
+  font-weight: 600;
+}
+
 .section {
   display: flex;
   flex-direction: column;
@@ -117,6 +142,90 @@
   &:hover {
     opacity: 0.8;
   }
+}
+
+.stepList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: 0;
+  margin: 0;
+}
+
+.step {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+}
+
+.stepNum {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--color-emphasis);
+  color: var(--color-background);
+  font-size: var(--font-size-label);
+  font-weight: 700;
+  margin-top: 1px;
+}
+
+.stepBody {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.stepTitle {
+  font-size: var(--font-size-body-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0;
+  line-height: var(--line-height-body-sm);
+}
+
+.stepHint {
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text-muted);
+  margin: 0;
+  line-height: var(--line-height-body);
+}
+
+.inlineCode {
+  font-family: monospace;
+  font-size: 0.8125rem;
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: 2px;
+  padding: 1px 4px;
+  color: var(--color-text);
+}
+
+.commandList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin: var(--space-xs) 0 0;
+  padding: 0;
+}
+
+.command {
+  display: inline-block;
+  font-family: monospace;
+  font-size: 0.8125rem;
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  color: var(--color-text);
+  user-select: all;
 }
 
 .modelList {

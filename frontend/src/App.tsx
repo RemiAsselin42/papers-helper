@@ -2,8 +2,11 @@ import { AlertCircle, BookOpen } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import styles from './App.module.scss'
 import { checkHealth, getStoredOllamaUrl, type HealthData } from './api/health'
+import { getStoredProvider, isActiveProviderReady, type LLMProvider } from './api/llm'
 import { listProjects, type ProjectInfo } from './api/projects'
 import { AllProjectsView } from './components/AllProjectsView'
+import { ApiKeyModal } from './components/ApiKeyModal'
+import { AppHeader } from './components/AppHeader'
 import { ChatView } from './components/ChatView'
 import { DebugPanel } from './components/DebugPanel'
 import { DropZone, type FileState } from './components/DropZone'
@@ -29,6 +32,12 @@ export default function App() {
   type OllamaStatus = 'checking' | 'connected' | 'unavailable' | 'dismissed'
   const [ollamaStatus, setOllamaStatus] = useState<OllamaStatus>('checking')
   const [healthData, setHealthData] = useState<HealthData | null>(null)
+  const [apiKeyModalProvider, setApiKeyModalProvider] = useState<Exclude<
+    LLMProvider,
+    'ollama'
+  > | null>(null)
+  const [activeProvider, setActiveProvider] = useState<LLMProvider>(() => getStoredProvider())
+  const [ollamaModelBump, setOllamaModelBump] = useState(0)
 
   const bump = () => setRefreshKey(k => k + 1)
 
@@ -45,13 +54,17 @@ export default function App() {
           setCurrentProjectId(stored)
         }
         setHealthData(health)
-        const needsModal =
-          health.ollama === 'unavailable' ||
-          health.ollama_models.some(m => !m.available)
-        if (needsModal && !dismissed) {
+        const ollamaHealthy =
+          health.ollama === 'connected' && health.ollama_models.every(m => m.available)
+        // Modal only matters when the active provider isn't ready — i.e. user
+        // picked Ollama and it's broken, OR they picked an external provider
+        // but haven't saved a key yet.
+        if (isActiveProviderReady(ollamaHealthy)) {
+          setOllamaStatus('connected')
+        } else if (!dismissed) {
           setOllamaStatus('unavailable')
         } else {
-          setOllamaStatus('connected')
+          setOllamaStatus('dismissed')
         }
       })
       .catch(() => {
@@ -100,10 +113,43 @@ export default function App() {
     />
   )
 
+  const currentProject = projects.find(p => p.id === currentProjectId) ?? null
+
+  function reevaluateOllamaStatus() {
+    const ollamaHealthy =
+      healthData?.ollama === 'connected' &&
+      healthData.ollama_models.every(m => m.available)
+    if (isActiveProviderReady(!!ollamaHealthy)) {
+      setOllamaStatus('connected')
+    }
+  }
+
+  function handleProviderChange(p: LLMProvider) {
+    setActiveProvider(p)
+    reevaluateOllamaStatus()
+  }
+
+  const ollamaHealthy =
+    healthData?.ollama === 'connected' &&
+    healthData.ollama_models.every(m => m.available)
+
+  const header = (
+    <AppHeader
+      currentProject={currentProject}
+      onConfigureOllama={() => {
+        if (!ollamaHealthy) setOllamaStatus('unavailable')
+      }}
+      onRequestApiKey={setApiKeyModalProvider}
+      onProviderChange={handleProviderChange}
+      onOllamaModelChange={() => setOllamaModelBump(b => b + 1)}
+    />
+  )
+
   if (!projectsLoaded) {
     return (
       <div className={styles.root}>
         {sidebar}
+        {header}
         <main className={styles.content} />
       </div>
     )
@@ -147,7 +193,13 @@ export default function App() {
           <ProblematiqueView projectId={projectId} />
         )}
         {activeView === 'chat' && (
-          <ChatView projectId={projectId} />
+          <ChatView
+            projectId={projectId}
+            provider={activeProvider}
+            ollamaModelBump={ollamaModelBump}
+            onResumeProvider={handleProviderChange}
+            onResumeOllamaModel={() => setOllamaModelBump(b => b + 1)}
+          />
         )}
         {activeView === 'debug' && (
           <DebugPanel projectId={projectId} refreshKey={refreshKey} />
@@ -159,6 +211,7 @@ export default function App() {
   return (
     <div className={styles.root}>
       {sidebar}
+      {header}
       <main className={styles.content}>
         {ollamaStatus === 'dismissed' && (
           <div className={styles.ollamaBanner}>
@@ -178,6 +231,23 @@ export default function App() {
             setOllamaStatus('connected')
           }}
           onDismiss={() => setOllamaStatus('dismissed')}
+        />
+      )}
+      {apiKeyModalProvider && (
+        <ApiKeyModal
+          provider={apiKeyModalProvider}
+          onSave={() => {
+            setApiKeyModalProvider(null)
+            // Saving a key may make the active provider ready — silence the
+            // Ollama modal/banner if so.
+            const ollamaHealthy =
+              healthData?.ollama === 'connected' &&
+              healthData.ollama_models.every(m => m.available)
+            if (isActiveProviderReady(!!ollamaHealthy)) {
+              setOllamaStatus('connected')
+            }
+          }}
+          onClose={() => setApiKeyModalProvider(null)}
         />
       )}
     </div>

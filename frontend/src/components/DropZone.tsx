@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback, DragEvent } from 'react'
 import { HelpCircle } from 'lucide-react'
 import { addUrlSource } from '../api/projects'
-import { OLLAMA_URL_KEY } from '../api/health'
+import { allLlmHeaders } from '../api/llm'
 import {
   ACCEPTED_INPUT_ATTR,
   isAcceptedDocument,
@@ -126,10 +126,9 @@ export function DropZone({ projectId, onSuccess, onProgress }: DropZoneProps) {
     for (const file of docFiles) body.append('files', file)
 
     try {
-      const ollamaUrl = localStorage.getItem(OLLAMA_URL_KEY)
       const res = await fetch(`/api/projects/${projectId}/papers/upload/stream`, {
         method: 'POST',
-        headers: ollamaUrl ? { 'X-Ollama-URL': ollamaUrl } : {},
+        headers: allLlmHeaders(),
         body,
         signal: abort.signal,
       })

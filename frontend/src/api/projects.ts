@@ -1,5 +1,5 @@
 import { OLLAMA_URL_KEY } from './health'
-import { getStoredProvider, llmHeaders } from './llm'
+import { allLlmHeaders } from './llm'
 
 function ollamaHeaders(): HeadersInit {
   const url = localStorage.getItem(OLLAMA_URL_KEY)
@@ -22,7 +22,9 @@ export interface SourceInfo {
 }
 
 export async function listSources(projectId: string): Promise<SourceInfo[]> {
-  const res = await fetch(`/api/projects/${projectId}/papers/`)
+  const res = await fetch(`/api/projects/${projectId}/papers/`, {
+    headers: allLlmHeaders(),
+  })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }
@@ -30,7 +32,7 @@ export async function listSources(projectId: string): Promise<SourceInfo[]> {
 export async function deleteSource(projectId: string, stem: string): Promise<void> {
   const res = await fetch(
     `/api/projects/${projectId}/papers/${encodeURIComponent(stem)}`,
-    { method: 'DELETE' }
+    { method: 'DELETE', headers: allLlmHeaders() }
   )
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
 }
@@ -55,7 +57,7 @@ export async function updateSourceMetadata(
     `/api/projects/${projectId}/papers/${encodeURIComponent(stem)}`,
     {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...allLlmHeaders() },
       body: JSON.stringify(payload),
     }
   )
@@ -66,7 +68,7 @@ export async function updateSourceMetadata(
 export function addUrlSource(projectId: string, url: string, signal?: AbortSignal): Promise<Response> {
   return fetch(`/api/projects/${projectId}/papers/url`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...ollamaHeaders() },
+    headers: { 'Content-Type': 'application/json', ...allLlmHeaders() },
     body: JSON.stringify({ url }),
     signal,
   })
@@ -156,13 +158,11 @@ export function streamChat(
   messages: ChatMessage[],
   signal?: AbortSignal,
 ): Promise<Response> {
-  const provider = getStoredProvider()
   return fetch(`/api/projects/${projectId}/chat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...ollamaHeaders(),
-      ...llmHeaders(provider),
+      ...allLlmHeaders(),
     },
     body: JSON.stringify({ model, messages }),
     signal,

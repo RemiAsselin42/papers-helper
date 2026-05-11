@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
+import { allLlmHeaders } from '../api/llm'
 import styles from './DebugPanel.module.scss'
 
 interface PaperInfo {
@@ -32,7 +33,9 @@ export function DebugPanel({ projectId, refreshKey }: DebugPanelProps) {
     setLoading(true)
     setNetworkError(null)
     try {
-      const res = await fetch(`/api/projects/${projectId}/papers/`)
+      const res = await fetch(`/api/projects/${projectId}/papers/`, {
+        headers: allLlmHeaders(),
+      })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data: PaperInfo[] = await res.json()
       setPapers(data)
@@ -54,7 +57,8 @@ export function DebugPanel({ projectId, refreshKey }: DebugPanelProps) {
     setChunksError(null)
     try {
       const res = await fetch(
-        `/api/projects/${projectId}/papers/${encodeURIComponent(stem)}/chunks`
+        `/api/projects/${projectId}/papers/${encodeURIComponent(stem)}/chunks`,
+        { headers: allLlmHeaders() }
       )
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data: ChunkInfo[] = await res.json()

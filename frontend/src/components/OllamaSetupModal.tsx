@@ -34,10 +34,16 @@ export function OllamaSetupModal({ healthData, onConnected, onDismiss }: OllamaS
         if (urlOverride) setStoredOllamaUrl(urlOverride)
         onConnected(health)
       } else {
-        setRetryError("Ollama ne répond toujours pas. Vérifiez qu'il est démarré.")
+        const detail = health.ollama_error
+          ? ` (${health.ollama_error})`
+          : ''
+        setRetryError(
+          `Ollama ne répond toujours pas à ${health.ollama_url}${detail}. Vérifiez qu'il est démarré.`,
+        )
       }
-    } catch {
-      setRetryError('Impossible de joindre le serveur.')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setRetryError(`Impossible de joindre le backend Papers Helper (${msg}).`)
     } finally {
       setRetrying(false)
     }
@@ -82,32 +88,94 @@ export function OllamaSetupModal({ healthData, onConnected, onDismiss }: OllamaS
                 ) : (
                   <WifiOff size={32} className={styles.statusIcon} />
                 )}
-                <p className={styles.statusText}>
-                  {hasModelIssues
-                    ? "Ollama est démarré mais certains modèles requis ne sont pas installés."
-                    : "Papers Helper nécessite Ollama pour la recherche sémantique et le chat. Ollama s'exécute localement sur votre machine."}
-                </p>
+                <div className={styles.statusContent}>
+                  <p className={styles.statusText}>
+                    {hasModelIssues
+                      ? "Ollama est démarré mais certains modèles requis ne sont pas installés."
+                      : "Papers Helper nécessite Ollama pour la recherche sémantique et le chat. Ollama s'exécute localement sur votre machine."}
+                  </p>
+                  {healthData?.ollama_error && (
+                    <p className={styles.diagnostic}>
+                      Tentative de connexion à{' '}
+                      <code className={styles.inlineCode}>{healthData.ollama_url}</code>
+                      {' '}échouée : <span className={styles.diagnosticError}>{healthData.ollama_error}</span>
+                      {healthData.ollama_url.includes('localhost') && (
+                        <>
+                          {' '}— sur Windows, essayez l&apos;URL{' '}
+                          <code className={styles.inlineCode}>http://127.0.0.1:11434</code>
+                          {' '}via «&nbsp;Configurer une URL personnalisée&nbsp;» ci-dessous.
+                        </>
+                      )}
+                    </p>
+                  )}
+                </div>
               </div>
 
               {!hasModelIssues && (
                 <section className={styles.section}>
-                  <h3 className={styles.sectionTitle}>Installer Ollama</h3>
+                  <h3 className={styles.sectionTitle}>Configuration en 3 étapes</h3>
+                  <ol className={styles.stepList}>
+                    <li className={styles.step}>
+                      <span className={styles.stepNum}>1</span>
+                      <div className={styles.stepBody}>
+                        <p className={styles.stepTitle}>Télécharger Ollama</p>
+                        <p className={styles.stepHint}>
+                          Depuis{' '}
+                          <a
+                            href="https://ollama.com/download"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={styles.link}
+                          >
+                            ollama.com/download
+                          </a>{' '}
+                          (macOS, Windows ou Linux).
+                        </p>
+                      </div>
+                    </li>
+                    <li className={styles.step}>
+                      <span className={styles.stepNum}>2</span>
+                      <div className={styles.stepBody}>
+                        <p className={styles.stepTitle}>Lancer Ollama</p>
+                        <p className={styles.stepHint}>
+                          Sur macOS / Windows : ouvrez l&apos;application — elle démarre
+                          un serveur local sur <code className={styles.inlineCode}>localhost:11434</code>{' '}
+                          et reste active en arrière-plan (icône dans la barre des menus / la zone
+                          de notification).
+                          <br />
+                          Sur Linux : exécutez{' '}
+                          <code className={styles.inlineCode}>ollama serve</code> dans un terminal.
+                        </p>
+                      </div>
+                    </li>
+                    <li className={styles.step}>
+                      <span className={styles.stepNum}>3</span>
+                      <div className={styles.stepBody}>
+                        <p className={styles.stepTitle}>Télécharger les modèles requis</p>
+                        <p className={styles.stepHint}>
+                          Dans un terminal, exécutez les commandes ci-dessous (~1–5 Go par modèle,
+                          téléchargement unique) :
+                        </p>
+                        <ul className={styles.commandList}>
+                          {(healthData?.ollama_models.length
+                            ? healthData.ollama_models.map(m => m.name)
+                            : ['nomic-embed-text', 'llama3']
+                          ).map(name => (
+                            <li key={name}>
+                              <code className={styles.command}>ollama pull {name}</code>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </li>
+                  </ol>
                   <p className={styles.text}>
-                    Téléchargez et installez Ollama depuis{' '}
-                    <a
-                      href="https://ollama.com/download"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={styles.link}
-                    >
-                      ollama.com/download
-                    </a>
-                    , puis relancez-le.
+                    Une fois ces étapes terminées, cliquez sur <strong>Réessayer</strong> ci-dessous.
                   </p>
                 </section>
               )}
 
-              {healthData && healthData.ollama_models.length > 0 && (
+              {hasModelIssues && healthData && healthData.ollama_models.length > 0 && (
                 <section className={styles.section}>
                   <h3 className={styles.sectionTitle}>Modèles requis</h3>
                   <ul className={styles.modelList}>
