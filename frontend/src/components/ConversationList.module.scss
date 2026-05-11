@@ -1,0 +1,130 @@
+@use '../styles/mixins' as *;
+
+.root {
+  display: flex;
+  flex-direction: column;
+  width: 240px;
+  flex-shrink: 0;
+  gap: var(--space-sm);
+  border-right: var(--border);
+  padding-right: var(--space-sm);
+  overflow: hidden;
+}
+
+.newBtn {
+  @include btn-secondary;
+  justify-content: flex-start;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-body-sm);
+  flex-shrink: 0;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.empty {
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text-muted);
+  padding: var(--space-sm) var(--space-xs);
+  text-align: center;
+}
+
+.item {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+
+  &:hover .deleteBtn,
+  &:hover .renameBtn {
+    opacity: 1;
+  }
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-sm);
+  cursor: pointer;
+  color: var(--color-text);
+  transition: background-color 150ms;
+
+  &:hover {
+    background: var(--color-surface);
+  }
+}
+
+.item.active .row {
+  background: var(--color-emphasis);
+  color: var(--color-background);
+
+  .meta {
+    color: var(--color-background);
+    opacity: 0.75;
+  }
+}
+
+.title {
+  width: 100%;
+  font-size: var(--font-size-body-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.titleInput {
+  width: 100%;
+  background: var(--color-background);
+  color: var(--color-text);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px 4px;
+  font-family: var(--font);
+  font-size: var(--font-size-body-sm);
+  outline: none;
+}
+
+.meta {
+  font-size: var(--font-size-caption, 11px);
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.renameBtn,
+.deleteBtn {
+  @include btn-icon;
+  width: 24px;
+  height: 24px;
+  align-self: center;
+  margin-left: 4px;
+  opacity: 0;
+  transition:
+    opacity 150ms,
+    color 150ms;
+}
+
+.item.active .renameBtn,
+.item.active .deleteBtn {
+  opacity: 1;
+  color: var(--color-background);
+}
