@@ -108,9 +108,7 @@ class TestConversationCRUD:
         assert resp.status_code == 201
         assert resp.json()["title"] == "Nouvelle conversation"
 
-    def test_create_rejects_unknown_provider(
-        self, client: TestClient, project_dir: Path
-    ) -> None:
+    def test_create_rejects_unknown_provider(self, client: TestClient, project_dir: Path) -> None:
         with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
             resp = client.post(
                 f"/projects/{project_dir.name}/conversations/",
@@ -118,9 +116,7 @@ class TestConversationCRUD:
             )
         assert resp.status_code == 422
 
-    def test_get_returns_full_conversation(
-        self, client: TestClient, project_dir: Path
-    ) -> None:
+    def test_get_returns_full_conversation(self, client: TestClient, project_dir: Path) -> None:
         with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
             created = client.post(
                 f"/projects/{project_dir.name}/conversations/",
@@ -236,15 +232,11 @@ class TestConversationCRUD:
             ).json()
             path = project_dir / "conversations" / f"{created['id']}.json"
             assert path.exists()
-            resp = client.delete(
-                f"/projects/{project_dir.name}/conversations/{created['id']}"
-            )
+            resp = client.delete(f"/projects/{project_dir.name}/conversations/{created['id']}")
         assert resp.status_code == 204
         assert not path.exists()
 
-    def test_conversations_are_project_scoped(
-        self, client: TestClient, tmp_path: Path
-    ) -> None:
+    def test_conversations_are_project_scoped(self, client: TestClient, tmp_path: Path) -> None:
         proj_a = tmp_path / "a"
         proj_a.mkdir()
         proj_b = tmp_path / "b"
@@ -255,3 +247,35 @@ class TestConversationCRUD:
             list_b = client.get("/projects/b/conversations/").json()
         assert len(list_a) == 1
         assert list_b == []
+
+
+class TestBumpTs:
+    """`_bump_ts` guarantees a strictly-monotonic updated_at even when the
+    system clock has microsecond resolution that collides with `existing`."""
+
+    def test_returns_now_when_strictly_greater(self) -> None:
+        from app.routes.conversations import _bump_ts
+
+        old = "2000-01-01T00:00:00+00:00"
+        result = _bump_ts(old)
+        assert result > old
+
+    def test_bumps_by_one_microsecond_when_equal(self) -> None:
+        from datetime import UTC, datetime
+
+        from app.routes.conversations import _bump_ts
+
+        # Use a future timestamp to guarantee now() <= existing → bump path.
+        future = (datetime.now(UTC).replace(year=datetime.now(UTC).year + 1)).isoformat()
+        result = _bump_ts(future)
+        assert result > future
+        # Difference is exactly 1 microsecond.
+        delta = datetime.fromisoformat(result) - datetime.fromisoformat(future)
+        assert delta.total_seconds() * 1_000_000 == pytest.approx(1.0, abs=0.5)
+
+    def test_bumps_when_existing_in_future(self) -> None:
+        from app.routes.conversations import _bump_ts
+
+        future = "2999-01-01T00:00:00+00:00"
+        result = _bump_ts(future)
+        assert result > future

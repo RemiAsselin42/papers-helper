@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal
 
@@ -77,6 +77,14 @@ def _conversation_path(project_id: str, conversation_id: str) -> Path:
 def _require_project(project_id: str) -> None:
     if not _project_dir(project_id).exists():
         raise HTTPException(status_code=404, detail="Project not found")
+
+
+def _bump_ts(existing: str) -> str:
+    """Return now() ISO string, guaranteed strictly greater than `existing`."""
+    now = datetime.now(UTC).isoformat()
+    if now <= existing:
+        return (datetime.fromisoformat(existing) + timedelta(microseconds=1)).isoformat()
+    return now
 
 
 def _derive_title(messages: list[ConversationMessage]) -> str:
@@ -190,7 +198,7 @@ async def update_conversation(
             provider=body.provider,
             model=body.model,
             created_at=existing.created_at,
-            updated_at=datetime.now(UTC).isoformat(),
+            updated_at=_bump_ts(existing.updated_at),
             messages=body.messages,
         )
         _write_conversation(path, updated)
@@ -224,7 +232,7 @@ async def rename_conversation(
             provider=existing.provider,
             model=existing.model,
             created_at=existing.created_at,
-            updated_at=datetime.now(UTC).isoformat(),
+            updated_at=_bump_ts(existing.updated_at),
             messages=existing.messages,
         )
         _write_conversation(path, updated)
