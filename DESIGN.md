@@ -91,6 +91,9 @@ components:
     backgroundColor: "{colors.emphasis}"
     textColor: "{colors.background}"
     rounded: "{rounded.sm}"
+  icon:
+    size-standard: "{20}"
+    size-small: "{16}"
 ---
 
 ## Overview
@@ -134,14 +137,14 @@ Layout is a two-column shell: a narrow fixed sidebar (240px) and a flexible main
 
 The spacing scale is base-4. Use only defined steps — do not invent intermediate values.
 
-| Token | Value | Use |
-|-------|-------|-----|
-| xs    | 4px   | Icon gap, inline badge padding |
-| sm    | 8px   | List item gap, compact padding |
-| md    | 16px  | Card padding, section gap |
+| Token | Value | Use                             |
+| ----- | ----- | ------------------------------- |
+| xs    | 4px   | Icon gap, inline badge padding  |
+| sm    | 8px   | List item gap, compact padding  |
+| md    | 16px  | Card padding, section gap       |
 | lg    | 24px  | Panel padding, between-card gap |
-| xl    | 40px  | Section vertical rhythm |
-| 2xl   | 64px  | Page-level top/bottom margins |
+| xl    | 40px  | Section vertical rhythm         |
+| 2xl   | 64px  | Page-level top/bottom margins   |
 
 Content max-width: 760px for reading areas. No fluid type.
 
@@ -159,11 +162,11 @@ Never use `box-shadow`. Never use backdrop blur or blur effects.
 
 All corners use the defined radius scale. Components are slightly rounded, not pill-shaped.
 
-| Token | Value | Applied to |
-|-------|-------|------------|
+| Token | Value | Applied to                    |
+| ----- | ----- | ----------------------------- |
 | sm    | 3px   | Buttons, inputs, tags, badges |
-| md    | 6px   | Cards, dropdowns, tooltips |
-| lg    | 10px  | Modals, large panels |
+| md    | 6px   | Cards, dropdowns, tooltips    |
+| lg    | 10px  | Modals, large panels          |
 
 No fully circular elements except avatar initials (48px circle).
 
@@ -204,6 +207,7 @@ Project switcher sits at the top. Settings link at the bottom.
 ## Do's and Don'ts
 
 **Do:**
+
 - Use whitespace to separate concerns. Prefer more space over more visual elements.
 - Use `{colors.emphasis}` only for the single most important interactive element per view.
 - Keep borders at 1px solid `{colors.border}`. Never thicker, never dashed.
@@ -211,6 +215,7 @@ Project switcher sits at the top. Settings link at the bottom.
 - Use Fontawesome icons for common actions (delete, edit, download) but only when the meaning is universally clear. Otherwise, use a button with text.
 
 **Don't:**
+
 - Use gradients anywhere.
 - Introduce a new color not in the palette without revisiting this document.
 - Use font weights other than 400 and 700.

@@ -59,7 +59,6 @@
   flex-direction: column;
   gap: 2px;
   z-index: 60;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
 }
 
 .item {
@@ -123,8 +122,8 @@
 // would fire mouseleave.
 .flyout {
   position: absolute;
-  top: 0;
-  right: 100%;
+  top: -1px;
+  right: 98%;
   min-width: 200px;
   list-style: none;
   background: var(--color-surface);
@@ -135,7 +134,6 @@
   flex-direction: column;
   gap: 2px;
   z-index: 61;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
 }
 
 .flyoutInfo {

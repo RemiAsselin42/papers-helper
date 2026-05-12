@@ -34,11 +34,9 @@ export function OllamaSetupModal({ healthData, onConnected, onDismiss }: OllamaS
         if (urlOverride) setStoredOllamaUrl(urlOverride)
         onConnected(health)
       } else {
-        const detail = health.ollama_error
-          ? ` (${health.ollama_error})`
-          : ''
+        const detail = health.ollama_error ? ` (${health.ollama_error})` : ''
         setRetryError(
-          `Ollama ne répond toujours pas à ${health.ollama_url}${detail}. Vérifiez qu'il est démarré.`,
+          `Ollama ne répond toujours pas à ${health.ollama_url}${detail}. Vérifiez qu'il est démarré.`
         )
       }
     } catch (err) {
@@ -55,7 +53,7 @@ export function OllamaSetupModal({ healthData, onConnected, onDismiss }: OllamaS
   }
 
   const hasModelIssues =
-    healthData?.ollama === 'connected' && healthData.ollama_models.some(m => !m.available)
+    healthData?.ollama === 'connected' && healthData.ollama_models.some((m) => !m.available)
 
   return (
     <div
@@ -65,13 +63,19 @@ export function OllamaSetupModal({ healthData, onConnected, onDismiss }: OllamaS
       <div className={styles.dialog} role="dialog" aria-modal aria-label="Configuration Ollama">
         <div className={styles.header}>
           {view === 'custom-url' ? (
-            <button className={styles.backBtn} onClick={() => { setRetryError(null); setView('main') }}>
+            <button
+              className={styles.backBtn}
+              onClick={() => {
+                setRetryError(null)
+                setView('main')
+              }}
+            >
               <ArrowLeft size={16} />
               Retour
             </button>
           ) : (
             <span className={styles.headerTitle}>
-              {hasModelIssues ? 'Modèles Ollama manquants' : "Ollama n’est pas disponible"}
+              {hasModelIssues ? 'Modèles Ollama manquants' : 'Ollama n’est pas disponible'}
             </span>
           )}
           <button className={styles.closeBtn} onClick={handleDismiss} aria-label="Fermer">
@@ -91,21 +95,12 @@ export function OllamaSetupModal({ healthData, onConnected, onDismiss }: OllamaS
                 <div className={styles.statusContent}>
                   <p className={styles.statusText}>
                     {hasModelIssues
-                      ? "Ollama est démarré mais certains modèles requis ne sont pas installés."
+                      ? 'Ollama est démarré mais certains modèles requis ne sont pas installés.'
                       : "Papers Helper nécessite Ollama pour la recherche sémantique et le chat. Ollama s'exécute localement sur votre machine."}
                   </p>
                   {healthData?.ollama_error && (
                     <p className={styles.diagnostic}>
-                      Tentative de connexion à{' '}
-                      <code className={styles.inlineCode}>{healthData.ollama_url}</code>
-                      {' '}échouée : <span className={styles.diagnosticError}>{healthData.ollama_error}</span>
-                      {healthData.ollama_url.includes('localhost') && (
-                        <>
-                          {' '}— sur Windows, essayez l&apos;URL{' '}
-                          <code className={styles.inlineCode}>http://127.0.0.1:11434</code>
-                          {' '}via «&nbsp;Configurer une URL personnalisée&nbsp;» ci-dessous.
-                        </>
-                      )}
+                      <span className={styles.diagnosticError}>{healthData.ollama_error}</span>
                     </p>
                   )}
                 </div>
@@ -138,10 +133,10 @@ export function OllamaSetupModal({ healthData, onConnected, onDismiss }: OllamaS
                       <div className={styles.stepBody}>
                         <p className={styles.stepTitle}>Lancer Ollama</p>
                         <p className={styles.stepHint}>
-                          Sur macOS / Windows : ouvrez l&apos;application — elle démarre
-                          un serveur local sur <code className={styles.inlineCode}>localhost:11434</code>{' '}
-                          et reste active en arrière-plan (icône dans la barre des menus / la zone
-                          de notification).
+                          Sur macOS / Windows : ouvrez l&apos;application — elle démarre un serveur
+                          local sur <code className={styles.inlineCode}>localhost:11434</code> et
+                          reste active en arrière-plan (icône dans la barre des menus / la zone de
+                          notification).
                           <br />
                           Sur Linux : exécutez{' '}
                           <code className={styles.inlineCode}>ollama serve</code> dans un terminal.
@@ -158,9 +153,9 @@ export function OllamaSetupModal({ healthData, onConnected, onDismiss }: OllamaS
                         </p>
                         <ul className={styles.commandList}>
                           {(healthData?.ollama_models.length
-                            ? healthData.ollama_models.map(m => m.name)
+                            ? healthData.ollama_models.map((m) => m.name)
                             : ['nomic-embed-text', 'llama3']
-                          ).map(name => (
+                          ).map((name) => (
                             <li key={name}>
                               <code className={styles.command}>ollama pull {name}</code>
                             </li>
@@ -170,7 +165,8 @@ export function OllamaSetupModal({ healthData, onConnected, onDismiss }: OllamaS
                     </li>
                   </ol>
                   <p className={styles.text}>
-                    Une fois ces étapes terminées, cliquez sur <strong>Réessayer</strong> ci-dessous.
+                    Une fois ces étapes terminées, cliquez sur <strong>Réessayer</strong>{' '}
+                    ci-dessous.
                   </p>
                 </section>
               )}
@@ -179,7 +175,7 @@ export function OllamaSetupModal({ healthData, onConnected, onDismiss }: OllamaS
                 <section className={styles.section}>
                   <h3 className={styles.sectionTitle}>Modèles requis</h3>
                   <ul className={styles.modelList}>
-                    {healthData.ollama_models.map(m => (
+                    {healthData.ollama_models.map((m) => (
                       <li key={m.name} className={styles.modelRow}>
                         {m.available ? (
                           <CheckCircle2 size={14} className={styles.modelOk} />
@@ -200,7 +196,13 @@ export function OllamaSetupModal({ healthData, onConnected, onDismiss }: OllamaS
 
               <section className={styles.section}>
                 <h3 className={styles.sectionTitle}>Ollama tourne ailleurs ?</h3>
-                <button className={styles.customUrlBtn} onClick={() => { setRetryError(null); setView('custom-url') }}>
+                <button
+                  className={styles.customUrlBtn}
+                  onClick={() => {
+                    setRetryError(null)
+                    setView('custom-url')
+                  }}
+                >
                   Configurer une URL personnalisée
                 </button>
               </section>
@@ -218,9 +220,9 @@ export function OllamaSetupModal({ healthData, onConnected, onDismiss }: OllamaS
                   type="url"
                   className={styles.urlInput}
                   value={urlInput}
-                  onChange={e => setUrlInput(e.target.value)}
+                  onChange={(e) => setUrlInput(e.target.value)}
                   placeholder="http://localhost:11434"
-                  onKeyDown={e => e.key === 'Enter' && handleRetry(urlInput.trim() || undefined)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleRetry(urlInput.trim() || undefined)}
                   autoFocus
                 />
                 <span className={styles.urlHint}>Défaut : http://localhost:11434</span>
@@ -237,11 +239,7 @@ export function OllamaSetupModal({ healthData, onConnected, onDismiss }: OllamaS
               <button className={styles.dismissBtn} onClick={handleDismiss}>
                 Continuer quand même
               </button>
-              <button
-                className={styles.retryBtn}
-                onClick={() => handleRetry()}
-                disabled={retrying}
-              >
+              <button className={styles.retryBtn} onClick={() => handleRetry()} disabled={retrying}>
                 <RefreshCw size={14} className={retrying ? styles.spinning : undefined} />
                 {retrying ? 'Vérification…' : 'Réessayer'}
               </button>
