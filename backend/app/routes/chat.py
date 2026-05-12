@@ -24,12 +24,20 @@ class ChatRequest(BaseModel):
     messages: list[ChatMessage]
 
 
+PLAIN_TEXT_SYSTEM_PROMPT = (
+    "Répondez en texte brut uniquement. N'utilisez aucune mise en forme Markdown "
+    "(pas de **gras**, pas de *italique*, pas de titres `#`, pas de listes `-`/`*`/`1.`, "
+    "pas de blocs de code, pas de tableaux). Utilisez des phrases simples et des sauts de ligne."
+)
+
+
 @router.post("/chat")
 async def chat(
     project_id: str,
     req: ChatRequest,
     x_llm_provider: str | None = Header(default=None),
     x_llm_api_key: str | None = Header(default=None),
+    x_prefer_plain_text: str | None = Header(default=None),
 ) -> StreamingResponse:
     provider = LLMProvider.OLLAMA
     if x_llm_provider:
@@ -47,6 +55,8 @@ async def chat(
     raw_messages: list[dict[str, Any]] = [
         {"role": m.role, "content": m.content} for m in req.messages
     ]
+    if x_prefer_plain_text == "1":
+        raw_messages.insert(0, {"role": "system", "content": PLAIN_TEXT_SYSTEM_PROMPT})
 
     if provider == LLMProvider.OLLAMA:
         token_stream: AsyncGenerator[str, None] = OllamaGenerationService(
