@@ -76,6 +76,21 @@ export function setStoredOllamaModel(model: string | null): void {
   else localStorage.removeItem(OLLAMA_MODEL_STORAGE_KEY)
 }
 
+const PLAIN_TEXT_STORAGE_KEY = 'chatPlainText'
+
+export function getStoredPlainText(): boolean {
+  return localStorage.getItem(PLAIN_TEXT_STORAGE_KEY) === '1'
+}
+
+export function setStoredPlainText(enabled: boolean): void {
+  if (enabled) localStorage.setItem(PLAIN_TEXT_STORAGE_KEY, '1')
+  else localStorage.removeItem(PLAIN_TEXT_STORAGE_KEY)
+}
+
+export function plainTextHeader(): Record<string, string> {
+  return getStoredPlainText() ? { 'X-Prefer-Plain-Text': '1' } : {}
+}
+
 export function llmHeaders(provider: LLMProvider): Record<string, string> {
   if (provider === 'ollama') return {}
   const key = getStoredApiKey(provider)

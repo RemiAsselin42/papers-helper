@@ -1,5 +1,5 @@
 import { OLLAMA_URL_KEY } from './health'
-import { allLlmHeaders } from './llm'
+import { allLlmHeaders, plainTextHeader } from './llm'
 
 function ollamaHeaders(): HeadersInit {
   const url = localStorage.getItem(OLLAMA_URL_KEY)
@@ -163,6 +163,7 @@ export function streamChat(
     headers: {
       'Content-Type': 'application/json',
       ...allLlmHeaders(),
+      ...plainTextHeader(),
     },
     body: JSON.stringify({ model, messages }),
     signal,

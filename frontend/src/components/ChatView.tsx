@@ -1,11 +1,15 @@
-import { ArrowUp, Bot, RotateCcw, User } from 'lucide-react'
+import { ArrowUp, Bot, History, RotateCcw, Settings, User } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import {
   getStoredExternalModel,
   getStoredOllamaModel,
+  getStoredPlainText,
   type LLMProvider,
   setStoredExternalModel,
   setStoredOllamaModel,
+  setStoredPlainText,
   setStoredProvider,
 } from '../api/llm'
 import { useChatStream } from '../hooks/useChatStream'
@@ -44,6 +48,19 @@ export function ChatView({
   const chat = useChatStream()
   const store = useConversationStore(projectId)
   const [saveError, setSaveError] = useState<string | null>(null)
+  type OpenPanel = 'history' | 'settings' | null
+  const [openPanel, setOpenPanel] = useState<OpenPanel>(null)
+  const historyOpen = openPanel === 'history'
+  const settingsOpen = openPanel === 'settings'
+  const [plainText, setPlainText] = useState<boolean>(() => getStoredPlainText())
+
+  function togglePlainText() {
+    setPlainText(prev => {
+      const next = !prev
+      setStoredPlainText(next)
+      return next
+    })
+  }
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -93,6 +110,10 @@ export function ChatView({
     onResumeProvider(p)
   }
 
+  function togglePanel(panel: 'history' | 'settings') {
+    setOpenPanel(prev => (prev === panel ? null : panel))
+  }
+
   async function handleSelect(id: string) {
     if (chat.streaming) return
     try {
@@ -100,6 +121,7 @@ export function ChatView({
       chat.resetMessages(conv.messages)
       setSaveError(null)
       applyPin(conv.provider, conv.model)
+      setOpenPanel(null)
     } catch {
       store.refresh()
     }
@@ -165,38 +187,103 @@ export function ChatView({
   }
 
   return (
-    <div className={styles.layout}>
-      <ConversationList
-        conversations={store.conversations}
-        currentId={store.pinned?.id ?? null}
-        onSelect={handleSelect}
-        onNew={handleNew}
-        onDelete={handleDelete}
-        onRename={store.rename}
-      />
+    <div className={styles.wrapper}>
+      {(historyOpen || settingsOpen) && (
+        <div
+          className={styles.backdrop}
+          onClick={() => setOpenPanel(null)}
+        />
+      )}
+
+      <div className={`${styles.panel} ${styles.panelLeft} ${historyOpen ? styles.panelOpen : ''}`}>
+        <ConversationList
+          conversations={store.conversations}
+          loading={store.loading}
+          currentId={store.pinned?.id ?? null}
+          onSelect={handleSelect}
+          onNew={handleNew}
+          onDelete={handleDelete}
+          onRename={store.rename}
+        />
+      </div>
+
+      <div className={`${styles.panel} ${styles.panelRight} ${settingsOpen ? styles.panelOpen : ''}`}>
+        <div className={styles.settingsList}>
+          <label className={styles.settingsRow}>
+            <span className={styles.settingsLabel}>
+              <span className={styles.settingsTitle}>Texte brut</span>
+              <span className={styles.settingsHint}>
+                Demande au modèle de répondre sans mise en page (pas de gras, titres, listes…).
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              className={styles.settingsToggle}
+              checked={plainText}
+              onChange={togglePlainText}
+            />
+          </label>
+        </div>
+      </div>
+
       <div className={styles.root}>
+        <div className={styles.toolbar}>
+          <button
+            type="button"
+            className={`${styles.toolbarBtn} ${historyOpen ? styles.toolbarBtnActive : ''}`}
+            onClick={() => togglePanel('history')}
+            aria-label="Historique des conversations"
+            aria-pressed={historyOpen}
+            title="Historique des conversations"
+          >
+            <History size={20} />
+          </button>
+          <div className={styles.toolbarSpacer} />
+          <button
+            type="button"
+            className={`${styles.toolbarBtn} ${settingsOpen ? styles.toolbarBtnActive : ''}`}
+            onClick={() => togglePanel('settings')}
+            aria-label="Paramètres du chat"
+            aria-pressed={settingsOpen}
+            title="Paramètres du chat"
+          >
+            <Settings size={20} />
+          </button>
+        </div>
+
         <div className={styles.messages}>
           {chat.messages.length === 0 && (
             <div className={styles.empty}>
               Commencez la conversation — le modèle est défini dans l’en-tête.
             </div>
           )}
-          {chat.messages.map((msg, i) => (
-            <div
-              key={i}
-              className={`${styles.message} ${msg.role === 'user' ? styles.user : styles.assistant}`}
-            >
-              <span className={styles.avatar}>
-                {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
-              </span>
-              <div className={styles.bubble}>
-                {msg.content ||
-                  (chat.streaming && i === chat.messages.length - 1 ? (
+          {chat.messages.map((msg, i) => {
+            const isAssistant = msg.role === 'assistant'
+            const renderMarkdown = isAssistant && !plainText
+            const showCursor =
+              !msg.content && chat.streaming && i === chat.messages.length - 1
+            return (
+              <div
+                key={i}
+                className={`${styles.message} ${msg.role === 'user' ? styles.user : styles.assistant}`}
+              >
+                <span className={styles.avatar}>
+                  {msg.role === 'user' ? <User size={20} /> : <Bot size={20} />}
+                </span>
+                <div
+                  className={`${styles.bubble} ${renderMarkdown ? styles.bubbleMarkdown : ''}`}
+                >
+                  {showCursor ? (
                     <span className={styles.cursor} />
-                  ) : null)}
+                  ) : renderMarkdown ? (
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                  ) : (
+                    msg.content
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
           <div ref={bottomRef} />
         </div>
 
@@ -249,7 +336,7 @@ export function ChatView({
             disabled={!chat.input.trim() || chat.streaming || !resolvedModel || pinnedMismatch}
             aria-label="Envoyer"
           >
-            <ArrowUp size={18} />
+            <ArrowUp size={20} />
           </button>
         </div>
       </div>
