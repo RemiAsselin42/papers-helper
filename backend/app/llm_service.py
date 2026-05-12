@@ -63,9 +63,7 @@ class ExternalLLMService:
             if token:
                 yield token
 
-    async def _stream_anthropic(
-        self, messages: list[dict[str, Any]]
-    ) -> AsyncGenerator[str, None]:
+    async def _stream_anthropic(self, messages: list[dict[str, Any]]) -> AsyncGenerator[str, None]:
         import anthropic
 
         system = ""

@@ -65,5 +65,3 @@ class OllamaGenerationService:
         ):
             if chunk.message.content:
                 yield chunk.message.content
-
-
