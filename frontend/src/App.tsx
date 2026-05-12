@@ -13,6 +13,7 @@ import { DropZone, type FileState } from './components/DropZone'
 import { ImportProgressToast } from './components/ImportProgressToast'
 import { NewProjectView } from './components/NewProjectView'
 import { NoProjectState } from './components/NoProjectState'
+import { Skeleton } from './components/Skeleton'
 import { OllamaSetupModal } from './components/OllamaSetupModal'
 import { SourceList } from './components/SourceList'
 import { ProblematiqueView } from './components/ProblematiqueView'
@@ -52,6 +53,8 @@ export default function App() {
         setProjects(list)
         if (stored && list.some(p => p.id === stored)) {
           setCurrentProjectId(stored)
+        } else if (list.length > 0) {
+          setCurrentProjectId(list[0].id)
         }
         setHealthData(health)
         const ollamaHealthy =
@@ -97,9 +100,10 @@ export default function App() {
   }
 
   function handleProjectDeleted(id: string) {
-    setProjects(prev => prev.filter(p => p.id !== id))
+    const next = projects.filter(p => p.id !== id)
+    setProjects(next)
     if (currentProjectId === id) {
-      setCurrentProjectId(null)
+      setCurrentProjectId(next[0]?.id ?? null)
     }
   }
 
@@ -110,6 +114,7 @@ export default function App() {
       projects={projects}
       currentProjectId={currentProjectId}
       onProjectSelect={handleProjectSelect}
+      loading={!projectsLoaded}
     />
   )
 
@@ -150,7 +155,13 @@ export default function App() {
       <div className={styles.root}>
         {sidebar}
         {header}
-        <main className={styles.content} />
+        <main className={styles.content}>
+          <div className={styles.skeletonMain}>
+            <Skeleton width={280} height={32} radius="var(--radius-md)" />
+            <Skeleton width={200} height={16} />
+            <Skeleton height={160} radius="var(--radius-lg)" />
+          </div>
+        </main>
       </div>
     )
   }

@@ -12,6 +12,7 @@ interface SidebarProps {
   projects: ProjectInfo[]
   currentProjectId: string | null
   onProjectSelect: (id: string) => void
+  loading?: boolean
 }
 
 export function Sidebar({
@@ -20,6 +21,7 @@ export function Sidebar({
   projects,
   currentProjectId,
   onProjectSelect,
+  loading = false,
 }: SidebarProps) {
   const [pinned, setPinned] = useState(false)
 
@@ -46,6 +48,7 @@ export function Sidebar({
         onShowAllProjects={() => onViewChange('all-projects')}
         newProjectActive={activeView === 'new-project'}
         allProjectsActive={activeView === 'all-projects'}
+        loading={loading}
       />
 
       <div className={styles.top}>

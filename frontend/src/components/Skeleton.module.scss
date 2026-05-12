@@ -1,0 +1,27 @@
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.bone {
+  display: block;
+  background: linear-gradient(
+    90deg,
+    var(--color-background) 25%,
+    var(--color-surface) 50%,
+    var(--color-background) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
+  flex-shrink: 0;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, FolderClosed, FolderOpen, Plus } from 'lucide-react'
 import { type ProjectInfo } from '../api/projects'
+import { Skeleton } from './Skeleton'
 import styles from './ProjectSwitcher.module.scss'
 
 interface ProjectSwitcherProps {
@@ -11,6 +12,7 @@ interface ProjectSwitcherProps {
   onShowAllProjects: () => void
   newProjectActive?: boolean
   allProjectsActive?: boolean
+  loading?: boolean
 }
 
 export function ProjectSwitcher({
@@ -21,6 +23,7 @@ export function ProjectSwitcher({
   onShowAllProjects,
   newProjectActive,
   allProjectsActive,
+  loading = false,
 }: ProjectSwitcherProps) {
   const [open, setOpen] = useState(false)
 
@@ -43,6 +46,14 @@ export function ProjectSwitcher({
     document.addEventListener('mousedown', onMouseDown)
     return () => document.removeEventListener('mousedown', onMouseDown)
   }, [open])
+
+  if (loading) {
+    return (
+      <div className={styles.switcher}>
+        <Skeleton count={2} height={32} gap={4} radius="var(--radius-sm)" />
+      </div>
+    )
+  }
 
   return (
     <div ref={rootRef} className={styles.switcher}>

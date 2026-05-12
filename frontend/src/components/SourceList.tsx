@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Skeleton } from './Skeleton'
 import {
   Check,
   ChevronDown,
@@ -98,6 +99,7 @@ function FileViewer({
 
 export function SourceList({ projectId, refreshKey, onDelete }: SourceListProps) {
   const [sources, setSources] = useState<SourceInfo[]>([])
+  const [loading, setLoading] = useState(true)
   const [confirmStem, setConfirmStem] = useState<string | null>(null)
   const [deletingStem, setDeletingStem] = useState<string | null>(null)
   const [editingSource, setEditingSource] = useState<SourceInfo | null>(null)
@@ -105,12 +107,15 @@ export function SourceList({ projectId, refreshKey, onDelete }: SourceListProps)
   const [networkError, setNetworkError] = useState<string | null>(null)
 
   const fetchSources = useCallback(async () => {
+    setLoading(true)
     try {
       const data = await listSources(projectId)
       setSources(data)
       setNetworkError(null)
     } catch (err) {
       setNetworkError(err instanceof Error ? err.message : 'Erreur réseau')
+    } finally {
+      setLoading(false)
     }
   }, [projectId])
 
@@ -136,6 +141,21 @@ export function SourceList({ projectId, refreshKey, onDelete }: SourceListProps)
     setEditingSource(null)
   }
 
+  if (loading && sources.length > 0) {
+    return (
+      <div className={styles.skeletonList}>
+        {Array.from({ length: sources.length }).map((_, i) => (
+          <div key={i} className={styles.skeletonCard}>
+            <Skeleton width={64} height={22} />
+            <div className={styles.skeletonMeta}>
+              <Skeleton height={20} />
+              <Skeleton width="55%" height={14} />
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
   if (networkError) return <p className={styles.networkError}>{networkError}</p>
   if (sources.length === 0) return <p className={styles.empty}>Aucune source importée.</p>
 

@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { getProblematique, saveProblematique, type Problematique } from '../api/projects'
+import { Skeleton } from './Skeleton'
 import styles from './ProblematiqueView.module.scss'
 
 interface Props {
@@ -398,7 +399,30 @@ export function ProblematiqueView({ projectId }: Props) {
       </div>
 
       {data === null ? (
-        <div className={styles.loading} />
+        <div className={styles.sections} aria-busy="true">
+          <div className={styles.section}>
+            <Skeleton width={180} height={12} />
+            <div className={styles.skeletonSection}>
+              <Skeleton height={14} />
+              <Skeleton width="80%" height={14} />
+            </div>
+          </div>
+          <div className={styles.section}>
+            <Skeleton width={120} height={12} />
+            <div className={styles.skeletonSection}>
+              <Skeleton height={14} />
+              <Skeleton width="70%" height={14} />
+              <Skeleton width="55%" height={14} />
+            </div>
+          </div>
+          <div className={styles.section}>
+            <Skeleton width={150} height={12} />
+            <div className={styles.skeletonSection}>
+              <Skeleton height={14} />
+              <Skeleton width="65%" height={14} />
+            </div>
+          </div>
+        </div>
       ) : isEmpty ? (
         <p className={styles.emptyHint}>
           Aucune problématique définie.{' '}

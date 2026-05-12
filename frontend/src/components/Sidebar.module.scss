@@ -17,14 +17,13 @@
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-width: none;
+
   &::-webkit-scrollbar {
     display: none;
   }
+
   transition: var(--transition);
 
-  &:hover {
-    width: 240px;
-  }
   &.pinned {
     width: 240px;
   }

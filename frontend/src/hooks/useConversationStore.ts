@@ -20,6 +20,7 @@ export interface PinnedConfig {
 
 export interface UseConversationStore {
   conversations: ConversationSummary[]
+  loading: boolean
   pinned: PinnedConfig | null
   refresh: () => void
   load: (id: string) => Promise<Conversation>
@@ -33,12 +34,15 @@ export interface UseConversationStore {
 
 export function useConversationStore(projectId: string): UseConversationStore {
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
+  const [loading, setLoading] = useState(true)
   const [pinned, setPinned] = useState<PinnedConfig | null>(null)
 
   const refresh = useCallback(() => {
+    setLoading(true)
     listConversations(projectId)
       .then(setConversations)
       .catch(() => setConversations([]))
+      .finally(() => setLoading(false))
   }, [projectId])
 
   useEffect(() => {
@@ -94,5 +98,5 @@ export function useConversationStore(projectId: string): UseConversationStore {
     [pinned, projectId, refresh],
   )
 
-  return { conversations, pinned, refresh, load, clear, remove, rename, persist }
+  return { conversations, loading, pinned, refresh, load, clear, remove, rename, persist }
 }
