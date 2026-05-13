@@ -3,18 +3,17 @@
 .header {
   position: fixed;
   top: var(--space-md);
-  left: calc(var(--space-md) + 48px + var(--space-sm));
+  left: var(--space-md);
   right: var(--space-md);
-  height: 48px;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: var(--space-md);
-  padding: 0 var(--space-md);
+  padding: var(--space-sm) var(--space-sm);
   background: var(--color-surface);
   border: var(--border);
   @include container-radius(var(--radius-lg), var(--space-xs));
-  z-index: 49;
+  z-index: 50;
 }
 
 .left {
@@ -27,6 +26,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin-left: var(--space-md);
 }
 
 .date {

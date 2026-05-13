@@ -3,8 +3,8 @@
 .sidebar {
   position: fixed;
   left: var(--space-md);
-  top: var(--space-md);
-  height: calc(100vh - 2 * var(--space-md));
+  top: calc(var(--space-md) + 48px + var(--space-lg));
+  height: calc(100dvh - var(--space-md) - 48px - var(--space-lg) - var(--space-lg));
   width: 48px;
   background: var(--color-surface);
   border: var(--border);
@@ -13,7 +13,7 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  z-index: 50;
+  z-index: 49;
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-width: none;
@@ -24,6 +24,7 @@
 
   transition: var(--transition);
 
+  &:hover,
   &.pinned {
     width: 240px;
   }

@@ -7,7 +7,8 @@
 .content {
   margin: 0 auto;
   padding: calc(var(--space-md) + 48px + var(--space-xl))
-    calc(var(--space-sm) + 48px + var(--space-xl)) 0 calc(var(--space-sm) + 48px + var(--space-xl));
+    calc(var(--space-sm) + 48px + var(--space-xl)) var(--space-xl)
+    calc(var(--space-sm) + 48px + var(--space-xl));
   max-width: 992px;
   width: 100%;
 }
@@ -30,7 +31,7 @@
 }
 
 .importIcon {
-  color: var(--color-emphasis-2);
+  color: var(--color-emphasis);
   width: 2.5rem;
   height: 2.5rem;
   margin-bottom: var(--space-xs);
