@@ -9,7 +9,7 @@ import {
 } from '../../api/llm'
 import { listSources, type SourceInfo } from '../../api/papers'
 import { useChatStream } from '../../hooks/useChatStream'
-import { useConversationStore } from '../../hooks/useConversationStore'
+import { CONVERSATION_PAGE_SIZE, useConversationStore } from '../../hooks/useConversationStore'
 import { useMentionPicker } from '../../hooks/useMentionPicker'
 import { usePerChatModel } from '../../hooks/usePerChatModel'
 import { parseMentions, resolveMentions } from '../../utils/mentions'
@@ -51,6 +51,13 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
   const [sources, setSources] = useState<SourceInfo[]>([])
   const mentionPicker = useMentionPicker(textareaRef, sources, chat.setInput)
 
+  // Tracks the projectId we've already auto-loaded for, so we don't re-fire
+  // the effect when the user explicitly starts a fresh chat (which would
+  // otherwise look like the same "no pinned, no messages" state we use as a
+  // trigger). Resets implicitly on remount (e.g. leaving and returning to
+  // the Chat section), which is exactly when we want to auto-load again.
+  const autoLoadedRef = useRef<string | null>(null)
+
   useEffect(() => {
     let cancelled = false
     listSources(projectId)
@@ -83,10 +90,59 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
     setSaveError(null)
     model.reset(provider)
     setTitleDraft('')
+    autoLoadedRef.current = null
     // chat.clear and model.reset are stable references but not memoized
     // against `provider` — intentional reset on project change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
+
+  // Auto-load the most recent conversation when the Chat view mounts (or
+  // when switching to a project for the first time). Lets the user resume
+  // their last conversation after navigating away from the section and back.
+  // Skipped if the user has already pinned/started something or there's
+  // nothing saved for this project.
+  useEffect(() => {
+    if (autoLoadedRef.current === projectId) return
+    if (store.loading) return
+    if (store.pinned) return
+    if (chat.streaming) return
+    if (chat.messages.length > 0) return
+    if (store.conversations.length === 0) {
+      autoLoadedRef.current = projectId
+      return
+    }
+    // Mark BEFORE the await so subsequent state changes (pinned, conversations
+    // list refreshed mid-load) don't re-fire this effect.
+    autoLoadedRef.current = projectId
+    const latestId = store.conversations[0].id
+    chat.load.begin('initial')
+    store
+      .load(latestId)
+      .then((conv) => {
+        chat.window.resetMessages(conv.messages, conv.messages_offset)
+        model.loadFromConversation(conv)
+      })
+      .catch(() => {
+        // Conversation may have been deleted in another tab; clear our flag
+        // and refresh the list so the next render can try the new top entry.
+        autoLoadedRef.current = null
+        store.refresh()
+      })
+      .finally(() => {
+        chat.load.end()
+      })
+    // chat.resetMessages, store.load, store.refresh, model.loadFromConversation
+    // are stable callbacks but not memoized — listing them would re-run the
+    // effect on every render via fresh references.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    projectId,
+    store.loading,
+    store.pinned,
+    store.conversations,
+    chat.streaming,
+    chat.messages.length,
+  ])
 
   // Sync the editable title with the pinned conversation's stored title.
   useEffect(() => {
@@ -104,14 +160,41 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
 
   async function handleSelect(id: string) {
     if (chat.streaming) return
+    // Close the panel + show the skeleton **before** the network round-trip
+    // so the click feels instant. The chat hook's load.begin swaps the
+    // message list for a placeholder until resetMessages lands.
+    setOpenPanel(null)
+    setSaveError(null)
+    chat.load.begin('initial')
     try {
       const conv = await store.load(id)
-      chat.resetMessages(conv.messages)
-      setSaveError(null)
+      chat.window.resetMessages(conv.messages, conv.messages_offset)
       model.loadFromConversation(conv)
-      setOpenPanel(null)
     } catch {
       store.refresh()
+    } finally {
+      chat.load.end()
+    }
+  }
+
+  async function handleLoadOlder() {
+    if (!store.pinned) return
+    if (chat.window.offset === 0) return
+    if (chat.load.state !== null) return
+    if (chat.streaming) return
+    chat.load.begin('older')
+    try {
+      const newOffset = Math.max(0, chat.window.offset - CONVERSATION_PAGE_SIZE)
+      const limit = chat.window.offset - newOffset
+      const older = await store.loadOlder(store.pinned.id, newOffset, limit)
+      chat.window.prependOlder(older.messages)
+    } catch (err) {
+      // Network failure here is non-critical; the existing window stays put
+      // and the sentinel will re-fire if the user scrolls again. Log so a
+      // flaky network is at least visible in DevTools.
+      console.warn('Failed to load older messages', err)
+    } finally {
+      chat.load.end()
     }
   }
 
@@ -177,11 +260,17 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
     if (result.status !== 'ok') return
 
     try {
+      // For an already-pinned conversation the store appends `result.newMessages`
+      // (just the freshly produced turn). For a brand-new chat with no pinned
+      // id yet, the store still calls create with the full local window —
+      // newMessages and messages are equal in that case.
+      const payloadMessages = store.pinned ? result.newMessages : result.messages
       await store.persist({
         provider: turnProvider,
         model: turnModel,
-        messages: result.messages,
+        messages: payloadMessages,
       })
+      chat.window.markSynced()
     } catch (err) {
       console.error('Failed to persist conversation', err)
       setSaveError(
@@ -198,8 +287,7 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
     }
   }
 
-  const currentTitle =
-    store.conversations.find((c) => c.id === store.pinned?.id)?.title ?? ''
+  const currentTitle = store.conversations.find((c) => c.id === store.pinned?.id)?.title ?? ''
 
   return (
     <div className={styles.wrapper}>
@@ -297,7 +385,14 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
           </button>
         </div>
 
-        <ChatMessages messages={chat.messages} streaming={chat.streaming} plainText={plainText} />
+        <ChatMessages
+          messages={chat.messages}
+          streaming={chat.streaming}
+          plainText={plainText}
+          messagesOffset={chat.window.offset}
+          loadingState={chat.load.state}
+          onLoadOlder={handleLoadOlder}
+        />
 
         {saveError && (
           <div className={styles.saveErrorBanner} role="alert">

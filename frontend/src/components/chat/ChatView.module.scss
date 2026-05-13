@@ -259,6 +259,20 @@
   padding: var(--space-sm) 0;
 }
 
+// Visually hidden but exposed to assistive tech (announces loadingStatus
+// transitions without disturbing the visible layout).
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .empty {
   margin: auto;
   font-size: var(--font-size-body-sm);
@@ -317,6 +331,35 @@
   line-height: var(--line-height-body);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+// Skeleton-mode bubble: replaces the colored fill with an animated shimmer
+// gradient. The bubble itself carries the animation — the width/height
+// come from inline styles set by ChatMessagesSkeleton (a nested
+// percentage-sized child would collapse to 0 inside an unsized flex item
+// and the animation would never be visible).
+@keyframes chatSkeletonShimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.bubbleSkeleton {
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(
+      90deg,
+      var(--color-surface) 0%,
+      var(--color-emphasis) 50%,
+      var(--color-surface) 100%
+    );
+  background-size: 200% 100%;
+  animation: chatSkeletonShimmer 1.4s ease-in-out infinite;
+  opacity: 0.5;
 }
 
 // When rendering markdown, block elements provide their own spacing; the

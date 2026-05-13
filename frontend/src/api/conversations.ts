@@ -19,6 +19,17 @@ export interface Conversation {
   created_at: string
   updated_at: string
   messages: ChatMessage[]
+  // Pagination metadata populated by the backend on read. With no query
+  // params: message_count = messages.length, messages_offset = 0. With
+  // ?limit / ?offset: messages is the requested window and these fields
+  // describe it.
+  message_count: number
+  messages_offset: number
+}
+
+export interface LoadConversationOptions {
+  limit?: number
+  offset?: number
 }
 
 export interface ConversationWritePayload {
@@ -42,12 +53,41 @@ export async function listConversations(projectId: string): Promise<Conversation
 
 export async function loadConversation(
   projectId: string,
-  conversationId: string
+  conversationId: string,
+  opts: LoadConversationOptions = {}
 ): Promise<Conversation> {
-  const res = await fetch(`/api/projects/${projectId}/conversations/${conversationId}`, {
-    headers: allLlmHeaders(),
-  })
+  const qs = new URLSearchParams()
+  if (opts.limit !== undefined) qs.set('limit', String(opts.limit))
+  if (opts.offset !== undefined) qs.set('offset', String(opts.offset))
+  const suffix = qs.toString() ? `?${qs.toString()}` : ''
+  const res = await fetch(
+    `/api/projects/${projectId}/conversations/${conversationId}${suffix}`,
+    { headers: allLlmHeaders() }
+  )
   if (!res.ok) throw new Error(`Failed to load conversation: ${res.status}`)
+  return res.json()
+}
+
+/**
+ * Append messages to an existing conversation without sending the full
+ * history. Used by the tail-loaded chat flow where the client only holds a
+ * window of the conversation (a full-replace PUT would clobber older
+ * messages the client never loaded).
+ */
+export async function appendMessages(
+  projectId: string,
+  conversationId: string,
+  messages: ChatMessage[]
+): Promise<ConversationSummary> {
+  const res = await fetch(
+    `/api/projects/${projectId}/conversations/${conversationId}/messages`,
+    {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ messages }),
+    }
+  )
+  if (!res.ok) throw new Error(`Failed to append messages: ${res.status}`)
   return res.json()
 }
 

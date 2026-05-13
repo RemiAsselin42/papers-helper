@@ -140,4 +140,81 @@ describe('useChatStream', () => {
     act(() => result.current.clear())
     expect(result.current.messages).toHaveLength(0)
   })
+
+  it('window.resetMessages records the offset and marks the window as synced', () => {
+    const { result } = renderHook(() => useChatStream())
+    const loaded = [
+      { role: 'user' as const, content: 'a' },
+      { role: 'assistant' as const, content: 'b' },
+    ]
+    act(() => result.current.window.resetMessages(loaded, 50))
+    expect(result.current.messages).toEqual(loaded)
+    expect(result.current.window.offset).toBe(50)
+    expect(result.current.window.syncedCount).toBe(2)
+  })
+
+  it('window.prependOlder shifts the offset down and keeps everything synced', () => {
+    const { result } = renderHook(() => useChatStream())
+    act(() =>
+      result.current.window.resetMessages(
+        [{ role: 'user' as const, content: 'tail' }],
+        10
+      )
+    )
+    act(() =>
+      result.current.window.prependOlder([
+        { role: 'user', content: 'older-1' },
+        { role: 'assistant', content: 'older-2' },
+      ])
+    )
+    expect(result.current.window.offset).toBe(8)
+    expect(result.current.messages.map((m) => m.content)).toEqual([
+      'older-1',
+      'older-2',
+      'tail',
+    ])
+    expect(result.current.window.syncedCount).toBe(3)
+  })
+
+  it('send() exposes only the new messages until window.markSynced is called', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        body: sseStream([frame({ token: 'ok' }), 'data: [DONE]\n']),
+      })
+    )
+    const { result } = renderHook(() => useChatStream())
+    // Simulate landing on a conversation with one previous turn already in
+    // sync with the server (syncedCount = 1).
+    act(() =>
+      result.current.window.resetMessages(
+        [{ role: 'user' as const, content: 'previous' }],
+        5
+      )
+    )
+
+    let outcome: Awaited<ReturnType<typeof result.current.send>> | undefined
+    await act(async () => {
+      outcome = await result.current.send('proj-1', 'hi', 'llama3')
+    })
+
+    // newMessages contains ONLY the user + assistant produced this turn.
+    expect(outcome?.newMessages.map((m) => m.content)).toEqual(['hi', 'ok'])
+    // syncedCount has NOT advanced yet — caller must persist + markSynced.
+    expect(result.current.window.syncedCount).toBe(1)
+    act(() => result.current.window.markSynced())
+    expect(result.current.window.syncedCount).toBe(3)
+  })
+
+  it('load.begin / load.end toggles the skeleton flag', () => {
+    const { result } = renderHook(() => useChatStream())
+    expect(result.current.load.state).toBeNull()
+    act(() => result.current.load.begin('initial'))
+    expect(result.current.load.state).toBe('initial')
+    act(() => result.current.load.begin('older'))
+    expect(result.current.load.state).toBe('older')
+    act(() => result.current.load.end())
+    expect(result.current.load.state).toBeNull()
+  })
 })

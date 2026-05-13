@@ -7,26 +7,71 @@ const DONE_SENTINEL = '[DONE]'
 
 export type StreamStatus = 'ok' | 'aborted' | 'error'
 
+export type ChatLoadingState = 'initial' | 'older' | null
+
 export interface StreamResult {
   status: StreamStatus
   messages: ChatMessage[]
+  /**
+   * The messages that were added during this `send()` call (typically the
+   * user message and the streamed assistant reply). The caller should
+   * hand this off to the persist layer and then call `window.markSynced()`
+   * to acknowledge that these are now server-confirmed.
+   */
+  newMessages: ChatMessage[]
+}
+
+/**
+ * Pagination + persistence state for the currently-loaded conversation
+ * window. Separate from the core streaming surface so consumers can pass
+ * just `chat.window` to components that handle scroll/load-older without
+ * also exposing `send`/`abort`.
+ */
+export interface ChatWindow {
+  /**
+   * Index of `messages[0]` in the full conversation on the server. Greater
+   * than zero when only the tail of the conversation is loaded locally; the
+   * top-sentinel in `ChatMessages` uses this to decide whether more older
+   * messages can be fetched.
+   */
+  offset: number
+  /**
+   * Count of leading messages in the local window that are confirmed
+   * persisted on the server. Diverges from `messages.length` only between a
+   * successful `send()` and a successful `markSynced()` — those few messages
+   * are local-only until persist completes.
+   */
+  syncedCount: number
+  /**
+   * Replace the entire message window (used when loading a saved
+   * conversation). `offset` is the index of `next[0]` in the full conversation.
+   */
+  resetMessages: (next: ChatMessage[], offset?: number) => void
+  /** Prepend a window of older messages, shifting `offset` down. */
+  prependOlder: (older: ChatMessage[]) => void
+  /** Acknowledge that all local messages are now persisted on the server. */
+  markSynced: () => void
+}
+
+/** Skeleton-loading state for initial fetch vs older-page fetch. */
+export interface ChatLoad {
+  state: ChatLoadingState
+  begin: (kind: 'initial' | 'older') => void
+  end: () => void
 }
 
 export interface UseChatStream {
   messages: ChatMessage[]
-  /** Replace the entire message list (used when loading a saved conversation). */
-  resetMessages: (next: ChatMessage[]) => void
-  /** Clear the message list (new chat). */
+  /** Pagination + sync metadata for the loaded conversation window. */
+  window: ChatWindow
+  /** UI loading state for the skeleton placeholder. */
+  load: ChatLoad
+  /** Reset to a brand-new empty chat. */
   clear: () => void
   input: string
   setInput: (s: string) => void
   streaming: boolean
   abort: () => void
-  /**
-   * Append a user message, stream an assistant reply, and resolve with the
-   * final message list. The returned `messages` is authoritative — read it
-   * instead of reading state, which won't be flushed yet.
-   */
   send: (
     projectId: string,
     text: string,
@@ -38,12 +83,16 @@ export interface UseChatStream {
 
 export function useChatStream(): UseChatStream {
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [messagesOffset, setMessagesOffset] = useState(0)
+  const [syncedCount, setSyncedCount] = useState(0)
+  const [loadingState, setLoadingState] = useState<ChatLoadingState>(null)
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
 
-  // Mirrors `messages`. Lets send() read the post-stream content synchronously
-  // (the setMessages(prev => ...) trick races against React's update queue).
+  // Mirrors state for synchronous reads inside send() — React batches setters
+  // and we need the just-committed values when computing slice ranges.
   const messagesRef = useRef<ChatMessage[]>([])
+  const syncedCountRef = useRef(0)
   const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => () => abortRef.current?.abort(), [])
@@ -54,13 +103,45 @@ export function useChatStream(): UseChatStream {
     setMessages(next)
   }
 
-  function resetMessages(next: ChatMessage[]): void {
+  function resetMessages(next: ChatMessage[], offset: number = 0): void {
     messagesRef.current = next
     setMessages(next)
+    setMessagesOffset(offset)
+    syncedCountRef.current = next.length
+    setSyncedCount(next.length)
+  }
+
+  function prependOlder(older: ChatMessage[]): void {
+    if (!older.length) return
+    const next = [...older, ...messagesRef.current]
+    messagesRef.current = next
+    setMessages(next)
+    setMessagesOffset((prev) => Math.max(0, prev - older.length))
+    // Older window comes from the server → fully in sync.
+    syncedCountRef.current = next.length
+    setSyncedCount(next.length)
+  }
+
+  function beginLoad(kind: 'initial' | 'older'): void {
+    setLoadingState(kind)
+  }
+
+  function endLoad(): void {
+    setLoadingState(null)
+  }
+
+  function markSynced(): void {
+    syncedCountRef.current = messagesRef.current.length
+    setSyncedCount(messagesRef.current.length)
   }
 
   function clear(): void {
-    resetMessages([])
+    messagesRef.current = []
+    setMessages([])
+    setMessagesOffset(0)
+    syncedCountRef.current = 0
+    setSyncedCount(0)
+    setLoadingState(null)
   }
 
   function abort(): void {
@@ -74,6 +155,7 @@ export function useChatStream(): UseChatStream {
     mentions: string[] = [],
     provider?: LLMProvider
   ): Promise<StreamResult> {
+    const syncedBeforeSend = syncedCountRef.current
     const userMsg: ChatMessage = { role: 'user', content: text }
     const nextMessages = [...messagesRef.current, userMsg]
     commit(() => nextMessages)
@@ -139,12 +221,28 @@ export function useChatStream(): UseChatStream {
       abortRef.current = null
     }
 
-    return { status, messages: messagesRef.current }
+    const finalMessages = messagesRef.current
+    return {
+      status,
+      messages: finalMessages,
+      newMessages: finalMessages.slice(syncedBeforeSend),
+    }
   }
 
   return {
     messages,
-    resetMessages,
+    window: {
+      offset: messagesOffset,
+      syncedCount,
+      resetMessages,
+      prependOlder,
+      markSynced,
+    },
+    load: {
+      state: loadingState,
+      begin: beginLoad,
+      end: endLoad,
+    },
     clear,
     input,
     setInput,

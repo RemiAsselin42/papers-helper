@@ -22,6 +22,8 @@ const conversation = (overrides: Partial<Conversation> = {}): Conversation => ({
   created_at: '',
   updated_at: '',
   messages: [],
+  message_count: 0,
+  messages_offset: 0,
   ...overrides,
 })
 
@@ -105,12 +107,12 @@ describe('useConversationStore', () => {
     expect(calls.map((c) => c.init?.method ?? 'GET')).toEqual(['GET', 'POST', 'GET'])
   })
 
-  it('persist() updates the existing conversation when pinned', async () => {
+  it('persist() appends new messages when pinned (tail-loaded chat flow)', async () => {
     const { calls } = stubFetchSequence([
       () => jsonResponse<ConversationSummary[]>([summary({ id: 'a' })]),
       () => jsonResponse(conversation({ id: 'a' })),
-      () => jsonResponse(conversation({ id: 'a' })),
-      () => jsonResponse<ConversationSummary[]>([summary({ id: 'a' })]),
+      () => jsonResponse(summary({ id: 'a', message_count: 2 })),
+      () => jsonResponse<ConversationSummary[]>([summary({ id: 'a', message_count: 2 })]),
     ])
     const { result } = renderHook(() => useConversationStore('proj-1'))
     await waitFor(() => expect(result.current.loading).toBe(false))
@@ -119,11 +121,20 @@ describe('useConversationStore', () => {
       await result.current.load('a')
     })
     await act(async () => {
-      await result.current.persist({ provider: 'ollama', model: 'llama3', messages: [] })
+      await result.current.persist({
+        provider: 'ollama',
+        model: 'llama3',
+        messages: [
+          { role: 'user', content: 'hi' },
+          { role: 'assistant', content: 'hello' },
+        ],
+      })
     })
 
-    // PUT (update) rather than POST (create) on the second persist call.
-    expect(calls.map((c) => c.init?.method ?? 'GET')).toEqual(['GET', 'GET', 'PUT', 'GET'])
+    // Append (POST /messages) instead of full-replace PUT on the second
+    // persist call; the client only holds a window of the conversation now.
+    expect(calls.map((c) => c.init?.method ?? 'GET')).toEqual(['GET', 'GET', 'POST', 'GET'])
+    expect(calls[2].url).toContain('/conversations/a/messages')
   })
 
   it('remove() unpins the deleted conversation', async () => {
