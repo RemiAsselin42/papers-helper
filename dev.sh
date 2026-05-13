@@ -329,8 +329,6 @@ load "Starting frontend (logs: $(cygpath -w "$FRONTEND_LOG" 2>/dev/null || echo 
 # Invoke vite.js via node directly + `exec` so the captured PID is the actual
 # node process, not the pnpm.sh -> pnpm.exe -> node chain (which loses children
 # on MSYS and produces phantom deaths).
-FRONTEND_HEARTBEAT="$ROOT/frontend.heartbeat"
-: > "$FRONTEND_HEARTBEAT"
 (
   trap 'echo "[trap] caught HUP at $(date +%T)" >> "'"$FRONTEND_LOG"'"' HUP
   trap 'echo "[trap] caught INT at $(date +%T)" >> "'"$FRONTEND_LOG"'"' INT
@@ -339,16 +337,8 @@ FRONTEND_HEARTBEAT="$ROOT/frontend.heartbeat"
   trap 'echo "[trap] caught QUIT at $(date +%T)" >> "'"$FRONTEND_LOG"'"' QUIT
   cd "$FRONTEND" || exit 1
   unset NODE_OPTIONS VSCODE_INSPECTOR_OPTIONS
-  (
-    while true; do
-      echo "$(date '+%H:%M:%S') alive" >> "$FRONTEND_HEARTBEAT"
-      sleep 5
-    done
-  ) &
-  HB_PID=$!
   nohup env NO_COLOR=1 FORCE_COLOR=0 node node_modules/vite/bin/vite.js </dev/null
   code=$?
-  kill "$HB_PID" 2>/dev/null || true
   echo "[vite-exit] code=$code at $(date '+%H:%M:%S')" >> "$FRONTEND_LOG"
 ) >>"$FRONTEND_LOG" 2>&1 &
 FRONTEND_PID=$!
