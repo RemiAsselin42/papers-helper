@@ -23,6 +23,7 @@ data/*.db
 # Node
 node_modules/
 dist/
+coverage/
 .env
 .env.local
 .env.*.local
