@@ -7,6 +7,7 @@ import re
 import time
 import zipfile
 from collections.abc import AsyncGenerator
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -28,6 +29,81 @@ from app.parsers import (
 from app.parsers._bibtex import normalize_title
 
 MAX_TOTAL_UPLOAD_SIZE = 200 * 1024 * 1024  # 200 MB across all files in one request
+
+
+SIDECAR_SUFFIX = ".meta.json"
+
+
+# Per-source metadata persisted as <files_dir>/<stem>.meta.json so a file can be
+# imported (and edited) even when embedding is unavailable. When the source is
+# indexed in Chroma, both stores are kept in sync.
+@dataclass
+class SidecarMeta:
+    stem: str
+    filename: str
+    source_type: str = "document"
+    pdf_title: str = ""
+    author: str = ""
+    year: str = ""
+    authors_json: str = ""
+    publication: str = ""
+    doi: str = ""
+    abstract: str = ""
+    notes: str = ""
+    categories: str = ""
+    index_error: str = ""
+    indexed_at: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+# Fields the user can edit via PATCH /papers/{stem}. Kept in sync with the
+# UpdateMetadataRequest model in routes/papers.py.
+EDITABLE_META_KEYS: frozenset[str] = frozenset(
+    {
+        "pdf_title",
+        "author",
+        "authors_json",
+        "year",
+        "publication",
+        "doi",
+        "abstract",
+        "notes",
+        "categories",
+    }
+)
+
+
+def sidecar_path(files_dir: Path, stem: str) -> Path:
+    return files_dir / f"{stem}{SIDECAR_SUFFIX}"
+
+
+def read_sidecar(files_dir: Path, stem: str) -> SidecarMeta | None:
+    p = sidecar_path(files_dir, stem)
+    if not p.exists():
+        return None
+    try:
+        raw = json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    fields = set(SidecarMeta.__dataclass_fields__.keys())
+    cleaned = {k: v for k, v in raw.items() if k in fields and v is not None}
+    cleaned.setdefault("stem", stem)
+    cleaned.setdefault("filename", f"{stem}")
+    return SidecarMeta(**cleaned)
+
+
+def write_sidecar(files_dir: Path, meta: SidecarMeta) -> None:
+    files_dir.mkdir(parents=True, exist_ok=True)
+    sidecar_path(files_dir, meta.stem).write_text(
+        json.dumps(meta.to_dict(), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def delete_sidecar(files_dir: Path, stem: str) -> None:
+    sidecar_path(files_dir, stem).unlink(missing_ok=True)
 
 
 def _sse(data: dict[str, object]) -> str:
@@ -98,6 +174,8 @@ def _index_chunks(
     publication: str = "",
     doi: str = "",
     abstract: str = "",
+    notes: str = "",
+    categories: str = "",
 ) -> int:
     existing = collection.get(where={"source_stem": stem})
     if existing["ids"]:
@@ -121,6 +199,8 @@ def _index_chunks(
                 "publication": publication,
                 "doi": doi,
                 "abstract": abstract,
+                "notes": notes,
+                "categories": categories,
             }
             for i, chunk in enumerate(chunks)
         ],
@@ -128,86 +208,146 @@ def _index_chunks(
     return chunk_total
 
 
-class _IndexResult:
-    __slots__ = ("chunk_total",)
+@dataclass
+class _ParsedSource:
+    """Result of parsing a file, before any embedding attempt."""
 
-    def __init__(self, chunk_total: int) -> None:
-        self.chunk_total = chunk_total
+    text: str
+    chunks: list[str]
+    meta: SidecarMeta
 
 
-async def _parse_and_index_file(
-    project_id: str,
+def _parse_source(
     filename: str,
     content: bytes,
-    file_path: Path,
-    already_existed: bool,
     *,
     bib: BibtexEntry | None = None,
     pdf_title_fallback: str = "",
-) -> tuple[_IndexResult, None] | tuple[None, str]:
-    try:
-        result: ParseResult = parse(filename, content)
-        text = normalize_text(result.text)
-    except Exception as exc:
-        if not already_existed:
-            file_path.unlink(missing_ok=True)
-        return None, f"Erreur d'extraction : {exc}"
-
+    sidecar_overrides: SidecarMeta | None = None,
+) -> _ParsedSource:
+    """Pure parse step. Raises on parse failure. Never touches Chroma."""
+    result: ParseResult = parse(filename, content)
+    text = normalize_text(result.text)
     if not text:
-        if not already_existed:
-            file_path.unlink(missing_ok=True)
-        return None, "Aucun texte extrait du fichier"
+        raise ValueError("Aucun texte extrait du fichier")
 
     chunks = chunk_text(text)
     stem = Path(filename).stem
 
     pdf_title = (bib.title if bib else result.title) or pdf_title_fallback
-    author = bib.author if bib else result.author
-    year = bib.year if bib else result.year
-    source_type = result.source_type
-    authors_json = bib.authors_json if bib else ""
-    publication = bib.publication if bib else ""
-    doi = bib.doi if bib else ""
-    abstract = bib.abstract if bib else ""
+    meta = SidecarMeta(
+        stem=stem,
+        filename=filename,
+        source_type=result.source_type,
+        pdf_title=pdf_title,
+        author=bib.author if bib else result.author,
+        year=bib.year if bib else result.year,
+        authors_json=bib.authors_json if bib else "",
+        publication=bib.publication if bib else "",
+        doi=bib.doi if bib else "",
+        abstract=bib.abstract if bib else "",
+    )
+
+    # Preserve user-edited fields (notes, categories, hand-edited metadata) if a
+    # sidecar already existed for this stem before reparsing.
+    if sidecar_overrides is not None:
+        for key in EDITABLE_META_KEYS:
+            existing = getattr(sidecar_overrides, key, "")
+            if existing:
+                setattr(meta, key, existing)
+
+    return _ParsedSource(text=text, chunks=chunks, meta=meta)
+
+
+def _attempt_index(project_id: str, parsed: _ParsedSource) -> int:
+    """Index `parsed` into the project's Chroma collection. Raises on failure."""
+    collection = get_collection(project_id)
+    return _index_chunks(
+        collection,
+        parsed.meta.stem,
+        parsed.meta.filename,
+        parsed.chunks,
+        pdf_title=parsed.meta.pdf_title,
+        author=parsed.meta.author,
+        year=parsed.meta.year,
+        source_type=parsed.meta.source_type,
+        authors_json=parsed.meta.authors_json,
+        publication=parsed.meta.publication,
+        doi=parsed.meta.doi,
+        abstract=parsed.meta.abstract,
+        notes=parsed.meta.notes,
+        categories=parsed.meta.categories,
+    )
+
+
+@dataclass
+class _ImportOutcome:
+    chunk_total: int
+    indexed: bool
+    index_error: str = ""
+    already_existed: bool = False
+
+
+async def _import_one(
+    project_id: str,
+    filename: str,
+    content: bytes,
+    files_dir: Path,
+    *,
+    already_existed: bool,
+    bib: BibtexEntry | None = None,
+    pdf_title_fallback: str = "",
+) -> tuple[_ImportOutcome, None] | tuple[None, str]:
+    """Save the file (already done by caller) and try to index it. Returns the
+    outcome (always success on parse) or a hard error string if parsing fails.
+
+    On parse failure the caller's freshly-written file is removed when it
+    didn't pre-exist. On index failure the file is kept and a sidecar is
+    written with `index_error` set.
+    """
+    file_path = files_dir / filename
+    stem = Path(filename).stem
+    existing_sidecar = read_sidecar(files_dir, stem)
 
     try:
-
-        def _do_index(
-            pid: str = project_id,
-            s: str = stem,
-            f: str = filename,
-            c: list[str] = chunks,
-            pt: str = pdf_title,
-            a: str = author,
-            y: str = year,
-            st: str = source_type,
-            aj: str = authors_json,
-            pub: str = publication,
-            d: str = doi,
-            abstr: str = abstract,
-        ) -> int:
-            return _index_chunks(
-                get_collection(pid),
-                s,
-                f,
-                c,
-                pdf_title=pt,
-                author=a,
-                year=y,
-                source_type=st,
-                authors_json=aj,
-                publication=pub,
-                doi=d,
-                abstract=abstr,
-            )
-
-        chunk_total = await asyncio.to_thread(_do_index)
+        parsed = _parse_source(
+            filename,
+            content,
+            bib=bib,
+            pdf_title_fallback=pdf_title_fallback,
+            sidecar_overrides=existing_sidecar,
+        )
     except Exception as exc:
         if not already_existed:
             file_path.unlink(missing_ok=True)
-        return None, f"Erreur d'indexation : {exc}"
+        return None, f"Erreur d'extraction : {exc}"
 
-    return _IndexResult(chunk_total), None
+    # Write sidecar before attempting indexing so the source is visible even
+    # if indexing fails afterwards.
+    write_sidecar(files_dir, parsed.meta)
+
+    try:
+        chunk_total = await asyncio.to_thread(_attempt_index, project_id, parsed)
+    except Exception as exc:
+        # Update sidecar with the error so the UI can show it on the source row.
+        parsed.meta.index_error = f"{type(exc).__name__}: {exc}"
+        parsed.meta.indexed_at = ""
+        write_sidecar(files_dir, parsed.meta)
+        return _ImportOutcome(
+            chunk_total=0,
+            indexed=False,
+            index_error=parsed.meta.index_error,
+            already_existed=already_existed,
+        ), None
+
+    parsed.meta.index_error = ""
+    parsed.meta.indexed_at = str(int(time.time()))
+    write_sidecar(files_dir, parsed.meta)
+    return _ImportOutcome(
+        chunk_total=chunk_total,
+        indexed=True,
+        already_existed=already_existed,
+    ), None
 
 
 def _expand_zip(content: bytes) -> list[tuple[str, bytes]]:
@@ -241,6 +381,23 @@ def _url_to_stem(url: str) -> str:
     path = parsed.path.strip("/").replace("/", "__")
     raw = f"{host}__{path}" if path else host
     return re.sub(r"[^a-zA-Z0-9_-]", "_", raw)[:80]
+
+
+def _result_event(
+    *,
+    filename: str,
+    stem: str,
+    outcome: _ImportOutcome,
+) -> dict[str, object]:
+    return {
+        "type": "result",
+        "filename": filename,
+        "stem": stem,
+        "chunks_indexed": outcome.chunk_total,
+        "indexed": outcome.indexed,
+        "index_error": outcome.index_error,
+        "already_existed": outcome.already_existed,
+    }
 
 
 async def _stream_upload(
@@ -337,28 +494,20 @@ async def _stream_upload(
             except Exception:
                 pass
 
-        index_result, index_err = await _parse_and_index_file(
+        outcome, parse_err = await _import_one(
             project_id,
             filename,
             content,
-            file_path,
-            already_existed,
+            files_dir,
+            already_existed=already_existed,
             bib=bib_hint,
         )
-        if index_result is None:
-            assert index_err is not None
-            yield _sse({"type": "error", "filename": filename, "error": index_err})
+        if outcome is None:
+            assert parse_err is not None
+            yield _sse({"type": "error", "filename": filename, "error": parse_err})
             continue
 
-        stem = Path(filename).stem
-        result_data: dict[str, object] = {
-            "type": "result",
-            "filename": filename,
-            "stem": stem,
-            "chunks_indexed": index_result.chunk_total,
-            "already_existed": already_existed,
-        }
-        yield _sse(result_data)
+        yield _sse(_result_event(filename=filename, stem=Path(filename).stem, outcome=outcome))
 
     yield _sse({"type": "done"})
 
@@ -419,28 +568,59 @@ async def _stream_url_import(
     file_path = files_dir / inferred_filename
     file_path.write_bytes(raw_content)
 
-    index_result, index_err = await _parse_and_index_file(
+    outcome, parse_err = await _import_one(
         project_id,
         inferred_filename,
         raw_content,
-        file_path,
+        files_dir,
         already_existed=False,
         pdf_title_fallback=url,
     )
-    if index_result is None:
-        assert index_err is not None
-        yield _sse({"type": "error", "filename": url, "error": index_err})
+    if outcome is None:
+        assert parse_err is not None
+        yield _sse({"type": "error", "filename": url, "error": parse_err})
         yield _sse({"type": "done"})
         return
 
-    result_data: dict[str, object] = {
-        "type": "result",
-        "filename": url,
-        "stem": stem,
-        "chunks_indexed": index_result.chunk_total,
-        "already_existed": False,
-    }
-    yield _sse(result_data)
+    # Surface the URL as the event's filename so the frontend toast stays
+    # consistent with the upload progress view.
+    yield _sse(_result_event(filename=url, stem=stem, outcome=outcome))
+    yield _sse({"type": "done"})
+
+
+async def _stream_single_reindex(
+    project_id: str,
+    files_dir: Path,
+    stem: str,
+    file_path: Path,
+) -> AsyncGenerator[str, None]:
+    """Retry indexing for a single source previously imported without success.
+    Reuses the existing sidecar metadata, only the embedding step is rerun.
+    """
+    filename = file_path.name
+    yield _sse({"type": "start", "filename": filename})
+
+    try:
+        content = file_path.read_bytes()
+    except Exception as exc:
+        yield _sse({"type": "error", "filename": filename, "error": str(exc)})
+        yield _sse({"type": "done"})
+        return
+
+    outcome, parse_err = await _import_one(
+        project_id,
+        filename,
+        content,
+        files_dir,
+        already_existed=True,
+    )
+    if outcome is None:
+        assert parse_err is not None
+        yield _sse({"type": "error", "filename": filename, "error": parse_err})
+        yield _sse({"type": "done"})
+        return
+
+    yield _sse(_result_event(filename=filename, stem=stem, outcome=outcome))
     yield _sse({"type": "done"})
 
 
@@ -457,6 +637,32 @@ _RESTORABLE_META = frozenset(
         "categories",
     }
 )
+
+
+def iter_source_files(project_dir: Path) -> list[Path]:
+    """List every importable source file across the legacy ``pdfs/`` and the
+    current ``files/`` directories.
+    """
+    out: list[Path] = []
+    seen: set[str] = set()
+    for subdir in ("files", "pdfs"):
+        d = project_dir / subdir
+        if not d.exists():
+            continue
+        for f in d.iterdir():
+            if not f.is_file():
+                continue
+            if f.name.startswith("."):
+                continue
+            if f.name.endswith(SIDECAR_SUFFIX):
+                continue
+            if Path(f.name).suffix.lower() not in SUPPORTED_EXTENSIONS:
+                continue
+            if f.name in seen:
+                continue
+            seen.add(f.name)
+            out.append(f)
+    return out
 
 
 async def _stream_reindex(project_id: str, files_dir: Path) -> AsyncGenerator[str, None]:
@@ -479,25 +685,14 @@ async def _stream_reindex(project_id: str, files_dir: Path) -> AsyncGenerator[st
 
     await asyncio.to_thread(_reset)
 
-    # 3. Collect source files from both legacy and current directories.
+    # 3. Collect source files across legacy + current directories.
     project_dir = files_dir.parent
-    source_files: list[Path] = []
-    for subdir in ("files", "pdfs"):
-        d = project_dir / subdir
-        if d.exists():
-            source_files.extend(
-                f
-                for f in d.iterdir()
-                if f.is_file()
-                and not f.name.startswith(".")
-                and Path(f.name).suffix.lower() in SUPPORTED_EXTENSIONS
-            )
+    source_files = iter_source_files(project_dir)
 
     yield _sse({"type": "start_reindex", "total": len(source_files)})
 
     indexed = 0
     failed = 0
-    # Collect patches to apply in a single post-loop update.
     pending_patches: dict[str, dict[str, Any]] = {}
 
     for file_path in source_files:
@@ -511,16 +706,16 @@ async def _stream_reindex(project_id: str, files_dir: Path) -> AsyncGenerator[st
             failed += 1
             continue
 
-        index_result, index_err = await _parse_and_index_file(
+        outcome, parse_err = await _import_one(
             project_id,
             filename,
             content,
-            file_path,
+            files_dir,
             already_existed=True,
         )
-        if index_result is None:
-            assert index_err is not None
-            yield _sse({"type": "error", "filename": filename, "error": index_err})
+        if outcome is None:
+            assert parse_err is not None
+            yield _sse({"type": "error", "filename": filename, "error": parse_err})
             failed += 1
             continue
 
@@ -530,16 +725,12 @@ async def _stream_reindex(project_id: str, files_dir: Path) -> AsyncGenerator[st
             if patch:
                 pending_patches[stem] = patch
 
-        indexed += 1
-        yield _sse(
-            {
-                "type": "result",
-                "filename": filename,
-                "stem": stem,
-                "chunks_indexed": index_result.chunk_total,
-                "already_existed": True,
-            }
-        )
+        if outcome.indexed:
+            indexed += 1
+        else:
+            failed += 1
+
+        yield _sse(_result_event(filename=filename, stem=stem, outcome=outcome))
 
     # 4. Restore user-edited metadata (notes, BibTeX fields, categories) in a single pass.
     if pending_patches:

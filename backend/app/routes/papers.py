@@ -5,6 +5,7 @@ import ipaddress
 import mimetypes
 import socket
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -13,7 +14,18 @@ from pydantic import BaseModel
 
 from app.chroma import get_collection
 from app.config import PROJECTS_DIR
-from app.ingestion import _stream_reindex, _stream_upload, _stream_url_import
+from app.ingestion import (
+    EDITABLE_META_KEYS,
+    SidecarMeta,
+    _stream_reindex,
+    _stream_single_reindex,
+    _stream_upload,
+    _stream_url_import,
+    iter_source_files,
+    read_sidecar,
+    sidecar_path,
+    write_sidecar,
+)
 
 router = APIRouter(prefix="/projects/{project_id}/papers", tags=["papers"])
 
@@ -84,6 +96,8 @@ class PaperInfo(BaseModel):
     doi: str = ""
     abstract: str = ""
     notes: str = ""
+    indexed: bool = False
+    index_error: str = ""
 
 
 class UpdateMetadataRequest(BaseModel):
@@ -133,6 +147,48 @@ def _resolve_file_path(project_id: str, filename: str) -> Path | None:
     return None
 
 
+def _paper_from_meta(meta: SidecarMeta, chunk_total: int) -> PaperInfo:
+    return PaperInfo(
+        stem=meta.stem,
+        filename=meta.filename,
+        chunk_total=chunk_total,
+        pdf_title=meta.pdf_title,
+        author=meta.author,
+        year=meta.year,
+        source_type=meta.source_type,
+        authors_json=meta.authors_json,
+        publication=meta.publication,
+        doi=meta.doi,
+        abstract=meta.abstract,
+        notes=meta.notes,
+        indexed=chunk_total > 0,
+        index_error=meta.index_error,
+    )
+
+
+def _paper_from_chroma_meta(meta: dict[str, Any]) -> PaperInfo:
+    """Fallback when a Chroma entry exists with no sidecar — keeps legacy
+    projects working without re-indexing them.
+    """
+    chunk_total = int(meta.get("chunk_total", 0) or 0)
+    return PaperInfo(
+        stem=str(meta.get("source_stem", "")),
+        filename=str(meta.get("source_filename", "")),
+        chunk_total=chunk_total,
+        pdf_title=str(meta.get("pdf_title", "")),
+        author=str(meta.get("author", "")),
+        year=str(meta.get("year", "")),
+        source_type=str(meta.get("source_type", "document")),
+        authors_json=str(meta.get("authors_json", "")),
+        publication=str(meta.get("publication", "")),
+        doi=str(meta.get("doi", "")),
+        abstract=str(meta.get("abstract", "")),
+        notes=str(meta.get("notes", "")),
+        indexed=chunk_total > 0,
+        index_error="",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -140,27 +196,58 @@ def _resolve_file_path(project_id: str, filename: str) -> Path | None:
 
 @router.get("/", response_model=list[PaperInfo])
 async def list_papers(project_id: str) -> list[PaperInfo]:
+    project_dir = PROJECTS_DIR / project_id
+    if not project_dir.exists():
+        raise HTTPException(status_code=404, detail="Project not found")
+
     def _fetch() -> list[PaperInfo]:
-        collection = get_collection(project_id)
-        result = collection.get(include=["metadatas"])
+        files = iter_source_files(project_dir)
+
+        # Pull chunk_total per stem from Chroma if reachable. If the embedding
+        # client can't be built (Ollama unreachable + no API key), fall back to
+        # listing sources without their chunk counts rather than 500ing.
+        chunk_totals: dict[str, int] = {}
+        chroma_metas: dict[str, dict[str, Any]] = {}
+        try:
+            collection = get_collection(project_id)
+            result = collection.get(include=["metadatas"])
+            for meta in result["metadatas"] or []:
+                stem_val = meta.get("source_stem")
+                if not stem_val:
+                    continue
+                stem = str(stem_val)
+                chunk_totals[stem] = int(meta.get("chunk_total", 0) or 0)  # type: ignore[arg-type]
+                chroma_metas.setdefault(stem, dict(meta))
+        except Exception:
+            pass
+
         papers: dict[str, PaperInfo] = {}
-        for meta in result["metadatas"] or []:
-            stem = str(meta["source_stem"])
-            if stem not in papers:
+
+        # Files on disk are the primary source of truth (one entry per file).
+        for f in files:
+            stem = Path(f.name).stem
+            files_dir = f.parent
+            sidecar = read_sidecar(files_dir, stem)
+            chunk_total = chunk_totals.get(stem, 0)
+            if sidecar is not None:
+                papers[stem] = _paper_from_meta(sidecar, chunk_total)
+            elif stem in chroma_metas:
+                # Legacy project: no sidecar but chunks exist in Chroma.
+                papers[stem] = _paper_from_chroma_meta(chroma_metas[stem])
+            else:
+                # File present without metadata anywhere: surface it as
+                # non-indexed so the user can re-trigger ingestion.
                 papers[stem] = PaperInfo(
                     stem=stem,
-                    filename=str(meta["source_filename"]),
-                    chunk_total=int(meta["chunk_total"]),  # type: ignore[arg-type]
-                    pdf_title=str(meta.get("pdf_title", "")),
-                    author=str(meta.get("author", "")),
-                    year=str(meta.get("year", "")),
-                    source_type=str(meta.get("source_type", "document")),
-                    authors_json=str(meta.get("authors_json", "")),
-                    publication=str(meta.get("publication", "")),
-                    doi=str(meta.get("doi", "")),
-                    abstract=str(meta.get("abstract", "")),
-                    notes=str(meta.get("notes", "")),
+                    filename=f.name,
+                    chunk_total=0,
+                    pdf_title="",
+                    author="",
+                    year="",
+                    indexed=False,
+                    index_error="",
                 )
+
         return list(papers.values())
 
     return await asyncio.to_thread(_fetch)
@@ -195,15 +282,21 @@ async def get_paper_chunks(project_id: str, stem: str) -> list[ChunkInfo]:
 async def get_paper_file(
     project_id: str,
     stem: str,
-    _: Path = Depends(_get_files_dir),
+    files_dir: Path = Depends(_get_files_dir),
 ) -> FileResponse:
     def _get_filename() -> str | None:
-        collection = get_collection(project_id)
-        result = collection.get(where={"source_stem": stem}, include=["metadatas"])
-        if not result["ids"]:
-            return None
-        assert result["metadatas"] is not None
-        return str(result["metadatas"][0]["source_filename"])
+        # Prefer sidecar (works without Ollama).
+        sidecar = read_sidecar(files_dir, stem)
+        if sidecar is not None:
+            return sidecar.filename
+        try:
+            collection = get_collection(project_id)
+            result = collection.get(where={"source_stem": stem}, include=["metadatas"])
+            if result["ids"] and result["metadatas"]:
+                return str(result["metadatas"][0]["source_filename"])
+        except Exception:
+            pass
+        return None
 
     filename = await asyncio.to_thread(_get_filename)
     if not filename:
@@ -235,43 +328,59 @@ async def update_paper_metadata(
     project_id: str,
     stem: str,
     body: UpdateMetadataRequest,
+    files_dir: Path = Depends(_get_files_dir),
 ) -> PaperInfo:
-    _PROTECTED_KEYS = frozenset(
-        {
-            "source_stem",
-            "source_filename",
-            "chunk_index",
-            "chunk_total",
-            "word_count",
-            "source_type",
-        }
-    )
-
     def _update() -> PaperInfo:
-        collection = get_collection(project_id)
-        result = collection.get(where={"source_stem": stem}, include=["metadatas"])
-        if not result["ids"]:
+        sidecar = read_sidecar(files_dir, stem)
+
+        # Try to update Chroma in parallel, but tolerate Ollama being down: the
+        # sidecar is the source of truth used by list_papers.
+        chroma_meta: dict[str, Any] | None = None
+        chunk_total = 0
+        try:
+            collection = get_collection(project_id)
+            result = collection.get(where={"source_stem": stem}, include=["metadatas"])
+            if result["ids"] and result["metadatas"]:
+                chroma_meta = dict(result["metadatas"][0])
+                chunk_total = int(chroma_meta.get("chunk_total", 0) or 0)
+        except Exception:
+            collection = None
+            result = None
+
+        if sidecar is None and chroma_meta is None:
             raise HTTPException(status_code=404, detail="Paper not found")
-        assert result["metadatas"] is not None
-        raw_patch = body.model_dump(exclude_none=True)
-        patch = {k: v for k, v in raw_patch.items() if k not in _PROTECTED_KEYS}
-        updated_metas = [{**meta, **patch} for meta in result["metadatas"]]
-        collection.update(ids=result["ids"], metadatas=updated_metas)  # type: ignore[arg-type]
-        first = updated_metas[0]
-        return PaperInfo(
-            stem=stem,
-            filename=str(first["source_filename"]),
-            chunk_total=int(first["chunk_total"]),
-            pdf_title=str(first.get("pdf_title", "")),
-            author=str(first.get("author", "")),
-            year=str(first.get("year", "")),
-            source_type=str(first.get("source_type", "document")),
-            authors_json=str(first.get("authors_json", "")),
-            publication=str(first.get("publication", "")),
-            doi=str(first.get("doi", "")),
-            abstract=str(first.get("abstract", "")),
-            notes=str(first.get("notes", "")),
-        )
+
+        # Reconstruct sidecar from Chroma if missing (legacy projects).
+        if sidecar is None:
+            assert chroma_meta is not None
+            sidecar = SidecarMeta(
+                stem=stem,
+                filename=str(chroma_meta.get("source_filename", "")),
+                source_type=str(chroma_meta.get("source_type", "document")),
+                pdf_title=str(chroma_meta.get("pdf_title", "")),
+                author=str(chroma_meta.get("author", "")),
+                year=str(chroma_meta.get("year", "")),
+                authors_json=str(chroma_meta.get("authors_json", "")),
+                publication=str(chroma_meta.get("publication", "")),
+                doi=str(chroma_meta.get("doi", "")),
+                abstract=str(chroma_meta.get("abstract", "")),
+                notes=str(chroma_meta.get("notes", "")),
+            )
+
+        patch = body.model_dump(exclude_none=True)
+        patch = {k: v for k, v in patch.items() if k in EDITABLE_META_KEYS}
+        for k, v in patch.items():
+            setattr(sidecar, k, v)
+
+        write_sidecar(files_dir, sidecar)
+
+        # Mirror the patch into Chroma if the collection has this source.
+        if collection is not None and result is not None and result["ids"] and result["metadatas"]:
+            updated = [{**meta, **patch} for meta in result["metadatas"]]
+            collection.update(ids=result["ids"], metadatas=updated)  # type: ignore[arg-type]
+            chunk_total = int(updated[0].get("chunk_total", 0) or 0)
+
+        return _paper_from_meta(sidecar, chunk_total)
 
     return await asyncio.to_thread(_update)
 
@@ -283,6 +392,36 @@ async def reindex_papers(
 ) -> StreamingResponse:
     return StreamingResponse(
         _stream_reindex(project_id, files_dir),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.post("/{stem}/reindex")
+async def reindex_one_paper(
+    project_id: str,
+    stem: str,
+    files_dir: Path = Depends(_get_files_dir),
+) -> StreamingResponse:
+    sidecar = read_sidecar(files_dir, stem)
+    filename: str | None = None
+    if sidecar is not None:
+        filename = sidecar.filename
+    if filename is None:
+        # Last-resort lookup: scan files on disk for a matching stem.
+        for f in iter_source_files(PROJECTS_DIR / project_id):
+            if Path(f.name).stem == stem:
+                filename = f.name
+                break
+    if filename is None:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    file_path = _resolve_file_path(project_id, filename)
+    if file_path is None:
+        raise HTTPException(status_code=404, detail="File not found on disk")
+
+    return StreamingResponse(
+        _stream_single_reindex(project_id, files_dir, stem, file_path),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -308,18 +447,31 @@ async def delete_paper(
     stem: str,
     files_dir: Path = Depends(_get_files_dir),
 ) -> None:
-    def _delete() -> str | None:
-        collection = get_collection(project_id)
-        existing = collection.get(where={"source_stem": stem}, include=["metadatas"])
-        if not existing["ids"]:
-            return None
-        assert existing["metadatas"] is not None
-        filename = str(existing["metadatas"][0]["source_filename"])
-        collection.delete(ids=existing["ids"])
-        return filename
+    def _delete() -> tuple[str | None, bool]:
+        sidecar = read_sidecar(files_dir, stem)
+        filename: str | None = sidecar.filename if sidecar else None
+        found = sidecar is not None
 
-    filename = await asyncio.to_thread(_delete)
+        # Try to drop chunks from Chroma; missing collection is fine for sources
+        # that were never indexed (Ollama unreachable at import time).
+        try:
+            collection = get_collection(project_id)
+            existing = collection.get(where={"source_stem": stem}, include=["metadatas"])
+            if existing["ids"]:
+                found = True
+                if filename is None and existing["metadatas"]:
+                    filename = str(existing["metadatas"][0]["source_filename"])
+                collection.delete(ids=existing["ids"])
+        except Exception:
+            pass
+
+        sidecar_path(files_dir, stem).unlink(missing_ok=True)
+        return filename, found
+
+    filename, found = await asyncio.to_thread(_delete)
+    if not found:
+        raise HTTPException(status_code=404, detail="Paper not found")
     if filename:
         file_path = _resolve_file_path(project_id, filename)
         if file_path:
-            file_path.unlink()
+            file_path.unlink(missing_ok=True)
