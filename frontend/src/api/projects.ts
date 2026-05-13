@@ -1,5 +1,5 @@
 import { OLLAMA_URL_KEY } from './health'
-import { allLlmHeaders, plainTextHeader } from './llm'
+import { allLlmHeaders, llmHeaders, plainTextHeader, type LLMProvider } from './llm'
 
 function ollamaHeaders(): HeadersInit {
   const url = localStorage.getItem(OLLAMA_URL_KEY)
@@ -19,6 +19,8 @@ export interface SourceInfo {
   doi: string
   abstract: string
   notes: string
+  indexed: boolean
+  index_error: string
 }
 
 export async function listSources(projectId: string): Promise<SourceInfo[]> {
@@ -30,10 +32,10 @@ export async function listSources(projectId: string): Promise<SourceInfo[]> {
 }
 
 export async function deleteSource(projectId: string, stem: string): Promise<void> {
-  const res = await fetch(
-    `/api/projects/${projectId}/papers/${encodeURIComponent(stem)}`,
-    { method: 'DELETE', headers: allLlmHeaders() }
-  )
+  const res = await fetch(`/api/projects/${projectId}/papers/${encodeURIComponent(stem)}`, {
+    method: 'DELETE',
+    headers: allLlmHeaders(),
+  })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
 }
 
@@ -51,25 +53,38 @@ export interface UpdateMetadataPayload {
 export async function updateSourceMetadata(
   projectId: string,
   stem: string,
-  payload: UpdateMetadataPayload,
+  payload: UpdateMetadataPayload
 ): Promise<SourceInfo> {
-  const res = await fetch(
-    `/api/projects/${projectId}/papers/${encodeURIComponent(stem)}`,
-    {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', ...allLlmHeaders() },
-      body: JSON.stringify(payload),
-    }
-  )
+  const res = await fetch(`/api/projects/${projectId}/papers/${encodeURIComponent(stem)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...allLlmHeaders() },
+    body: JSON.stringify(payload),
+  })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }
 
-export function addUrlSource(projectId: string, url: string, signal?: AbortSignal): Promise<Response> {
+export function addUrlSource(
+  projectId: string,
+  url: string,
+  signal?: AbortSignal
+): Promise<Response> {
   return fetch(`/api/projects/${projectId}/papers/url`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...allLlmHeaders() },
     body: JSON.stringify({ url }),
+    signal,
+  })
+}
+
+export function reindexSource(
+  projectId: string,
+  stem: string,
+  signal?: AbortSignal
+): Promise<Response> {
+  return fetch(`/api/projects/${projectId}/papers/${encodeURIComponent(stem)}/reindex`, {
+    method: 'POST',
+    headers: allLlmHeaders(),
     signal,
   })
 }
@@ -128,7 +143,10 @@ export async function getProblematique(projectId: string): Promise<Problematique
   return res.json()
 }
 
-export async function saveProblematique(projectId: string, data: Problematique): Promise<Problematique> {
+export async function saveProblematique(
+  projectId: string,
+  data: Problematique
+): Promise<Problematique> {
   const res = await fetch(`/api/projects/${projectId}/problematique`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -152,18 +170,38 @@ export interface ChatMessage {
   content: string
 }
 
+function mentionsHeader(stems: string[]): Record<string, string> {
+  if (!stems.length) return {}
+  return { 'X-Chat-Mentions': stems.map((s) => encodeURIComponent(s)).join(',') }
+}
+
 export function streamChat(
   projectId: string,
   model: string,
   messages: ChatMessage[],
   signal?: AbortSignal,
+  mentions: string[] = [],
+  provider?: LLMProvider
 ): Promise<Response> {
+  // When the caller supplies a provider (per-chat override), build headers
+  // around it instead of the globally-stored provider. Ollama URL is always
+  // forwarded so embedding fallback works regardless of the chat provider.
+  let providerHeaders: Record<string, string>
+  if (provider) {
+    providerHeaders = {
+      ...ollamaHeaders(),
+      ...llmHeaders(provider),
+    }
+  } else {
+    providerHeaders = allLlmHeaders()
+  }
   return fetch(`/api/projects/${projectId}/chat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...allLlmHeaders(),
+      ...providerHeaders,
       ...plainTextHeader(),
+      ...mentionsHeader(mentions),
     },
     body: JSON.stringify({ model, messages }),
     signal,

@@ -33,12 +33,14 @@ export function ImportProgressToast({ fileStates, onDismiss }: ImportProgressToa
             </span>
             <span className={styles.name}>{f.filename}</span>
             {f.status === 'done' && (
-              <span className={styles.meta}>
+              <span className={styles.meta} title={f.index_error || undefined}>
                 {f.extracted_count !== undefined
                   ? `${f.extracted_count} fichier${f.extracted_count !== 1 ? 's' : ''} extrait${f.extracted_count !== 1 ? 's' : ''}`
                   : f.items_parsed !== undefined
                     ? `${f.items_parsed} référence${f.items_parsed !== 1 ? 's' : ''}`
-                    : `${f.chunks} chunks`}
+                    : f.indexed === false
+                      ? 'importé · non indexé'
+                      : `${f.chunks} chunks`}
               </span>
             )}
             {f.status === 'error' && <span className={styles.meta}>{f.error}</span>}

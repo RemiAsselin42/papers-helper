@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { LLMProvider } from '../api/llm'
 import { type ChatMessage, streamChat } from '../api/projects'
 
 export type StreamStatus = 'ok' | 'aborted' | 'error'
@@ -23,7 +24,13 @@ export interface UseChatStream {
    * final message list. The returned `messages` is authoritative — read it
    * instead of reading state, which won't be flushed yet.
    */
-  send: (projectId: string, text: string, model: string) => Promise<StreamResult>
+  send: (
+    projectId: string,
+    text: string,
+    model: string,
+    mentions?: string[],
+    provider?: LLMProvider
+  ) => Promise<StreamResult>
 }
 
 export function useChatStream(): UseChatStream {
@@ -57,7 +64,13 @@ export function useChatStream(): UseChatStream {
     abortRef.current?.abort()
   }
 
-  async function send(projectId: string, text: string, model: string): Promise<StreamResult> {
+  async function send(
+    projectId: string,
+    text: string,
+    model: string,
+    mentions: string[] = [],
+    provider?: LLMProvider
+  ): Promise<StreamResult> {
     const userMsg: ChatMessage = { role: 'user', content: text }
     const nextMessages = [...messagesRef.current, userMsg]
     commit(() => nextMessages)
@@ -65,12 +78,19 @@ export function useChatStream(): UseChatStream {
     setStreaming(true)
 
     const assistantIndex = nextMessages.length
-    commit(prev => [...prev, { role: 'assistant', content: '' }])
+    commit((prev) => [...prev, { role: 'assistant', content: '' }])
 
     let status: StreamStatus = 'ok'
     abortRef.current = new AbortController()
     try {
-      const res = await streamChat(projectId, model, nextMessages, abortRef.current.signal)
+      const res = await streamChat(
+        projectId,
+        model,
+        nextMessages,
+        abortRef.current.signal,
+        mentions,
+        provider
+      )
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       if (!res.body) throw new Error('No response body')
 
@@ -89,8 +109,13 @@ export function useChatStream(): UseChatStream {
           const raw = line.slice(6)
           if (raw === '[DONE]') break
           try {
-            const { token } = JSON.parse(raw) as { token: string }
-            commit(prev => {
+            const evt = JSON.parse(raw) as { token?: string; error?: string }
+            if (evt.error) {
+              throw new Error(evt.error)
+            }
+            const token = evt.token
+            if (typeof token !== 'string') continue
+            commit((prev) => {
               const copy = [...prev]
               copy[assistantIndex] = {
                 ...copy[assistantIndex],
@@ -98,8 +123,11 @@ export function useChatStream(): UseChatStream {
               }
               return copy
             })
-          } catch {
-            // malformed SSE line, skip
+          } catch (parseErr) {
+            // Re-throw real provider errors; swallow only SyntaxError from
+            // malformed SSE lines.
+            if (parseErr instanceof SyntaxError) continue
+            throw parseErr
           }
         }
       }
@@ -108,9 +136,13 @@ export function useChatStream(): UseChatStream {
         status = 'aborted'
       } else {
         status = 'error'
-        commit(prev => {
+        const detail = (err as Error).message?.trim()
+        const body = detail
+          ? `⚠ Erreur lors de la génération : ${detail}`
+          : '⚠ Erreur lors de la génération.'
+        commit((prev) => {
           const copy = [...prev]
-          copy[assistantIndex] = { role: 'assistant', content: '⚠ Erreur lors de la génération.' }
+          copy[assistantIndex] = { role: 'assistant', content: body }
           return copy
         })
       }

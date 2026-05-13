@@ -2,10 +2,7 @@ import { useRef, useState, useCallback, DragEvent } from 'react'
 import { HelpCircle } from 'lucide-react'
 import { addUrlSource } from '../api/projects'
 import { allLlmHeaders } from '../api/llm'
-import {
-  ACCEPTED_INPUT_ATTR,
-  isAcceptedDocument,
-} from '../constants/acceptedFormats'
+import { ACCEPTED_INPUT_ATTR, isAcceptedDocument } from '../constants/acceptedFormats'
 import { HelpModal } from './HelpModal'
 import styles from './DropZone.module.scss'
 
@@ -19,13 +16,15 @@ export interface FileState {
   items_parsed?: number
   extracted_count?: number
   error?: string
-
+  indexed?: boolean
+  index_error?: string
 }
 
 interface DropZoneProps {
   projectId: string
   onSuccess?: () => void
   onProgress?: (states: FileState[]) => void
+  onFileCompleted?: (filename: string) => void
 }
 
 async function readSseStream(
@@ -52,7 +51,7 @@ async function readSseStream(
   }
 }
 
-export function DropZone({ projectId, onSuccess, onProgress }: DropZoneProps) {
+export function DropZone({ projectId, onSuccess, onProgress, onFileCompleted }: DropZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const fileStatesRef = useRef<FileState[]>([])
@@ -150,10 +149,14 @@ export function DropZone({ projectId, onSuccess, onProgress }: DropZoneProps) {
               items_parsed: event.items_parsed as number,
             })
           } else {
+            const indexed = (event.indexed as boolean | undefined) ?? true
             upsertFile(event.filename as string, {
               status: 'done',
               chunks: event.chunks_indexed as number,
+              indexed,
+              index_error: (event.index_error as string | undefined) || undefined,
             })
+            onFileCompleted?.(event.filename as string)
           }
         } else if (event.type === 'error') {
           upsertFile(event.filename as string, { status: 'error', error: event.error as string })
@@ -216,10 +219,14 @@ export function DropZone({ projectId, onSuccess, onProgress }: DropZoneProps) {
         if (event.type === 'start') {
           upsertFile(event.filename as string, { status: 'processing' })
         } else if (event.type === 'result') {
+          const indexed = (event.indexed as boolean | undefined) ?? true
           upsertFile(event.filename as string, {
             status: 'done',
             chunks: event.chunks_indexed as number,
+            indexed,
+            index_error: (event.index_error as string | undefined) || undefined,
           })
+          onFileCompleted?.(event.filename as string)
         } else if (event.type === 'error') {
           upsertFile(event.filename as string, { status: 'error', error: event.error as string })
         } else if (event.type === 'done') {
@@ -273,12 +280,15 @@ export function DropZone({ projectId, onSuccess, onProgress }: DropZoneProps) {
         />
         <button
           className={styles.helpBtn}
-          onClick={(e) => { e.stopPropagation(); setShowHelp(true) }}
+          onClick={(e) => {
+            e.stopPropagation()
+            setShowHelp(true)
+          }}
           aria-label="Aide sur les formats supportés"
           title="Formats supportés et conseils"
           tabIndex={-1}
         >
-          <HelpCircle size={14} />
+          <HelpCircle size={16} />
           Aide
         </button>
         <p className={styles.hint}>{hintText}</p>
