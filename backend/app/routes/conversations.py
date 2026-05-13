@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from app.config import PROJECTS_DIR
@@ -41,6 +41,15 @@ class Conversation(BaseModel):
     model: str
     created_at: str
     updated_at: str
+    messages: list[ConversationMessage]
+    # Pagination metadata: populated on read by `get_conversation`, never
+    # written to disk (see `_write_conversation`). Default 0 keeps the model
+    # constructible from raw JSON files that don't carry these keys.
+    message_count: int = 0
+    messages_offset: int = 0
+
+
+class AppendMessagesPayload(BaseModel):
     messages: list[ConversationMessage]
 
 
@@ -101,10 +110,17 @@ def _read_conversation(path: Path) -> Conversation:
     return Conversation(**data)
 
 
+_DISK_EXCLUDE_FIELDS = {"message_count", "messages_offset"}
+
+
 def _write_conversation(path: Path, conv: Conversation) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        json.dumps(conv.model_dump(), ensure_ascii=False, indent=2),
+        json.dumps(
+            conv.model_dump(exclude=_DISK_EXCLUDE_FIELDS),
+            ensure_ascii=False,
+            indent=2,
+        ),
         encoding="utf-8",
     )
 
@@ -166,12 +182,89 @@ async def create_conversation(project_id: str, body: CreateConversationRequest) 
 
 
 @router.get("/{conversation_id}", response_model=Conversation)
-async def get_conversation(project_id: str, conversation_id: str) -> Conversation:
+async def get_conversation(
+    project_id: str,
+    conversation_id: str,
+    limit: int | None = Query(default=None, ge=1, le=500),
+    offset: int | None = Query(default=None, ge=0),
+) -> Conversation:
+    """Return a conversation, optionally windowed.
+
+    - No `limit`/`offset`: full message array (backward-compat).
+    - `limit` only: tail mode — returns the last `limit` messages.
+    - `offset`+`limit`: windowed slice `messages[offset:offset+limit]`.
+    - `offset` only: from `offset` to the end.
+
+    Always populates `message_count` (total messages on disk) and
+    `messages_offset` (index of `messages[0]` in the full conversation) so
+    the client can paginate without a second round-trip.
+    """
     _require_project(project_id)
     path = _conversation_path(project_id, conversation_id)
     if not path.exists():
         raise HTTPException(status_code=404, detail="Conversation not found")
-    return await asyncio.to_thread(_read_conversation, path)
+
+    def _read_windowed() -> Conversation:
+        conv = _read_conversation(path)
+        total = len(conv.messages)
+        if limit is None and offset is None:
+            conv.message_count = total
+            conv.messages_offset = 0
+            return conv
+        if offset is None:
+            # limit-only → tail
+            start = max(0, total - (limit or 0))
+            end = total
+        else:
+            start = min(offset, total)
+            end = min(start + (limit or total), total) if limit is not None else total
+        conv.messages = conv.messages[start:end]
+        conv.message_count = total
+        conv.messages_offset = start
+        return conv
+
+    return await asyncio.to_thread(_read_windowed)
+
+
+@router.post("/{conversation_id}/messages", response_model=ConversationSummary)
+async def append_messages(
+    project_id: str,
+    conversation_id: str,
+    body: AppendMessagesPayload,
+) -> ConversationSummary:
+    """Append messages to an existing conversation without reading or
+    rewriting the full message history client-side. Designed for the
+    tail-loaded chat flow: the client doesn't hold the entire conversation,
+    so a full-replace PUT would be destructive."""
+    _require_project(project_id)
+    path = _conversation_path(project_id, conversation_id)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    def _append() -> ConversationSummary:
+        existing = _read_conversation(path)
+        existing.messages.extend(body.messages)
+        updated = Conversation(
+            id=existing.id,
+            title=existing.title,
+            provider=existing.provider,
+            model=existing.model,
+            created_at=existing.created_at,
+            updated_at=_bump_ts(existing.updated_at),
+            messages=existing.messages,
+        )
+        _write_conversation(path, updated)
+        return ConversationSummary(
+            id=updated.id,
+            title=updated.title,
+            provider=updated.provider,
+            model=updated.model,
+            created_at=updated.created_at,
+            updated_at=updated.updated_at,
+            message_count=len(updated.messages),
+        )
+
+    return await asyncio.to_thread(_append)
 
 
 @router.put("/{conversation_id}", response_model=Conversation)

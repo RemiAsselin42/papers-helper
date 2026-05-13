@@ -249,6 +249,256 @@ class TestConversationCRUD:
         assert list_b == []
 
 
+def _seed_conversation(client: TestClient, project_name: str, n_messages: int) -> str:
+    """Create a conversation seeded with `n_messages` alternating messages.
+    Returns its id. Caller is responsible for patching PROJECTS_DIR."""
+    msgs = [
+        {"role": "user" if i % 2 == 0 else "assistant", "content": f"msg-{i}"}
+        for i in range(n_messages)
+    ]
+    resp = client.post(
+        f"/projects/{project_name}/conversations/",
+        json=_payload(messages=msgs),
+    )
+    assert resp.status_code == 201
+    return str(resp.json()["id"])
+
+
+class TestConversationPagination:
+    def test_get_no_pagination_returns_full(
+        self, client: TestClient, project_dir: Path
+    ) -> None:
+        with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
+            cid = _seed_conversation(client, project_dir.name, 8)
+            resp = client.get(f"/projects/{project_dir.name}/conversations/{cid}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["messages"]) == 8
+        # Metadata is populated even without query params so the client always
+        # knows the total.
+        assert data["message_count"] == 8
+        assert data["messages_offset"] == 0
+
+    def test_get_with_limit_returns_tail(
+        self, client: TestClient, project_dir: Path
+    ) -> None:
+        with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
+            cid = _seed_conversation(client, project_dir.name, 50)
+            resp = client.get(
+                f"/projects/{project_dir.name}/conversations/{cid}",
+                params={"limit": 10},
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["message_count"] == 50
+        assert data["messages_offset"] == 40
+        assert len(data["messages"]) == 10
+        assert data["messages"][0]["content"] == "msg-40"
+        assert data["messages"][-1]["content"] == "msg-49"
+
+    def test_get_with_offset_and_limit_window(
+        self, client: TestClient, project_dir: Path
+    ) -> None:
+        with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
+            cid = _seed_conversation(client, project_dir.name, 30)
+            resp = client.get(
+                f"/projects/{project_dir.name}/conversations/{cid}",
+                params={"offset": 10, "limit": 5},
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["messages_offset"] == 10
+        assert data["message_count"] == 30
+        assert [m["content"] for m in data["messages"]] == [
+            "msg-10",
+            "msg-11",
+            "msg-12",
+            "msg-13",
+            "msg-14",
+        ]
+
+    def test_get_offset_clamped_to_total(
+        self, client: TestClient, project_dir: Path
+    ) -> None:
+        with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
+            cid = _seed_conversation(client, project_dir.name, 5)
+            resp = client.get(
+                f"/projects/{project_dir.name}/conversations/{cid}",
+                params={"offset": 50, "limit": 10},
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["messages"] == []
+        assert data["messages_offset"] == 5
+        assert data["message_count"] == 5
+
+    def test_pagination_metadata_not_written_to_disk(
+        self, client: TestClient, project_dir: Path
+    ) -> None:
+        """`message_count` and `messages_offset` are derived on read; they
+        must never end up in the conversation JSON file (where they would
+        drift out of sync after every write)."""
+        with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
+            cid = _seed_conversation(client, project_dir.name, 6)
+            # Triggers a write through the append path (covers any code path
+            # that calls _write_conversation).
+            client.post(
+                f"/projects/{project_dir.name}/conversations/{cid}/messages",
+                json={"messages": [{"role": "user", "content": "ping"}]},
+            )
+        raw = json.loads(
+            (project_dir / "conversations" / f"{cid}.json").read_text(encoding="utf-8")
+        )
+        assert "message_count" not in raw
+        assert "messages_offset" not in raw
+
+
+class TestAppendMessages:
+    def test_append_messages_extends_conversation(
+        self, client: TestClient, project_dir: Path
+    ) -> None:
+        with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
+            cid = _seed_conversation(client, project_dir.name, 3)
+            before = client.get(
+                f"/projects/{project_dir.name}/conversations/{cid}"
+            ).json()
+            resp = client.post(
+                f"/projects/{project_dir.name}/conversations/{cid}/messages",
+                json={
+                    "messages": [
+                        {"role": "user", "content": "new question"},
+                        {"role": "assistant", "content": "new answer"},
+                    ]
+                },
+            )
+            after = client.get(
+                f"/projects/{project_dir.name}/conversations/{cid}"
+            ).json()
+        assert resp.status_code == 200
+        summary = resp.json()
+        assert summary["message_count"] == 5
+        assert summary["updated_at"] > before["updated_at"]
+        # Full GET confirms ordering: previous tail then the two appended.
+        assert [m["content"] for m in after["messages"][-2:]] == [
+            "new question",
+            "new answer",
+        ]
+
+    def test_append_messages_404_on_missing_conv(
+        self, client: TestClient, project_dir: Path
+    ) -> None:
+        with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
+            resp = client.post(
+                f"/projects/{project_dir.name}/conversations/missing/messages",
+                json={"messages": [{"role": "user", "content": "x"}]},
+            )
+        assert resp.status_code == 404
+
+    def test_append_messages_persists_to_disk(
+        self, client: TestClient, project_dir: Path
+    ) -> None:
+        with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
+            cid = _seed_conversation(client, project_dir.name, 2)
+            client.post(
+                f"/projects/{project_dir.name}/conversations/{cid}/messages",
+                json={"messages": [{"role": "user", "content": "persisted"}]},
+            )
+        raw = json.loads(
+            (project_dir / "conversations" / f"{cid}.json").read_text(encoding="utf-8")
+        )
+        assert raw["messages"][-1] == {"role": "user", "content": "persisted"}
+        assert len(raw["messages"]) == 3
+
+    def test_append_messages_404_on_missing_project(
+        self, client: TestClient, tmp_path: Path
+    ) -> None:
+        with patch("app.routes.conversations.PROJECTS_DIR", tmp_path):
+            resp = client.post(
+                "/projects/nope/conversations/whatever/messages",
+                json={"messages": [{"role": "user", "content": "x"}]},
+            )
+        assert resp.status_code == 404
+
+
+class TestAppendOnlyRoundTrip:
+    """End-to-end coverage for the windowed-chat flow that the frontend
+    relies on: open a conversation with a tail-only fetch, page older
+    messages into view, then append a new turn. The client never holds the
+    full history at any point — only the loaded window — so any drift
+    between `messages_offset` / `message_count` and disk reality would
+    silently corrupt the conversation. This test exercises the full loop."""
+
+    def test_tail_load_then_prepend_older_then_append(
+        self, client: TestClient, project_dir: Path
+    ) -> None:
+        with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
+            cid = _seed_conversation(client, project_dir.name, 50)
+
+            # Step 1 — tail load (mirrors the frontend's default `load` call
+            # with limit=CONVERSATION_PAGE_SIZE=30). The client now holds
+            # messages 20..49 and knows there are 20 older ones it doesn't.
+            tail = client.get(
+                f"/projects/{project_dir.name}/conversations/{cid}",
+                params={"limit": 30},
+            ).json()
+            assert tail["message_count"] == 50
+            assert tail["messages_offset"] == 20
+            assert [m["content"] for m in tail["messages"]] == [
+                f"msg-{i}" for i in range(20, 50)
+            ]
+
+            # Step 2 — prepend older (mirrors `loadOlder` when the user
+            # scrolls to the top of the visible window). The next page is
+            # messages 0..19; the client will glue them onto the front of
+            # its existing window.
+            older = client.get(
+                f"/projects/{project_dir.name}/conversations/{cid}",
+                params={"offset": 0, "limit": 20},
+            ).json()
+            assert older["message_count"] == 50
+            assert older["messages_offset"] == 0
+            assert [m["content"] for m in older["messages"]] == [
+                f"msg-{i}" for i in range(0, 20)
+            ]
+
+            # Step 3 — append a new turn via POST /messages (mirrors the
+            # `persist` path when a conversation is pinned). The client only
+            # sends the *new* user+assistant pair, NOT the full window.
+            append_resp = client.post(
+                f"/projects/{project_dir.name}/conversations/{cid}/messages",
+                json={
+                    "messages": [
+                        {"role": "user", "content": "follow-up"},
+                        {"role": "assistant", "content": "follow-up reply"},
+                    ]
+                },
+            )
+            assert append_resp.status_code == 200
+            summary = append_resp.json()
+            assert summary["message_count"] == 52
+            assert summary["updated_at"] > tail["updated_at"]
+
+            # Step 4 — re-fetch with the same tail-load window. The newly
+            # appended turn must appear at the end; the offset must shift by
+            # exactly the count we appended (2). No previous message may
+            # have been lost or reordered.
+            tail2 = client.get(
+                f"/projects/{project_dir.name}/conversations/{cid}",
+                params={"limit": 30},
+            ).json()
+        assert tail2["message_count"] == 52
+        assert tail2["messages_offset"] == 22
+        # The new turn is the trailing pair; the rest of the tail mirrors
+        # the original messages with the head shifted forward by 2.
+        assert [m["content"] for m in tail2["messages"][-2:]] == [
+            "follow-up",
+            "follow-up reply",
+        ]
+        assert [m["content"] for m in tail2["messages"][:-2]] == [
+            f"msg-{i}" for i in range(22, 50)
+        ]
+
+
 class TestBumpTs:
     """`_bump_ts` guarantees a strictly-monotonic updated_at even when the
     system clock has microsecond resolution that collides with `existing`."""
