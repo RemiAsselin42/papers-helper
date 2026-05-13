@@ -1,7 +1,7 @@
 import { Check, ChevronDown, Cpu, KeyRound, Settings } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { PROVIDER_LABELS, getStoredApiKey, type LLMProvider } from '../api/llm'
-import { listModels } from '../api/projects'
+import { PROVIDER_LABELS, getStoredApiKey, type LLMProvider } from '../../api/llm'
+import { listModels } from '../../api/models'
 import styles from './ModelSelector.module.scss'
 
 export interface ModelSelectorProps {

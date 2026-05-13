@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { createProject, type ProjectInfo } from '../api/projects'
+import { createProject, type ProjectInfo } from '../../api/projects'
 import styles from './NewProjectView.module.scss'
 
 interface NewProjectViewProps {

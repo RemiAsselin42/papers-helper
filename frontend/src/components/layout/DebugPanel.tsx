@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
-import { allLlmHeaders } from '../api/llm'
+import { allLlmHeaders } from '../../api/llm'
 import styles from './DebugPanel.module.scss'
 
 interface PaperInfo {

@@ -6,7 +6,7 @@ import {
   getStoredApiKey,
   setStoredApiKey,
   type LLMProvider,
-} from '../api/llm'
+} from '../../api/llm'
 import styles from './ApiKeyModal.module.scss'
 
 interface Props {

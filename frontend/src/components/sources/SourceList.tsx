@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Upload } from 'lucide-react'
-import { deleteSource, listSources, reindexSource, type SourceInfo } from '../api/projects'
-import { extractBibtexCategories } from '../utils'
+import { deleteSource, listSources, reindexSource, type SourceInfo } from '../../api/papers'
+import { extractBibtexCategories } from '../../utils/bibtex'
+import { drainStream } from '../../utils/sse'
 import { MetadataModal } from './MetadataModal'
-import { Skeleton } from './Skeleton'
+import { Skeleton } from '../layout/Skeleton'
 import type { FileState } from './DropZone'
 import { ImportingCard } from './ImportingCard'
 import { SourceCard } from './SourceCard'
 import { SourceFilters } from './SourceFilters'
+import { readCachedSourceCount, setCachedSourceCount } from './SourceList.cache'
 import {
   DEFAULT_FILTERS,
   filterSources,
@@ -26,38 +28,6 @@ interface SourceListProps {
   onDelete?: () => void
   onReindexed?: () => void
   onRequestImport?: () => void
-}
-
-// Cached source count per project. Used to pick the right initial render
-// (empty CTA vs. skeletons) before the network fetch resolves — avoids both
-// the empty-flash-then-list and the skeleton-flash-then-empty UX glitches.
-const SOURCE_COUNT_CACHE_PREFIX = 'sourceCount:'
-
-function readCachedSourceCount(projectId: string): number | null {
-  try {
-    const raw = localStorage.getItem(SOURCE_COUNT_CACHE_PREFIX + projectId)
-    if (raw === null) return null
-    const n = parseInt(raw, 10)
-    return Number.isFinite(n) && n >= 0 ? n : null
-  } catch {
-    return null
-  }
-}
-
-export function setCachedSourceCount(projectId: string, count: number): void {
-  try {
-    localStorage.setItem(SOURCE_COUNT_CACHE_PREFIX + projectId, String(count))
-  } catch {
-    // Storage is best-effort; skip silently on quota / disabled storage.
-  }
-}
-
-export function clearCachedSourceCount(projectId: string): void {
-  try {
-    localStorage.removeItem(SOURCE_COUNT_CACHE_PREFIX + projectId)
-  } catch {
-    // Same rationale as setCachedSourceCount.
-  }
 }
 
 export function SourceList({
@@ -136,13 +106,7 @@ export function SourceList({
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       // Drain the SSE stream — the backend emits result + done; we don't need
       // intermediate events here, just wait for completion before refetching.
-      if (res.body) {
-        const reader = res.body.getReader()
-        while (true) {
-          const { done } = await reader.read()
-          if (done) break
-        }
-      }
+      if (res.body) await drainStream(res.body)
       await fetchSources()
       onReindexed?.()
     } catch (err) {
@@ -314,6 +278,3 @@ export function SourceList({
   )
 }
 
-// Re-export so call sites that imported from './SourceList' previously still work
-// during the split. (filterSources is also useful for tests.)
-export { filterSources } from './SourceList.filters'

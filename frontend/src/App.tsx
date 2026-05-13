@@ -3,21 +3,23 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import styles from './App.module.scss'
 import { checkHealth, getStoredOllamaUrl, type HealthData } from './api/health'
 import { getStoredProvider, isActiveProviderReady, type LLMProvider } from './api/llm'
+import { useProviderReadiness } from './hooks/useProviderReadiness'
 import { listProjects, type ProjectInfo } from './api/projects'
-import { AllProjectsView } from './components/AllProjectsView'
-import { ApiKeyModal } from './components/ApiKeyModal'
-import { AppHeader } from './components/AppHeader'
-import { ChatView } from './components/ChatView'
-import { DebugPanel } from './components/DebugPanel'
-import { DropZone, type FileState } from './components/DropZone'
-import { ImportProgressToast } from './components/ImportProgressToast'
-import { NewProjectView } from './components/NewProjectView'
-import { NoProjectState } from './components/NoProjectState'
-import { Skeleton } from './components/Skeleton'
-import { OllamaSetupModal } from './components/OllamaSetupModal'
-import { SourceList, setCachedSourceCount } from './components/SourceList'
-import { ProblematiqueView } from './components/ProblematiqueView'
-import { Sidebar, type View } from './components/Sidebar'
+import { AllProjectsView } from './components/layout/AllProjectsView'
+import { ApiKeyModal } from './components/modals/ApiKeyModal'
+import { AppHeader } from './components/layout/AppHeader'
+import { ChatView } from './components/chat/ChatView'
+import { DebugPanel } from './components/layout/DebugPanel'
+import { DropZone, type FileState } from './components/sources/DropZone'
+import { ImportProgressToast } from './components/sources/ImportProgressToast'
+import { NewProjectView } from './components/layout/NewProjectView'
+import { NoProjectState } from './components/layout/NoProjectState'
+import { Skeleton } from './components/layout/Skeleton'
+import { OllamaSetupModal } from './components/modals/OllamaSetupModal'
+import { SourceList } from './components/sources/SourceList'
+import { setCachedSourceCount, clearCachedSourceCount } from './components/sources/SourceList.cache'
+import { ProblematiqueView } from './components/problematique/ProblematiqueView'
+import { Sidebar, type View } from './components/layout/Sidebar'
 
 const STORAGE_KEY = 'currentProjectId'
 
@@ -38,6 +40,7 @@ export default function App() {
     'ollama'
   > | null>(null)
   const [activeProvider, setActiveProvider] = useState<LLMProvider>(() => getStoredProvider())
+  const { ollamaHealthy, providerReady } = useProviderReadiness(healthData, activeProvider)
 
   const bump = () => setRefreshKey((k) => k + 1)
 
@@ -75,12 +78,13 @@ export default function App() {
           setCurrentProjectId(list[0].id)
         }
         setHealthData(health)
-        const ollamaHealthy =
-          health.ollama === 'connected' && health.ollama_models.every((m) => m.available)
         // Modal only matters when the active provider isn't ready — i.e. user
         // picked Ollama and it's broken, OR they picked an external provider
-        // but haven't saved a key yet.
-        if (isActiveProviderReady(ollamaHealthy)) {
+        // but haven't saved a key yet. We can't read the hook output here
+        // (it's derived from the healthData we just set), so inline the check.
+        const healthy =
+          health.ollama === 'connected' && health.ollama_models.every((m) => m.available)
+        if (isActiveProviderReady(healthy)) {
           setOllamaStatus('connected')
         } else if (!dismissed) {
           setOllamaStatus('unavailable')
@@ -121,6 +125,7 @@ export default function App() {
   }
 
   function handleProjectDeleted(id: string) {
+    clearCachedSourceCount(id)
     const next = projects.filter((p) => p.id !== id)
     setProjects(next)
     if (currentProjectId === id) {
@@ -141,21 +146,12 @@ export default function App() {
 
   const currentProject = projects.find((p) => p.id === currentProjectId) ?? null
 
-  function reevaluateOllamaStatus() {
-    const ollamaHealthy =
-      healthData?.ollama === 'connected' && healthData.ollama_models.every((m) => m.available)
-    if (isActiveProviderReady(!!ollamaHealthy)) {
-      setOllamaStatus('connected')
-    }
-  }
-
   function handleProviderChange(p: LLMProvider) {
     setActiveProvider(p)
-    reevaluateOllamaStatus()
+    // Re-evaluation runs implicitly via useProviderReadiness; only the status
+    // gate flips to 'connected' if the new provider is already usable.
+    if (providerReady) setOllamaStatus('connected')
   }
-
-  const ollamaHealthy =
-    healthData?.ollama === 'connected' && healthData.ollama_models.every((m) => m.available)
 
   const header = (
     <AppHeader
@@ -225,7 +221,7 @@ export default function App() {
             key={projectId}
             projectId={projectId}
             refreshKey={refreshKey}
-            ollamaReady={isActiveProviderReady(!!ollamaHealthy)}
+            ollamaReady={providerReady}
             inFlightImports={importStates}
             onDelete={bump}
             onReindexed={bump}
@@ -280,10 +276,7 @@ export default function App() {
             setApiKeyModalProvider(null)
             // Saving a key may make the active provider ready — silence the
             // Ollama modal/banner if so.
-            const ollamaHealthy =
-              healthData?.ollama === 'connected' &&
-              healthData.ollama_models.every((m) => m.available)
-            if (isActiveProviderReady(!!ollamaHealthy)) {
+            if (isActiveProviderReady(ollamaHealthy)) {
               setOllamaStatus('connected')
             }
           }}

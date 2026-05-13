@@ -1,6 +1,6 @@
-import { extractBibtexCategories, stripBibtexBraces } from '../utils'
-import { EXT_TO_TYPE } from '../constants/acceptedFormats'
-import type { SourceInfo } from '../api/projects'
+import { extractBibtexCategories, stripBibtexBraces } from '../../utils/bibtex'
+import { EXT_TO_TYPE } from '../../constants/acceptedFormats'
+import type { SourceInfo } from '../../api/papers'
 
 export const FORMAT_LABEL: Record<string, string> = {
   pdf: 'PDF',

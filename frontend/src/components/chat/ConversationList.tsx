@@ -1,8 +1,8 @@
 import { MessageSquarePlus, Pencil, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { PROVIDER_LABELS } from '../api/llm'
-import type { ConversationSummary } from '../api/conversations'
-import { Skeleton } from './Skeleton'
+import { PROVIDER_LABELS } from '../../api/llm'
+import type { ConversationSummary } from '../../api/conversations'
+import { Skeleton } from '../layout/Skeleton'
 import styles from './ConversationList.module.scss'
 
 interface Props {

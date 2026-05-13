@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Plus, Trash2, X } from 'lucide-react'
-import { updateSourceMetadata, type SourceInfo, type UpdateMetadataPayload } from '../api/projects'
-import { extractBibtexCategories } from '../utils'
+import { updateSourceMetadata, type SourceInfo, type UpdateMetadataPayload } from '../../api/papers'
+import { extractBibtexCategories } from '../../utils/bibtex'
 import styles from './MetadataModal.module.scss'
 
 interface AuthorEntry {

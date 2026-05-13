@@ -8,7 +8,7 @@ import {
   Target,
   Upload,
 } from 'lucide-react'
-import { type ProjectInfo } from '../api/projects'
+import { type ProjectInfo } from '../../api/projects'
 import { ProjectSwitcher } from './ProjectSwitcher'
 import styles from './Sidebar.module.scss'
 

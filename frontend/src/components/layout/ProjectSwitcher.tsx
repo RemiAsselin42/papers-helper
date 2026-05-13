@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, FolderClosed, FolderOpen, Plus } from 'lucide-react'
-import { type ProjectInfo } from '../api/projects'
+import { type ProjectInfo } from '../../api/projects'
 import { Skeleton } from './Skeleton'
 import styles from './ProjectSwitcher.module.scss'
 

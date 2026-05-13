@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { SourceInfo } from '../api/projects'
+import type { SourceInfo } from '../../api/papers'
 import {
   DEFAULT_FILTERS,
   filterSources,

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Check, Trash2, X } from 'lucide-react'
-import { deleteProject, type ProjectInfo } from '../api/projects'
+import { deleteProject, type ProjectInfo } from '../../api/projects'
 import styles from './AllProjectsView.module.scss'
 
 interface AllProjectsViewProps {

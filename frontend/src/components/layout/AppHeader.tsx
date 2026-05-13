@@ -5,17 +5,16 @@ import {
   setStoredOllamaModel,
   setStoredProvider,
   type LLMProvider,
-} from '../api/llm'
-import { type ProjectInfo } from '../api/projects'
+} from '../../api/llm'
+import { type ProjectInfo } from '../../api/projects'
 import styles from './AppHeader.module.scss'
-import { ModelSelector } from './ModelSelector'
+import { ModelSelector } from '../chat/ModelSelector'
 
 interface AppHeaderProps {
   currentProject: ProjectInfo | null
   onConfigureOllama: () => void
   onRequestApiKey: (provider: Exclude<LLMProvider, 'ollama'>) => void
   onProviderChange?: (provider: LLMProvider) => void
-  onOllamaModelChange?: (model: string) => void
 }
 
 const DATE_FORMAT = new Intl.DateTimeFormat('fr-FR', {
@@ -33,7 +32,6 @@ export function AppHeader({
   onConfigureOllama,
   onRequestApiKey,
   onProviderChange,
-  onOllamaModelChange,
 }: AppHeaderProps) {
   const [now, setNow] = useState(() => new Date())
 
@@ -66,10 +64,9 @@ export function AppHeader({
       if (nextOllamaModel && nextOllamaModel !== ollamaModel) {
         setStoredOllamaModel(nextOllamaModel)
         setOllamaModel(nextOllamaModel)
-        onOllamaModelChange?.(nextOllamaModel)
       }
     },
-    [provider, ollamaModel, onProviderChange, onOllamaModelChange]
+    [provider, ollamaModel, onProviderChange]
   )
 
   // Auto-seed the global Ollama model the first time the model list arrives.
@@ -80,9 +77,8 @@ export function AppHeader({
       const first = models[0]
       setStoredOllamaModel(first)
       setOllamaModel(first)
-      onOllamaModelChange?.(first)
     },
-    [ollamaModel, onOllamaModelChange]
+    [ollamaModel]
   )
 
   return (

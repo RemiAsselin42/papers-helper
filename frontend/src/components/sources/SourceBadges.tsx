@@ -1,6 +1,6 @@
 import { FileText, Link } from 'lucide-react'
-import { typeBadgeClass } from '../utils/typeBadgeClass'
-import type { SourceInfo } from '../api/projects'
+import { typeBadgeClass } from '../../utils/typeBadgeClass'
+import type { SourceInfo } from '../../api/papers'
 import { FORMAT_LABEL } from './SourceList.filters'
 import styles from './SourceList.module.scss'
 

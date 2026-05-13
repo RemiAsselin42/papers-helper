@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
-import type { SourceInfo } from '../api/projects'
-import { mentionSuggestions } from '../utils/mentions'
-import { typeBadgeClass } from '../utils/typeBadgeClass'
+import type { SourceInfo } from '../../api/papers'
+import { mentionSuggestions } from '../../utils/mentions'
+import { typeBadgeClass } from '../../utils/typeBadgeClass'
 import styles from './MentionPopover.module.scss'
 
 interface Props {

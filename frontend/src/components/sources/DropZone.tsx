@@ -1,9 +1,10 @@
 import { useRef, useState, useCallback, DragEvent } from 'react'
 import { HelpCircle } from 'lucide-react'
-import { addUrlSource } from '../api/projects'
-import { allLlmHeaders } from '../api/llm'
-import { ACCEPTED_INPUT_ATTR, isAcceptedDocument } from '../constants/acceptedFormats'
-import { HelpModal } from './HelpModal'
+import { addUrlSource } from '../../api/papers'
+import { allLlmHeaders } from '../../api/llm'
+import { ACCEPTED_INPUT_ATTR, isAcceptedDocument } from '../../constants/acceptedFormats'
+import { readSseEvents } from '../../utils/sse'
+import { HelpModal } from '../modals/HelpModal'
 import styles from './DropZone.module.scss'
 
 type Status = 'idle' | 'dragging' | 'loading' | 'error'
@@ -27,29 +28,49 @@ interface DropZoneProps {
   onFileCompleted?: (filename: string) => void
 }
 
-async function readSseStream(
-  body: ReadableStream<Uint8Array>,
-  onEvent: (event: Record<string, unknown>) => void
-): Promise<void> {
-  const reader = body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
+// Bulk upload includes parsing time for the whole batch — give it twice the
+// budget of a single-URL fetch. Both ceilings are deliberate: a stuck request
+// kills the in-flight UI status, not the entire app.
+const UPLOAD_TIMEOUT_MS = 120_000
+const URL_IMPORT_TIMEOUT_MS = 60_000
 
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-
-    buffer += decoder.decode(value, { stream: true })
-    const parts = buffer.split('\n\n')
-    buffer = parts.pop() ?? ''
-
-    for (const part of parts) {
-      const line = part.trim()
-      if (!line.startsWith('data: ')) continue
-      onEvent(JSON.parse(line.slice(6)))
-    }
-  }
+// ── SSE event schema (matches backend/app/ingestion.py emissions) ─────────────
+interface UploadStart {
+  type: 'start'
+  filename: string
 }
+interface UploadDocResult {
+  type: 'result'
+  filename: string
+  chunks_indexed: number
+  indexed?: boolean
+  index_error?: string
+}
+interface UploadZipResult {
+  type: 'result'
+  filename: string
+  extracted_count: number
+}
+interface UploadBibResult {
+  type: 'result'
+  filename: string
+  items_parsed: number
+}
+interface UploadError {
+  type: 'error'
+  filename: string
+  error: string
+}
+interface UploadDone {
+  type: 'done'
+}
+type UploadEvent =
+  | UploadStart
+  | UploadDocResult
+  | UploadZipResult
+  | UploadBibResult
+  | UploadError
+  | UploadDone
 
 export function DropZone({ projectId, onSuccess, onProgress, onFileCompleted }: DropZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null)
@@ -77,6 +98,80 @@ export function DropZone({ projectId, onSuccess, onProgress, onFileCompleted }: 
     [onProgress]
   )
 
+  const handleEvent = useCallback(
+    (event: UploadEvent) => {
+      switch (event.type) {
+        case 'start':
+          upsertFile(event.filename, { status: 'processing' })
+          return
+        case 'result':
+          if ('extracted_count' in event) {
+            upsertFile(event.filename, {
+              status: 'done',
+              extracted_count: event.extracted_count,
+            })
+          } else if ('items_parsed' in event) {
+            upsertFile(event.filename, {
+              status: 'done',
+              items_parsed: event.items_parsed,
+            })
+          } else {
+            const indexed = event.indexed ?? true
+            upsertFile(event.filename, {
+              status: 'done',
+              chunks: event.chunks_indexed,
+              indexed,
+              index_error: event.index_error || undefined,
+            })
+            onFileCompleted?.(event.filename)
+          }
+          return
+        case 'error':
+          upsertFile(event.filename, { status: 'error', error: event.error })
+          return
+        case 'done':
+          setStatus('idle')
+          onSuccess?.()
+          return
+      }
+    },
+    [upsertFile, onFileCompleted, onSuccess]
+  )
+
+  async function runImport(
+    initial: FileState[],
+    timeoutMs: number,
+    action: (signal: AbortSignal) => Promise<Response>
+  ): Promise<void> {
+    const abort = new AbortController()
+    abortRef.current = abort
+    const timeout = setTimeout(
+      () => abort.abort(new DOMException('Timeout', 'TimeoutError')),
+      timeoutMs
+    )
+
+    setStatus('loading')
+    fileStatesRef.current = initial
+    onProgress?.(initial)
+
+    try {
+      const res = await action(abort.signal)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      if (!res.body) throw new Error('No response body')
+      await readSseEvents<UploadEvent>(res.body, handleEvent)
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setStatus('idle')
+        return
+      }
+      setErrorMessage(err instanceof Error ? err.message : 'Erreur inconnue')
+      setStatus('error')
+    } finally {
+      clearTimeout(timeout)
+      abortRef.current = null
+    }
+  }
+
   function onDragOver(e: DragEvent) {
     e.preventDefault()
     setStatus('dragging')
@@ -99,83 +194,24 @@ export function DropZone({ projectId, onSuccess, onProgress, onFileCompleted }: 
   }
 
   async function upload(target: File[]) {
-    const abort = new AbortController()
-    abortRef.current = abort
-    const timeout = setTimeout(
-      () => abort.abort(new DOMException('Upload timeout', 'TimeoutError')),
-      120_000
-    )
-
-    setStatus('loading')
-
     const docFiles = target.filter((f) => isAcceptedDocument(f) || isZipFile(f))
-
-    const initial: FileState[] = docFiles.map((f) => ({ filename: f.name, status: 'queued' }))
-    fileStatesRef.current = initial
-    onProgress?.(initial)
-
     if (docFiles.length === 0) {
-      clearTimeout(timeout)
-      abortRef.current = null
       setStatus('idle')
       return
     }
 
     const body = new FormData()
     for (const file of docFiles) body.append('files', file)
+    const initial: FileState[] = docFiles.map((f) => ({ filename: f.name, status: 'queued' }))
 
-    try {
-      const res = await fetch(`/api/projects/${projectId}/papers/upload/stream`, {
+    await runImport(initial, UPLOAD_TIMEOUT_MS, (signal) =>
+      fetch(`/api/projects/${projectId}/papers/upload/stream`, {
         method: 'POST',
         headers: allLlmHeaders(),
         body,
-        signal: abort.signal,
+        signal,
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      if (!res.body) throw new Error('No response body')
-
-      await readSseStream(res.body, (event) => {
-        if (event.type === 'start') {
-          upsertFile(event.filename as string, { status: 'processing' })
-        } else if (event.type === 'result') {
-          if ('extracted_count' in event) {
-            upsertFile(event.filename as string, {
-              status: 'done',
-              extracted_count: event.extracted_count as number,
-            })
-          } else if ('items_parsed' in event) {
-            upsertFile(event.filename as string, {
-              status: 'done',
-              items_parsed: event.items_parsed as number,
-            })
-          } else {
-            const indexed = (event.indexed as boolean | undefined) ?? true
-            upsertFile(event.filename as string, {
-              status: 'done',
-              chunks: event.chunks_indexed as number,
-              indexed,
-              index_error: (event.index_error as string | undefined) || undefined,
-            })
-            onFileCompleted?.(event.filename as string)
-          }
-        } else if (event.type === 'error') {
-          upsertFile(event.filename as string, { status: 'error', error: event.error as string })
-        } else if (event.type === 'done') {
-          setStatus('idle')
-          onSuccess?.()
-        }
-      })
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        setStatus('idle')
-        return
-      }
-      setErrorMessage(err instanceof Error ? err.message : 'Erreur inconnue')
-      setStatus('error')
-    } finally {
-      clearTimeout(timeout)
-      abortRef.current = null
-    }
+    )
   }
 
   function isValidUrl(raw: string): boolean {
@@ -198,53 +234,9 @@ export function DropZone({ projectId, onSuccess, onProgress, onFileCompleted }: 
     }
 
     setUrlValue('')
-    setStatus('loading')
-    const initial: FileState[] = [{ filename: url, status: 'queued' }]
-    fileStatesRef.current = initial
-    onProgress?.(initial)
-
-    const abort = new AbortController()
-    abortRef.current = abort
-    const timeout = setTimeout(
-      () => abort.abort(new DOMException('Timeout', 'TimeoutError')),
-      60_000
+    await runImport([{ filename: url, status: 'queued' }], URL_IMPORT_TIMEOUT_MS, (signal) =>
+      addUrlSource(projectId, url, signal)
     )
-
-    try {
-      const res = await addUrlSource(projectId, url, abort.signal)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      if (!res.body) throw new Error('No response body')
-
-      await readSseStream(res.body, (event) => {
-        if (event.type === 'start') {
-          upsertFile(event.filename as string, { status: 'processing' })
-        } else if (event.type === 'result') {
-          const indexed = (event.indexed as boolean | undefined) ?? true
-          upsertFile(event.filename as string, {
-            status: 'done',
-            chunks: event.chunks_indexed as number,
-            indexed,
-            index_error: (event.index_error as string | undefined) || undefined,
-          })
-          onFileCompleted?.(event.filename as string)
-        } else if (event.type === 'error') {
-          upsertFile(event.filename as string, { status: 'error', error: event.error as string })
-        } else if (event.type === 'done') {
-          setStatus('idle')
-          onSuccess?.()
-        }
-      })
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        setStatus('idle')
-        return
-      }
-      setErrorMessage(err instanceof Error ? err.message : 'Erreur inconnue')
-      setStatus('error')
-    } finally {
-      clearTimeout(timeout)
-      abortRef.current = null
-    }
   }
 
   const isDragging = status === 'dragging'

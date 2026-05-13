@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AlertCircle, ArrowLeft, CheckCircle2, RefreshCw, WifiOff, X } from 'lucide-react'
-import { checkHealth, getStoredOllamaUrl, setStoredOllamaUrl, type HealthData } from '../api/health'
+import { checkHealth, getStoredOllamaUrl, setStoredOllamaUrl, type HealthData } from '../../api/health'
 import styles from './OllamaSetupModal.module.scss'
 
 interface OllamaSetupModalProps {

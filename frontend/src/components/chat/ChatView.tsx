@@ -1,30 +1,24 @@
-import { ArrowUp, Bot, History, Settings, User, X } from 'lucide-react'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { ArrowUp, History, Settings, X } from 'lucide-react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   getStoredApiKey,
-  getStoredExternalModel,
-  getStoredOllamaModel,
   getStoredPlainText,
   type LLMProvider,
   PROVIDER_LABELS,
   setStoredPlainText,
-} from '../api/llm'
-import { listSources, type SourceInfo } from '../api/projects'
-import { useChatStream } from '../hooks/useChatStream'
-import { useConversationStore } from '../hooks/useConversationStore'
-import {
-  findActiveMention,
-  mentionInsertion,
-  mentionItemCount,
-  parseMentions,
-  resolveMentions,
-} from '../utils/mentions'
-import { ModelSelector } from './ModelSelector'
+} from '../../api/llm'
+import { listSources, type SourceInfo } from '../../api/papers'
+import { useChatStream } from '../../hooks/useChatStream'
+import { useConversationStore } from '../../hooks/useConversationStore'
+import { useMentionPicker } from '../../hooks/useMentionPicker'
+import { usePerChatModel } from '../../hooks/usePerChatModel'
+import { parseMentions, resolveMentions } from '../../utils/mentions'
+import { ChatMessages } from './ChatMessages'
+import { ChatTitleEditor } from './ChatTitleEditor'
 import styles from './ChatView.module.scss'
 import { ConversationList } from './ConversationList'
 import { MentionPopover } from './MentionPopover'
+import { ModelSelector } from './ModelSelector'
 
 interface Props {
   projectId: string
@@ -33,30 +27,16 @@ interface Props {
   onRequestApiKey: (provider: Exclude<LLMProvider, 'ollama'>) => void
 }
 
-// Backend default — must match OLLAMA_GENERATION_MODEL in app/config.py.
-const OLLAMA_FALLBACK_MODEL = 'llama3'
-
-type ExternalModelOverrides = Partial<Record<Exclude<LLMProvider, 'ollama'>, string>>
-
 export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiKey }: Props) {
   const chat = useChatStream()
   const store = useConversationStore(projectId)
+  const model = usePerChatModel(provider)
   const [saveError, setSaveError] = useState<string | null>(null)
   type OpenPanel = 'history' | 'settings' | null
   const [openPanel, setOpenPanel] = useState<OpenPanel>(null)
   const historyOpen = openPanel === 'history'
   const settingsOpen = openPanel === 'settings'
   const [plainText, setPlainText] = useState<boolean>(() => getStoredPlainText())
-
-  // Per-chat provider/model. Independent of localStorage — only affects this
-  // conversation. New chats seed from the header (`provider` prop + stored
-  // defaults); loaded conversations seed from their persisted values.
-  const [chatProvider, setChatProvider] = useState<LLMProvider>(provider)
-  const [chatOllamaModel, setChatOllamaModel] = useState<string | null>(() =>
-    getStoredOllamaModel()
-  )
-  const [chatExternalModel, setChatExternalModel] = useState<ExternalModelOverrides>({})
-
   const [titleDraft, setTitleDraft] = useState<string>('')
 
   function togglePlainText() {
@@ -67,13 +47,9 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
     })
   }
 
-  const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-
-  // Source list + @mention popover state.
   const [sources, setSources] = useState<SourceInfo[]>([])
-  const [mention, setMention] = useState<{ start: number; query: string } | null>(null)
-  const [mentionHighlight, setMentionHighlight] = useState(0)
+  const mentionPicker = useMentionPicker(textareaRef, sources, chat.setInput)
 
   useEffect(() => {
     let cancelled = false
@@ -89,48 +65,6 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
     }
   }, [projectId])
 
-  function refreshMentionFromCaret() {
-    const el = textareaRef.current
-    if (!el) return
-    const caret = el.selectionStart ?? el.value.length
-    const found = findActiveMention(el.value, caret)
-    setMention((prev) => {
-      if (!found) return null
-      if (prev && prev.start === found.start && prev.query === found.query) {
-        return prev
-      }
-      setMentionHighlight(0)
-      return found
-    })
-  }
-
-  function closeMention() {
-    setMention(null)
-    setMentionHighlight(0)
-  }
-
-  function applyMentionInsertion(insertion: string) {
-    const el = textareaRef.current
-    if (!el || !mention) return
-    const value = el.value
-    const caret = el.selectionStart ?? value.length
-    const before = value.slice(0, mention.start)
-    const after = value.slice(caret)
-    const next = `${before}@${insertion}${after}`
-    chat.setInput(next)
-    closeMention()
-    // Place caret right after the inserted text and re-run detection so the
-    // popover progresses (e.g. type → file step).
-    const nextCaret = before.length + 1 + insertion.length
-    queueMicrotask(() => {
-      const node = textareaRef.current
-      if (!node) return
-      node.focus()
-      node.setSelectionRange(nextCaret, nextCaret)
-      refreshMentionFromCaret()
-    })
-  }
-
   // Auto-grow textarea: reset then snap to scrollHeight. CSS `max-height`
   // caps it at 10 lines and switches to scroll. We add `offsetHeight -
   // clientHeight` (= border height with box-sizing: border-box) so a
@@ -143,24 +77,14 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
     el.style.height = `${el.scrollHeight + borderDelta}px`
   }, [chat.input])
 
-  const resolvedModel = useMemo(() => {
-    if (chatProvider === 'ollama') return chatOllamaModel ?? OLLAMA_FALLBACK_MODEL
-    return chatExternalModel[chatProvider] ?? getStoredExternalModel(chatProvider)
-  }, [chatProvider, chatOllamaModel, chatExternalModel])
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [chat.messages])
-
   // Reset chat when the project changes.
   useEffect(() => {
     chat.clear()
     setSaveError(null)
-    setChatProvider(provider)
-    setChatOllamaModel(getStoredOllamaModel())
-    setChatExternalModel({})
+    model.reset(provider)
     setTitleDraft('')
-    // chat.clear is stable per render but not deeply memoized — intentional reset.
+    // chat.clear and model.reset are stable references but not memoized
+    // against `provider` — intentional reset on project change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
 
@@ -184,12 +108,7 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
       const conv = await store.load(id)
       chat.resetMessages(conv.messages)
       setSaveError(null)
-      setChatProvider(conv.provider)
-      if (conv.provider === 'ollama') {
-        setChatOllamaModel(conv.model)
-      } else {
-        setChatExternalModel((prev) => ({ ...prev, [conv.provider]: conv.model }))
-      }
+      model.loadFromConversation(conv)
       setOpenPanel(null)
     } catch {
       store.refresh()
@@ -201,9 +120,7 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
     chat.clear()
     store.clear()
     setSaveError(null)
-    setChatProvider(provider)
-    setChatOllamaModel(getStoredOllamaModel())
-    setChatExternalModel({})
+    model.reset(provider)
     setTitleDraft('')
   }
 
@@ -214,9 +131,7 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
     if (wasActive) {
       chat.clear()
       setSaveError(null)
-      setChatProvider(provider)
-      setChatOllamaModel(getStoredOllamaModel())
-      setChatExternalModel({})
+      model.reset(provider)
       setTitleDraft('')
     }
   }
@@ -236,19 +151,12 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
     }
   }
 
-  function handleModelChange(p: LLMProvider, ollama: string | null) {
-    setChatProvider(p)
-    if (p === 'ollama') {
-      setChatOllamaModel(ollama)
-    }
-  }
-
   async function send() {
     const text = chat.input.trim()
-    if (!text || !resolvedModel || chat.streaming) return
+    if (!text || !model.resolvedModel || chat.streaming) return
 
-    const turnProvider = chatProvider
-    const turnModel = resolvedModel
+    const turnProvider = model.provider
+    const turnModel = model.resolvedModel
 
     // Pre-send guard: surface a friendly message rather than letting the
     // request fail with an opaque 401 / fallback model not found.
@@ -256,13 +164,13 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
       setSaveError(`Clé API manquante pour ${PROVIDER_LABELS[turnProvider]}.`)
       return
     }
-    if (turnProvider === 'ollama' && !chatOllamaModel) {
+    if (turnProvider === 'ollama' && !model.ollamaModel) {
       setSaveError('Aucun modèle Ollama sélectionné.')
       return
     }
 
     setSaveError(null)
-    closeMention()
+    mentionPicker.close()
 
     const mentions = resolveMentions(parseMentions(text), sources)
     const result = await chat.send(projectId, text, turnModel, mentions, turnProvider)
@@ -283,37 +191,15 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (mention) {
-      const count = mentionItemCount(mention.query, sources)
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        closeMention()
-        return
-      }
-      if (e.key === 'ArrowDown' && count > 0) {
-        e.preventDefault()
-        setMentionHighlight((h) => (h + 1) % count)
-        return
-      }
-      if (e.key === 'ArrowUp' && count > 0) {
-        e.preventDefault()
-        setMentionHighlight((h) => (h - 1 + count) % count)
-        return
-      }
-      if ((e.key === 'Enter' || e.key === 'Tab') && count > 0) {
-        const insertion = mentionInsertion(mention.query, sources, mentionHighlight)
-        if (insertion !== null) {
-          e.preventDefault()
-          applyMentionInsertion(insertion)
-          return
-        }
-      }
-    }
+    if (mentionPicker.handleKey(e)) return
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       send()
     }
   }
+
+  const currentTitle =
+    store.conversations.find((c) => c.id === store.pinned?.id)?.title ?? ''
 
   return (
     <div className={styles.wrapper}>
@@ -384,33 +270,17 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
           >
             <History size={20} />
           </button>
-          <input
-            type="text"
-            className={styles.toolbarTitle}
+          <ChatTitleEditor
             value={titleDraft}
-            onChange={(e) => setTitleDraft(e.target.value)}
-            onBlur={commitTitle}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                ;(e.target as HTMLInputElement).blur()
-              } else if (e.key === 'Escape') {
-                e.preventDefault()
-                const current =
-                  store.conversations.find((c) => c.id === store.pinned?.id)?.title ?? ''
-                setTitleDraft(current)
-                ;(e.target as HTMLInputElement).blur()
-              }
-            }}
-            placeholder="Nouvelle conversation"
+            currentTitle={currentTitle}
+            onChange={setTitleDraft}
+            onCommit={commitTitle}
             disabled={!store.pinned || chat.streaming}
-            title={titleDraft || 'Nouvelle conversation'}
-            aria-label="Nom de la conversation"
           />
           <ModelSelector
-            provider={chatProvider}
-            ollamaModel={chatProvider === 'ollama' ? chatOllamaModel : null}
-            onChange={handleModelChange}
+            provider={model.provider}
+            ollamaModel={model.provider === 'ollama' ? model.ollamaModel : null}
+            onChange={model.handleChange}
             onConfigureOllama={onConfigureOllama}
             onRequestApiKey={onRequestApiKey}
             disabled={chat.streaming}
@@ -427,41 +297,7 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
           </button>
         </div>
 
-        <div className={styles.messages}>
-          {chat.messages.length === 0 && (
-            <div className={styles.empty}>
-              Commencez la conversation
-              <br />
-              Ctrl + Entrée pour un saut de ligne
-              <br />@ pour mentionner une source
-            </div>
-          )}
-          {chat.messages.map((msg, i) => {
-            const isAssistant = msg.role === 'assistant'
-            const renderMarkdown = isAssistant && !plainText
-            const showCursor = !msg.content && chat.streaming && i === chat.messages.length - 1
-            return (
-              <div
-                key={i}
-                className={`${styles.message} ${msg.role === 'user' ? styles.user : styles.assistant}`}
-              >
-                <span className={styles.avatar}>
-                  {msg.role === 'user' ? <User size={20} /> : <Bot size={20} />}
-                </span>
-                <div className={`${styles.bubble} ${renderMarkdown ? styles.bubbleMarkdown : ''}`}>
-                  {showCursor ? (
-                    <span className={styles.cursor} />
-                  ) : renderMarkdown ? (
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
-                  ) : (
-                    msg.content
-                  )}
-                </div>
-              </div>
-            )
-          })}
-          <div ref={bottomRef} />
-        </div>
+        <ChatMessages messages={chat.messages} streaming={chat.streaming} plainText={plainText} />
 
         {saveError && (
           <div className={styles.saveErrorBanner} role="alert">
@@ -478,13 +314,13 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
         )}
 
         <div className={styles.inputBar}>
-          {mention && (
+          {mentionPicker.mention && (
             <MentionPopover
-              query={mention.query}
+              query={mentionPicker.mention.query}
               sources={sources}
-              highlight={mentionHighlight}
-              onHighlightChange={setMentionHighlight}
-              onSelect={applyMentionInsertion}
+              highlight={mentionPicker.highlight}
+              onHighlightChange={mentionPicker.setHighlight}
+              onSelect={mentionPicker.applyInsertion}
             />
           )}
           <textarea
@@ -493,12 +329,12 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
             value={chat.input}
             onChange={(e) => {
               chat.setInput(e.target.value)
-              refreshMentionFromCaret()
+              mentionPicker.refresh()
             }}
             onKeyDown={handleKeyDown}
-            onKeyUp={refreshMentionFromCaret}
-            onClick={refreshMentionFromCaret}
-            onBlur={closeMention}
+            onKeyUp={mentionPicker.refresh}
+            onClick={mentionPicker.refresh}
+            onBlur={mentionPicker.close}
             placeholder="Écrivez votre message…"
             rows={1}
             disabled={chat.streaming}
@@ -506,7 +342,7 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
           <button
             className={styles.sendBtn}
             onClick={send}
-            disabled={!chat.input.trim() || chat.streaming || !resolvedModel}
+            disabled={!chat.input.trim() || chat.streaming || !model.resolvedModel}
             aria-label="Envoyer"
           >
             <ArrowUp size={20} />
