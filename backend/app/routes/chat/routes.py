@@ -10,9 +10,17 @@ from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from app.chroma import get_collection
+from app.config import (
+    CHAT_MENTION_CONTENT_CHAR_CAP,
+    CHAT_MENTION_TOTAL_CHAR_CAP,
+)
 from app.llm_service import ExternalLLMService, LLMProvider
 from app.ollama_service import OllamaGenerationService
+from app.routes.chat.context import (
+    _format_problematique_context,
+    _retrieve_global_context,
+    _retrieve_mention_context,
+)
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["chat"])
 
@@ -32,14 +40,6 @@ PLAIN_TEXT_SYSTEM_PROMPT = (
     "(pas de **gras**, pas de *italique*, pas de titres `#`, pas de listes `-`/`*`/`1.`, "
     "pas de blocs de code, pas de tableaux). Utilisez des phrases simples et des sauts de ligne."
 )
-
-# Cap on characters injected per mentioned source. Picked to comfortably fit a
-# handful of mentions even on a small-context model (~8k tokens ≈ 32k chars).
-MENTION_CONTENT_CHAR_CAP = 20_000
-
-# Cap on total characters injected across all mentions. Leaves room for the
-# user's own prompt and the assistant's reply on small-context models.
-MENTION_TOTAL_CHAR_CAP = 60_000
 
 # Hard ceiling on mention count per request. A malicious or buggy client cannot
 # force the backend to iterate Chroma N times for arbitrarily large N.
@@ -64,86 +64,11 @@ def _parse_mentions_header(raw: str | None) -> list[str]:
     return out
 
 
-def _chunk_idx(meta: dict[str, Any]) -> int:
-    try:
-        return int(meta.get("chunk_index", 0))
-    except (TypeError, ValueError):
-        return 0
-
-
-def _load_mention_context(project_id: str, stems: list[str]) -> str | None:
-    """Return a single system-message body that concatenates the indexed
-    chunks of every mentioned source. Returns None if no source resolved.
-
-    Uses one batched Chroma query with `$in` so the worst case is a single
-    round-trip regardless of mention count.
-    """
-    if not stems:
-        return None
-    collection = get_collection(project_id)
-    # Chroma's `Where` is a strict TypedDict union; mypy needs help inferring
-    # both the literal "$in" key and the widened element type of the values.
-    in_values: list[str | int | float | bool] = list(stems)
-    where_clause: dict[str, Any] = {"source_stem": {"$in": in_values}}
-    res = collection.get(
-        where=where_clause,
-        include=["documents", "metadatas"],
-    )
-    ids = res.get("ids") or []
-    if not ids:
-        return None
-    documents = res.get("documents") or []
-    metadatas = res.get("metadatas") or []
-
-    # Bucket rows by source_stem, preserving the user-supplied mention order.
-    buckets: dict[str, list[tuple[Any, dict[str, Any]]]] = {s: [] for s in stems}
-    for doc, meta in zip(documents, metadatas, strict=False):
-        meta_d = dict(meta) if meta else {}
-        stem = str(meta_d.get("source_stem") or "")
-        if stem in buckets:
-            buckets[stem].append((doc, meta_d))
-
-    sections: list[str] = []
-    for stem in stems:
-        rows = buckets.get(stem) or []
-        if not rows:
-            continue
-        rows.sort(key=lambda r: _chunk_idx(r[1]))
-        body = "\n\n".join(doc for doc, _meta in rows if doc).strip()
-        if not body:
-            continue
-        if len(body) > MENTION_CONTENT_CHAR_CAP:
-            body = body[:MENTION_CONTENT_CHAR_CAP] + "\n…[contenu tronqué]"
-        first_meta = rows[0][1]
-        filename = str(first_meta.get("source_filename") or stem)
-        source_type = str(first_meta.get("source_type") or "document").capitalize()
-        sections.append(f"--- @{source_type}/{filename} ---\n{body}")
-
-    if not sections:
-        return None
-
-    header = (
-        "Contexte fourni par l'utilisateur via des mentions @Type/fichier. "
-        "Utilisez ce contenu en priorité pour répondre."
-    )
-
-    # Boundary-aware accumulation: drop trailing sections rather than splitting
-    # one mid-byte. Guarantees at least the first section is included even if
-    # it alone exceeds the total cap (capped per-source above to 20k).
-    selected: list[str] = []
-    used = 0
-    truncated = False
-    for sec in sections:
-        sep = 2 if selected else 0
-        if selected and used + sep + len(sec) > MENTION_TOTAL_CHAR_CAP:
-            truncated = True
-            break
-        selected.append(sec)
-        used += sep + len(sec)
-    joined = "\n\n".join(selected)
-    if truncated:
-        joined += "\n…[contexte mentionné tronqué]"
-    return f"{header}\n\n{joined}"
+def _last_user_query(messages: list[dict[str, Any]]) -> str | None:
+    for m in reversed(messages):
+        if m["role"] == "user":
+            return str(m["content"])
+    return None
 
 
 @router.post("/chat")
@@ -154,6 +79,8 @@ async def chat(
     x_llm_api_key: str | None = Header(default=None),
     x_prefer_plain_text: str | None = Header(default=None),
     x_chat_mentions: str | None = Header(default=None),
+    x_chat_neighbor_chunks: str | None = Header(default=None),
+    x_chat_global_rag: str | None = Header(default=None),
 ) -> StreamingResponse:
     provider = LLMProvider.OLLAMA
     if x_llm_provider:
@@ -168,18 +95,51 @@ async def chat(
             detail="X-LLM-API-Key header required for external providers",
         )
 
+    # The frontend (`detoxOutgoingMessages` in api/chat.ts) is the authoritative
+    # rewriter of `@Type/filename` tokens → `« filename »` in user-typed
+    # content. We trust that here: the backend no longer applies a second
+    # regex-based pass, so the two implementations cannot drift apart on
+    # spaced filenames or other edge cases.
     raw_messages: list[dict[str, Any]] = [
         {"role": m.role, "content": m.content} for m in req.messages
     ]
 
+    # Frontend sends "1" when enabled. Neighbor chunks default ON (omitted
+    # header is treated as enabled); global RAG defaults OFF.
+    include_neighbors = x_chat_neighbor_chunks != "0"
+    global_rag_enabled = x_chat_global_rag == "1"
+
     mention_stems = _parse_mentions_header(x_chat_mentions)
+    user_query = _last_user_query(raw_messages)
+
+    # System messages are prepended in reverse priority order so the final
+    # arrangement is: [problematique, mentions, global RAG, plain-text, …user/assistant…].
+    # We insert at index 0 from least-to-most-important, so the most stable
+    # framing (problematique) ends up on top.
+    if x_prefer_plain_text == "1":
+        raw_messages.insert(0, {"role": "system", "content": PLAIN_TEXT_SYSTEM_PROMPT})
+
+    if global_rag_enabled and user_query:
+        global_block = await asyncio.to_thread(
+            _retrieve_global_context, project_id, user_query
+        )
+        if global_block:
+            raw_messages.insert(0, {"role": "system", "content": global_block})
+
     if mention_stems:
-        mention_block = await asyncio.to_thread(_load_mention_context, project_id, mention_stems)
+        mention_block = await asyncio.to_thread(
+            _retrieve_mention_context,
+            project_id,
+            mention_stems,
+            user_query,
+            include_neighbors,
+        )
         if mention_block:
             raw_messages.insert(0, {"role": "system", "content": mention_block})
 
-    if x_prefer_plain_text == "1":
-        raw_messages.insert(0, {"role": "system", "content": PLAIN_TEXT_SYSTEM_PROMPT})
+    problem_block = await asyncio.to_thread(_format_problematique_context, project_id)
+    if problem_block:
+        raw_messages.insert(0, {"role": "system", "content": problem_block})
 
     if provider == LLMProvider.OLLAMA:
         token_stream: AsyncGenerator[str, None] = OllamaGenerationService(
@@ -205,3 +165,21 @@ async def chat(
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+# Test-suite aliases preserved for legacy direct imports of the cap constants
+# under their pre-split names.
+MENTION_CONTENT_CHAR_CAP = CHAT_MENTION_CONTENT_CHAR_CAP
+MENTION_TOTAL_CHAR_CAP = CHAT_MENTION_TOTAL_CHAR_CAP
+
+
+__all__ = [
+    "MENTION_CONTENT_CHAR_CAP",
+    "MENTION_MAX_COUNT",
+    "MENTION_TOTAL_CHAR_CAP",
+    "PLAIN_TEXT_SYSTEM_PROMPT",
+    "ChatMessage",
+    "ChatRequest",
+    "chat",
+    "router",
+]

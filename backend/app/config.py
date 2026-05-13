@@ -14,6 +14,14 @@ OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_EMBED_MODEL: str = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
 OLLAMA_GENERATION_MODEL: str = os.getenv("OLLAMA_GENERATION_MODEL", "llama3")
 
+# Chat context-injection sizing. Defaults are tuned for ~8k-token small-context
+# models (~32k chars). Larger Ollama setups can raise these via env vars to use
+# more of the available window before per-turn truncation kicks in.
+CHAT_MENTION_CONTENT_CHAR_CAP: int = int(os.getenv("CHAT_MENTION_CONTENT_CHAR_CAP", "20000"))
+CHAT_MENTION_TOTAL_CHAR_CAP: int = int(os.getenv("CHAT_MENTION_TOTAL_CHAR_CAP", "60000"))
+CHAT_K_PER_MENTION: int = int(os.getenv("CHAT_K_PER_MENTION", "5"))
+CHAT_GLOBAL_RAG_K: int = int(os.getenv("CHAT_GLOBAL_RAG_K", "6"))
+
 _request_ollama_url: ContextVar[str] = ContextVar("_request_ollama_url", default=OLLAMA_BASE_URL)
 _request_embed_config: ContextVar["EmbedConfig | None"] = ContextVar(
     "_request_embed_config", default=None

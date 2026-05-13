@@ -51,7 +51,7 @@ def test_new_providers_route_through_external_service(
 ) -> None:
     """Perplexity and DeepSeek must construct an ExternalLLMService with that provider."""
     with patch(
-        "app.routes.chat.ExternalLLMService.stream_generate_messages",
+        "app.routes.chat.routes.ExternalLLMService.stream_generate_messages",
         new=_fake_token_stream,
     ):
         response = client.post(
@@ -84,7 +84,7 @@ def test_plain_text_header_prepends_system_prompt(client: TestClient) -> None:
         yield "ok"
 
     with patch(
-        "app.routes.chat.ExternalLLMService.stream_generate_messages",
+        "app.routes.chat.routes.ExternalLLMService.stream_generate_messages",
         new=_capture_stream,
     ):
         response = client.post(
@@ -201,9 +201,9 @@ def test_chat_mentions_inject_source_context(client: TestClient) -> None:
             return fake_collection_result
 
     with (
-        patch("app.routes.chat.get_collection", return_value=_FakeCollection()),
+        patch("app.routes.chat.context.get_collection", return_value=_FakeCollection()),
         patch(
-            "app.routes.chat.OllamaGenerationService.stream_generate_messages",
+            "app.routes.chat.routes.OllamaGenerationService.stream_generate_messages",
             new=_capture,
         ),
     ):
@@ -216,8 +216,9 @@ def test_chat_mentions_inject_source_context(client: TestClient) -> None:
     assert response.status_code == 200
     messages = captured["messages"]
     assert messages[0]["role"] == "system"
-    assert "@Pdf/paper-a.pdf" in messages[0]["content"]
     body = messages[0]["content"]
+    assert "DÉBUT DU CONTENU : paper-a.pdf" in body
+    assert "FIN DU CONTENU : paper-a.pdf" in body
     assert body.index("first part") < body.index("second part")
     assert messages[-1] == {"role": "user", "content": "résume"}
 
@@ -272,9 +273,9 @@ def test_chat_mentions_total_payload_capped(client: TestClient) -> None:
 
     stems = ",".join(stem_list)
     with (
-        patch("app.routes.chat.get_collection", return_value=_FakeCollection()),
+        patch("app.routes.chat.context.get_collection", return_value=_FakeCollection()),
         patch(
-            "app.routes.chat.OllamaGenerationService.stream_generate_messages",
+            "app.routes.chat.routes.OllamaGenerationService.stream_generate_messages",
             new=_capture,
         ),
     ):
@@ -305,9 +306,9 @@ def test_chat_mentions_silent_when_no_match(client: TestClient) -> None:
             return {"ids": [], "documents": [], "metadatas": []}
 
     with (
-        patch("app.routes.chat.get_collection", return_value=_EmptyCollection()),
+        patch("app.routes.chat.context.get_collection", return_value=_EmptyCollection()),
         patch(
-            "app.routes.chat.OllamaGenerationService.stream_generate_messages",
+            "app.routes.chat.routes.OllamaGenerationService.stream_generate_messages",
             new=_capture,
         ),
     ):
