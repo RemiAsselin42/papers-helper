@@ -37,13 +37,16 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: var(--space-xs);
 }
 
 .card {
   border: var(--border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
-  overflow: hidden;
 }
 
 .cardHeader {
@@ -146,10 +149,9 @@
   }
 }
 
-// Type badges
-.badgeDoc,
-.badgeUrl,
-.badgeAudio {
+// Type badges — shared layout; type-specific colours come from the
+// `source-type-badges` mixin (resolved via utils/typeBadgeClass.ts).
+.badge {
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -162,21 +164,7 @@
   flex-shrink: 0;
 }
 
-.badgeDoc {
-  background: var(--color-accent);
-  color: var(--color-text);
-}
-
-.badgeUrl {
-  background: var(--color-emphasis-2);
-  color: var(--color-background);
-}
-
-.badgeAudio {
-  background: var(--color-surface);
-  color: var(--color-text-muted);
-  border: var(--border);
-}
+@include source-type-badges;
 
 // Status badges
 .badgeIndexed {
@@ -196,4 +184,232 @@
   font-size: var(--font-size-label);
   color: var(--color-error);
   white-space: nowrap;
+}
+
+.badgeWarning {
+  font-size: var(--font-size-label);
+  color: var(--color-warning, #b76e00);
+  white-space: nowrap;
+  cursor: help;
+}
+
+@keyframes sourceSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  animation: sourceSpin 0.9s linear infinite;
+}
+
+// In-flight import row (synthetic card while SSE upload is running)
+.cardImporting {
+  opacity: 0.95;
+}
+
+.progressTrack {
+  position: relative;
+  height: 4px;
+  margin-top: var(--space-xs);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progressBar {
+  position: absolute;
+  inset: 0;
+  background: var(--color-emphasis-2);
+  border-radius: inherit;
+  transform-origin: left center;
+}
+
+@keyframes sourceProgressSweep {
+  0% {
+    transform: translateX(-100%) scaleX(0.4);
+  }
+  50% {
+    transform: translateX(20%) scaleX(0.6);
+  }
+  100% {
+    transform: translateX(120%) scaleX(0.3);
+  }
+}
+
+.progressQueued .progressBar {
+  width: 0;
+}
+
+.progressProcessing .progressBar {
+  width: 100%;
+  animation: sourceProgressSweep 1.2s ease-in-out infinite;
+}
+
+.progressDone .progressBar {
+  width: 100%;
+  background: var(--color-success);
+}
+
+.progressError .progressBar {
+  width: 100%;
+  background: var(--color-error);
+}
+
+// CTA empty state — centered, replaces the previous "Aucune source importée." line
+.emptyCta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  padding: var(--space-2xl, var(--space-lg)) var(--space-lg);
+  margin: var(--space-xl, var(--space-lg)) auto;
+  max-width: 380px;
+  text-align: center;
+}
+
+.emptyCtaIcon {
+  color: var(--color-text);
+}
+
+.emptyCtaText {
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.emptyCtaButton {
+  @include btn-secondary;
+}
+
+// Sources view becomes a viewport-height flex column so the toolbar stays
+// fixed in place while only `.list` scrolls. AppHeader is position: fixed
+// above .content's padding-top — we reserve the same offset here.
+.scrollHost {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  // .content top padding (md + 48px header + xl) + bottom padding (xl).
+  height: calc(100dvh - var(--space-md) - 48px - var(--space-xl) - var(--space-xl));
+  min-height: 0;
+}
+
+.toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  border-bottom: var(--border);
+  flex: 0 0 auto;
+}
+
+.searchRow {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.searchIcon {
+  position: absolute;
+  left: var(--space-sm);
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 10px 14px 10px calc(var(--space-sm) * 2 + 18px);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--font-size-body-sm);
+  line-height: 1.5;
+
+  &::placeholder {
+    color: var(--color-text-muted);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-emphasis-2);
+  }
+}
+
+.filterRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.filterSelect {
+  padding: 6px var(--space-sm);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  // Firefox doesn't always inherit font-family through the native widget's
+  // shadow DOM — name the token explicitly so the closed select and the
+  // dropdown popup both render in Stack Sans Text.
+  font-family: var(--font);
+  font-size: var(--font-size-label);
+  line-height: 1.4;
+  cursor: pointer;
+  max-width: 220px;
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-emphasis-2);
+  }
+
+  // Styling option works on Firefox + recent Chromium desktop. Safari and
+  // most mobile browsers still defer to the OS picker for the popup.
+  option {
+    font-family: var(--font);
+    font-size: var(--font-size-label);
+    background: var(--color-surface);
+    color: var(--color-text);
+  }
+}
+
+.filterCount {
+  margin-left: auto;
+  font-family: inherit;
+  font-size: var(--font-size-label);
+  line-height: 1.4;
+  letter-spacing: var(--letter-spacing-label);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.filterEmpty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  margin-block: var(--space-sm);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  font-family: inherit;
+  font-size: var(--font-size-body-sm);
+  line-height: 1.5;
+  color: var(--color-text-muted);
+  flex: 0 0 auto;
+}
+
+.filterEmptyReset {
+  @include btn-secondary;
+  padding: 6px 14px;
+  font-size: var(--font-size-label);
+  line-height: 1.4;
+  letter-spacing: var(--letter-spacing-label);
 }

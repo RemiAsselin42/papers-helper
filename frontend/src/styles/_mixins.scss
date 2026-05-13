@@ -16,6 +16,8 @@
   border: none;
   border-radius: var(--inner-radius);
   color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--font-size-body);
   cursor: pointer;
   transition:
     color 150ms,
@@ -90,7 +92,8 @@
   }
 
   &:hover:not(:disabled) {
-    color: var(--color-text);
+    color: var(--color-background);
+    background: var(--color-emphasis);
   }
 }
 
@@ -115,5 +118,48 @@
   &:disabled {
     opacity: 0.4;
     cursor: default;
+  }
+}
+
+// One-stop source-type colour map. Emits .badgePdf / .badgeDocx / … inside the
+// caller's CSS Module scope so `styles.badgePdf` resolves locally. Pairs with
+// `typeBadgeClass()` from utils/typeBadgeClass.ts.
+@mixin source-type-badges {
+  .badgePdf {
+    background: var(--color-accent);
+    color: var(--color-text);
+  }
+  .badgeDocx {
+    background: var(--color-emphasis);
+    color: var(--color-background);
+  }
+  .badgeTxt {
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+    border: var(--border);
+  }
+  .badgeOdt {
+    background: var(--color-success);
+    color: var(--color-background);
+  }
+  .badgeRtf {
+    background: var(--color-warning, #b76e00);
+    color: var(--color-background);
+  }
+  .badgeHtml {
+    background: color-mix(in srgb, var(--color-text-muted) 60%, var(--color-surface));
+    color: var(--color-background);
+  }
+  .badgeEpub {
+    background: var(--color-error);
+    color: var(--color-background);
+  }
+  .badgeUrl {
+    background: var(--color-emphasis-2);
+    color: var(--color-background);
+  }
+  .badgeFallback {
+    background: var(--color-accent);
+    color: var(--color-text);
   }
 }
