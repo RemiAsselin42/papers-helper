@@ -209,7 +209,7 @@ export function ProblematiqueView({ projectId }: Props) {
                 disabled={isSaving}
                 type="button"
               >
-                <Plus size={12} /> Ajouter une sous-problématique
+                <Plus size={16} /> Ajouter une sous-problématique
               </button>
             ) : (
               <div className={styles.subGroup}>
@@ -294,7 +294,7 @@ export function ProblematiqueView({ projectId }: Props) {
                   disabled={isSaving}
                   type="button"
                 >
-                  <Plus size={20} /> Sous-hypothèse
+                  <Plus size={16} /> Sous-hypothèse
                 </button>
               </div>
             ))}
@@ -304,7 +304,7 @@ export function ProblematiqueView({ projectId }: Props) {
               disabled={isSaving}
               type="button"
             >
-              <Plus size={12} /> Ajouter une hypothèse
+              <Plus size={16} /> Ajouter une hypothèse
             </button>
           </div>
 
@@ -347,7 +347,7 @@ export function ProblematiqueView({ projectId }: Props) {
               disabled={isSaving}
               type="button"
             >
-              <Plus size={12} /> Ajouter une approche
+              <Plus size={16} /> Ajouter une approche
             </button>
           </div>
 
@@ -393,7 +393,7 @@ export function ProblematiqueView({ projectId }: Props) {
       <div className={styles.header}>
         <h1 className={styles.title}>Problématique & hypothèses</h1>
         <button className={styles.btnSecondary} onClick={handleEdit}>
-          <Pencil size={14} />
+          <Pencil size={16} />
           Modifier
         </button>
       </div>

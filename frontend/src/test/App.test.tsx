@@ -3,10 +3,13 @@ import { describe, it, expect, vi, beforeAll } from 'vitest'
 import App from '../App'
 
 beforeAll(() => {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-    ok: true,
-    json: async () => [],
-  }))
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    })
+  )
 })
 
 describe('App', () => {

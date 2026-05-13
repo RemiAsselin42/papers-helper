@@ -155,7 +155,9 @@ export function MetadataModal({ projectId, source, onSave, onClose }: MetadataMo
               <label className={styles.label}>Catégories</label>
               <div className={styles.categories}>
                 {extractBibtexCategories(source.pdf_title).map((cat) => (
-                  <span key={cat} className={styles.categoryTag}>{cat}</span>
+                  <span key={cat} className={styles.categoryTag}>
+                    {cat}
+                  </span>
                 ))}
               </div>
             </div>

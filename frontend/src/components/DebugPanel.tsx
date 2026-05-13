@@ -95,7 +95,9 @@ export function DebugPanel({ projectId, refreshKey }: DebugPanelProps) {
 
       <div className={styles.body}>
         {networkError && <p className={styles.error}>{networkError}</p>}
-        {papers.length === 0 && !loading && !networkError && <p className={styles.empty}>Aucun paper indexé.</p>}
+        {papers.length === 0 && !loading && !networkError && (
+          <p className={styles.empty}>Aucun paper indexé.</p>
+        )}
 
         {papers.length > 0 && (
           <div className={styles.paperList}>

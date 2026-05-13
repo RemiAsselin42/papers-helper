@@ -8,6 +8,7 @@
   gap: var(--space-xs);
   border-bottom: var(--border);
   flex-shrink: 0;
+  min-height: calc((40px * 3) + (var(--space-xs) * 4 + 1px)); // 3 items + gaps + border
 }
 
 .trigger {
@@ -65,9 +66,9 @@
   flex-direction: column;
   gap: var(--space-xs);
   max-height: 160px;
-  overflow-y: auto;
   border-left: var(--border-thick);
-  margin-left: var(--space-md);
+  margin-left: 19px;
+  overflow: hidden;
 }
 
 .projectBtn {

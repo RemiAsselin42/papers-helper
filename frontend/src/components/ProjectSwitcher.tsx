@@ -50,7 +50,7 @@ export function ProjectSwitcher({
   if (loading) {
     return (
       <div className={styles.switcher}>
-        <Skeleton count={2} height={32} gap={4} radius="var(--radius-sm)" />
+        <Skeleton count={3} height={40} gap={4} radius="var(--radius-sm)" />
       </div>
     )
   }

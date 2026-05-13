@@ -1,10 +1,4 @@
-export type LLMProvider =
-  | 'ollama'
-  | 'openai'
-  | 'anthropic'
-  | 'gemini'
-  | 'perplexity'
-  | 'deepseek'
+export type LLMProvider = 'ollama' | 'openai' | 'anthropic' | 'gemini' | 'perplexity' | 'deepseek'
 
 export const PROVIDER_LABELS: Record<LLMProvider, string> = {
   ollama: 'Ollama (local)',
@@ -47,7 +41,7 @@ export function getStoredApiKey(provider: Exclude<LLMProvider, 'ollama'>): strin
 
 export function setStoredApiKey(
   provider: Exclude<LLMProvider, 'ollama'>,
-  key: string | null,
+  key: string | null
 ): void {
   if (key) localStorage.setItem(`llmApiKey_${provider}`, key)
   else localStorage.removeItem(`llmApiKey_${provider}`)
@@ -59,7 +53,7 @@ export function getStoredExternalModel(provider: Exclude<LLMProvider, 'ollama'>)
 
 export function setStoredExternalModel(
   provider: Exclude<LLMProvider, 'ollama'>,
-  model: string,
+  model: string
 ): void {
   if (model) localStorage.setItem(`llmModel_${provider}`, model)
   else localStorage.removeItem(`llmModel_${provider}`)

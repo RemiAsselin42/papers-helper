@@ -32,16 +32,12 @@ export function NewProjectView({ onCreated }: NewProjectViewProps) {
           type="text"
           placeholder="Project name"
           value={name}
-          onChange={e => setName(e.target.value)}
+          onChange={(e) => setName(e.target.value)}
           maxLength={80}
           autoFocus
           disabled={submitting}
         />
-        <button
-          type="submit"
-          className={styles.btnPrimary}
-          disabled={!name.trim() || submitting}
-        >
+        <button type="submit" className={styles.btnPrimary} disabled={!name.trim() || submitting}>
           Create
         </button>
       </form>

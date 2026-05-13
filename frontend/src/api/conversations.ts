@@ -42,19 +42,18 @@ export async function listConversations(projectId: string): Promise<Conversation
 
 export async function loadConversation(
   projectId: string,
-  conversationId: string,
+  conversationId: string
 ): Promise<Conversation> {
-  const res = await fetch(
-    `/api/projects/${projectId}/conversations/${conversationId}`,
-    { headers: allLlmHeaders() },
-  )
+  const res = await fetch(`/api/projects/${projectId}/conversations/${conversationId}`, {
+    headers: allLlmHeaders(),
+  })
   if (!res.ok) throw new Error(`Failed to load conversation: ${res.status}`)
   return res.json()
 }
 
 export async function createConversation(
   projectId: string,
-  payload: ConversationWritePayload,
+  payload: ConversationWritePayload
 ): Promise<Conversation> {
   const res = await fetch(`/api/projects/${projectId}/conversations/`, {
     method: 'POST',
@@ -68,16 +67,13 @@ export async function createConversation(
 export async function updateConversation(
   projectId: string,
   conversationId: string,
-  payload: ConversationWritePayload,
+  payload: ConversationWritePayload
 ): Promise<Conversation> {
-  const res = await fetch(
-    `/api/projects/${projectId}/conversations/${conversationId}`,
-    {
-      method: 'PUT',
-      headers: jsonHeaders(),
-      body: JSON.stringify(payload),
-    },
-  )
+  const res = await fetch(`/api/projects/${projectId}/conversations/${conversationId}`, {
+    method: 'PUT',
+    headers: jsonHeaders(),
+    body: JSON.stringify(payload),
+  })
   if (!res.ok) throw new Error(`Failed to update conversation: ${res.status}`)
   return res.json()
 }
@@ -85,27 +81,21 @@ export async function updateConversation(
 export async function renameConversation(
   projectId: string,
   conversationId: string,
-  title: string,
+  title: string
 ): Promise<Conversation> {
-  const res = await fetch(
-    `/api/projects/${projectId}/conversations/${conversationId}`,
-    {
-      method: 'PATCH',
-      headers: jsonHeaders(),
-      body: JSON.stringify({ title }),
-    },
-  )
+  const res = await fetch(`/api/projects/${projectId}/conversations/${conversationId}`, {
+    method: 'PATCH',
+    headers: jsonHeaders(),
+    body: JSON.stringify({ title }),
+  })
   if (!res.ok) throw new Error(`Failed to rename conversation: ${res.status}`)
   return res.json()
 }
 
-export async function deleteConversation(
-  projectId: string,
-  conversationId: string,
-): Promise<void> {
-  const res = await fetch(
-    `/api/projects/${projectId}/conversations/${conversationId}`,
-    { method: 'DELETE', headers: allLlmHeaders() },
-  )
+export async function deleteConversation(projectId: string, conversationId: string): Promise<void> {
+  const res = await fetch(`/api/projects/${projectId}/conversations/${conversationId}`, {
+    method: 'DELETE',
+    headers: allLlmHeaders(),
+  })
   if (!res.ok) throw new Error(`Failed to delete conversation: ${res.status}`)
 }

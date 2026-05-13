@@ -34,11 +34,7 @@ export function Skeleton({
   }
 
   return (
-    <div
-      className={`${styles.group} ${className ?? ''}`}
-      style={{ gap: px(gap) }}
-      aria-hidden
-    >
+    <div className={`${styles.group} ${className ?? ''}`} style={{ gap: px(gap) }} aria-hidden>
       {widths.map((w, i) => (
         <span
           key={i}

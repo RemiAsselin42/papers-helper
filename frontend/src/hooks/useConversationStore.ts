@@ -56,7 +56,7 @@ export function useConversationStore(projectId: string): UseConversationStore {
       setPinned({ id: conv.id, provider: conv.provider, model: conv.model })
       return conv
     },
-    [projectId],
+    [projectId]
   )
 
   const clear = useCallback(() => {
@@ -68,11 +68,11 @@ export function useConversationStore(projectId: string): UseConversationStore {
       try {
         await deleteConversation(projectId, id)
       } finally {
-        setPinned(prev => (prev?.id === id ? null : prev))
+        setPinned((prev) => (prev?.id === id ? null : prev))
         refresh()
       }
     },
-    [projectId, refresh],
+    [projectId, refresh]
   )
 
   const rename = useCallback(
@@ -83,7 +83,7 @@ export function useConversationStore(projectId: string): UseConversationStore {
         refresh()
       }
     },
-    [projectId, refresh],
+    [projectId, refresh]
   )
 
   const persist = useCallback(
@@ -95,7 +95,7 @@ export function useConversationStore(projectId: string): UseConversationStore {
       refresh()
       return conv
     },
-    [pinned, projectId, refresh],
+    [pinned, projectId, refresh]
   )
 
   return { conversations, loading, pinned, refresh, load, clear, remove, rename, persist }

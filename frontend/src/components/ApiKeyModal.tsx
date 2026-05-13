@@ -38,15 +38,17 @@ export function ApiKeyModal({ provider, onSave, onClose }: Props) {
   }
 
   return (
-    <div
-      className={styles.overlay}
-      onMouseDown={e => e.target === e.currentTarget && onClose()}
-    >
-      <div className={styles.dialog} role="dialog" aria-modal aria-label={`Clé API ${PROVIDER_LABELS[provider]}`}>
+    <div className={styles.overlay} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div
+        className={styles.dialog}
+        role="dialog"
+        aria-modal
+        aria-label={`Clé API ${PROVIDER_LABELS[provider]}`}
+      >
         <div className={styles.header}>
           <span className={styles.title}>Clé API — {PROVIDER_LABELS[provider]}</span>
           <button className={styles.closeBtn} onClick={onClose} aria-label="Fermer">
-            <X size={18} />
+            <X size={20} />
           </button>
         </div>
 
@@ -60,7 +62,7 @@ export function ApiKeyModal({ provider, onSave, onClose }: Props) {
               rel="noopener noreferrer"
               className={styles.link}
             >
-              Obtenir une clé <ExternalLink size={11} />
+              Obtenir une clé <ExternalLink size={16} />
             </a>
           </p>
           <label className={styles.label} htmlFor="api-key-input">
@@ -71,9 +73,9 @@ export function ApiKeyModal({ provider, onSave, onClose }: Props) {
             type="password"
             className={styles.input}
             value={key}
-            onChange={e => setKey(e.target.value)}
+            onChange={(e) => setKey(e.target.value)}
             placeholder="sk-…"
-            onKeyDown={e => e.key === 'Enter' && key.trim() && handleSave()}
+            onKeyDown={(e) => e.key === 'Enter' && key.trim() && handleSave()}
             autoFocus
           />
         </div>
