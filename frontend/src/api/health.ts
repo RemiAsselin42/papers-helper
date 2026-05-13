@@ -26,6 +26,11 @@ export function setStoredOllamaUrl(url: string | null): void {
   }
 }
 
+export function ollamaHeaders(): HeadersInit {
+  const url = localStorage.getItem(OLLAMA_URL_KEY)
+  return url ? { 'X-Ollama-URL': url } : {}
+}
+
 export async function checkHealth(ollamaUrl?: string): Promise<HealthData> {
   const params = ollamaUrl ? `?ollama_url=${encodeURIComponent(ollamaUrl)}` : ''
   // Route through the /api proxy so this works regardless of whether the

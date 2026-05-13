@@ -1,5 +1,5 @@
+import type { ChatMessage } from './chat'
 import { allLlmHeaders, type LLMProvider } from './llm'
-import type { ChatMessage } from './projects'
 
 export interface ConversationSummary {
   id: string

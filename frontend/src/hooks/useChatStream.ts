@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import type { LLMProvider } from '../api/llm'
-import { type ChatMessage, streamChat } from '../api/projects'
+import { type ChatMessage, streamChat } from '../api/chat'
+import { readSseLines } from '../utils/sse'
+
+const DONE_SENTINEL = '[DONE]'
 
 export type StreamStatus = 'ok' | 'aborted' | 'error'
 
@@ -94,43 +97,28 @@ export function useChatStream(): UseChatStream {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       if (!res.body) throw new Error('No response body')
 
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buf = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buf += decoder.decode(value, { stream: true })
-        const lines = buf.split('\n')
-        buf = lines.pop() ?? ''
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          const raw = line.slice(6)
-          if (raw === '[DONE]') break
-          try {
-            const evt = JSON.parse(raw) as { token?: string; error?: string }
-            if (evt.error) {
-              throw new Error(evt.error)
+      await readSseLines(res.body, (raw) => {
+        if (raw === DONE_SENTINEL) return true
+        try {
+          const evt = JSON.parse(raw) as { token?: string; error?: string }
+          if (evt.error) throw new Error(evt.error)
+          const token = evt.token
+          if (typeof token !== 'string') return
+          commit((prev) => {
+            const copy = [...prev]
+            copy[assistantIndex] = {
+              ...copy[assistantIndex],
+              content: copy[assistantIndex].content + token,
             }
-            const token = evt.token
-            if (typeof token !== 'string') continue
-            commit((prev) => {
-              const copy = [...prev]
-              copy[assistantIndex] = {
-                ...copy[assistantIndex],
-                content: copy[assistantIndex].content + token,
-              }
-              return copy
-            })
-          } catch (parseErr) {
-            // Re-throw real provider errors; swallow only SyntaxError from
-            // malformed SSE lines.
-            if (parseErr instanceof SyntaxError) continue
-            throw parseErr
-          }
+            return copy
+          })
+        } catch (parseErr) {
+          // Re-throw real provider errors; swallow only SyntaxError from
+          // malformed SSE lines.
+          if (parseErr instanceof SyntaxError) return
+          throw parseErr
         }
-      }
+      })
     } catch (err) {
       if ((err as Error).name === 'AbortError') {
         status = 'aborted'

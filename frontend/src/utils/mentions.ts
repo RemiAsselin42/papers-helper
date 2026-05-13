@@ -1,4 +1,4 @@
-import type { SourceInfo } from '../api/projects'
+import type { SourceInfo } from '../api/papers'
 
 export interface ActiveMention {
   /** Index of the `@` character in the text (inclusive). */
