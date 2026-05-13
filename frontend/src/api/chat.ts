@@ -1,6 +1,13 @@
 import { detoxMentions, parseMentions } from '../utils/mentions'
 import { ollamaHeaders } from './health'
-import { allLlmHeaders, llmHeaders, plainTextHeader, type LLMProvider } from './llm'
+import {
+  allLlmHeaders,
+  globalRagHeader,
+  llmHeaders,
+  neighborChunksHeader,
+  plainTextHeader,
+  type LLMProvider,
+} from './llm'
 import type { SourceInfo } from './papers'
 
 export interface ChatMessage {
@@ -54,6 +61,8 @@ export function streamChat(
       'Content-Type': 'application/json',
       ...providerHeaders,
       ...plainTextHeader(),
+      ...neighborChunksHeader(),
+      ...globalRagHeader(),
       ...mentionsHeader(mentions),
     },
     body: JSON.stringify({ model, messages: outgoing }),

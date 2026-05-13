@@ -85,6 +85,38 @@ export function plainTextHeader(): Record<string, string> {
   return getStoredPlainText() ? { 'X-Prefer-Plain-Text': '1' } : {}
 }
 
+// Neighbor chunks default ON: backend treats a missing header as enabled, so
+// we only need to emit a header when the user explicitly opted out.
+const NEIGHBOR_CHUNKS_STORAGE_KEY = 'chatNeighborChunks'
+
+export function getStoredNeighborChunks(): boolean {
+  const raw = localStorage.getItem(NEIGHBOR_CHUNKS_STORAGE_KEY)
+  return raw === null ? true : raw === '1'
+}
+
+export function setStoredNeighborChunks(enabled: boolean): void {
+  localStorage.setItem(NEIGHBOR_CHUNKS_STORAGE_KEY, enabled ? '1' : '0')
+}
+
+export function neighborChunksHeader(): Record<string, string> {
+  return getStoredNeighborChunks() ? {} : { 'X-Chat-Neighbor-Chunks': '0' }
+}
+
+const GLOBAL_RAG_STORAGE_KEY = 'chatGlobalRag'
+
+export function getStoredGlobalRag(): boolean {
+  return localStorage.getItem(GLOBAL_RAG_STORAGE_KEY) === '1'
+}
+
+export function setStoredGlobalRag(enabled: boolean): void {
+  if (enabled) localStorage.setItem(GLOBAL_RAG_STORAGE_KEY, '1')
+  else localStorage.removeItem(GLOBAL_RAG_STORAGE_KEY)
+}
+
+export function globalRagHeader(): Record<string, string> {
+  return getStoredGlobalRag() ? { 'X-Chat-Global-Rag': '1' } : {}
+}
+
 export function llmHeaders(provider: LLMProvider): Record<string, string> {
   if (provider === 'ollama') return {}
   const key = getStoredApiKey(provider)

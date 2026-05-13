@@ -1,10 +1,15 @@
-import { ArrowUp, History, Settings, X } from 'lucide-react'
+import { ArrowUp, History, Info, Settings, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   getStoredApiKey,
+  getStoredGlobalRag,
+  getStoredNeighborChunks,
   getStoredPlainText,
   type LLMProvider,
   PROVIDER_LABELS,
+  setStoredGlobalRag,
+  setStoredNeighborChunks,
   setStoredPlainText,
 } from '../../api/llm'
 import { listSources, type SourceInfo } from '../../api/papers'
@@ -27,6 +32,98 @@ interface Props {
   onRequestApiKey: (provider: Exclude<LLMProvider, 'ollama'>) => void
 }
 
+interface SettingsToggleProps {
+  title: string
+  hint: string
+  checked: boolean
+  onChange: () => void
+}
+
+function SettingsToggle({ title, hint, checked, onChange }: SettingsToggleProps) {
+  return (
+    <label className={styles.settingsRow}>
+      <span className={styles.settingsLabel}>
+        <span className={styles.settingsTitle}>{title}</span>
+        <InfoTooltip text={hint} />
+      </span>
+      <span className={styles.settingsSwitch}>
+        <input
+          type="checkbox"
+          className={styles.settingsSwitchInput}
+          checked={checked}
+          onChange={onChange}
+        />
+        <span className={styles.settingsSwitchTrack} aria-hidden="true" />
+      </span>
+    </label>
+  )
+}
+
+/**
+ * Hover/focus tooltip rendered via a React Portal into `document.body`.
+ * The settings panel's ancestors (`.panel`, `.wrapper`) use `overflow: hidden`
+ * for the slide animation, and `.panel` has a `transform` that traps even
+ * `position: fixed` descendants — only a portal can reliably escape both.
+ *
+ * Anchored to the trigger's right edge (icon sits near the right edge of the
+ * panel which sits at the right edge of the viewport, so the bubble extends
+ * leftward to avoid clipping past the viewport's right boundary).
+ */
+function InfoTooltip({ text }: { text: string }) {
+  const triggerRef = useRef<HTMLSpanElement>(null)
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null)
+
+  function show() {
+    const el = triggerRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    // If the trigger is off the right edge of the viewport (which happens
+    // briefly while the settings panel slides in), `innerWidth - rect.right`
+    // is negative — applying that as CSS `right` would push the tooltip past
+    // the viewport edge, widen the document, and trigger a horizontal
+    // scrollbar that visually shifts the chat under the panel. Clamping to
+    // a small margin keeps the tooltip on-screen and the chat layout stable.
+    const right = Math.max(8, window.innerWidth - rect.right)
+    setPos({ top: rect.top - 6, right })
+  }
+
+  function hide() {
+    setPos(null)
+  }
+
+  return (
+    <>
+      <span
+        ref={triggerRef}
+        className={styles.settingsInfo}
+        aria-label={text}
+        role="img"
+        tabIndex={0}
+        onMouseEnter={show}
+        onMouseLeave={hide}
+        onFocus={show}
+        onBlur={hide}
+        // Clicking the info icon inside a label would otherwise toggle the
+        // checkbox; preventing default keeps the icon purely informational.
+        onClick={(e) => e.preventDefault()}
+      >
+        <Info size={16} aria-hidden="true" />
+      </span>
+      {pos &&
+        createPortal(
+          <div
+            className={styles.settingsTooltip}
+            style={{ top: pos.top, right: pos.right }}
+            role="tooltip"
+          >
+            {text}
+          </div>,
+          document.body
+        )}
+    </>
+  )
+}
+
 export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiKey }: Props) {
   const chat = useChatStream()
   const store = useConversationStore(projectId)
@@ -37,6 +134,8 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
   const historyOpen = openPanel === 'history'
   const settingsOpen = openPanel === 'settings'
   const [plainText, setPlainText] = useState<boolean>(() => getStoredPlainText())
+  const [neighborChunks, setNeighborChunks] = useState<boolean>(() => getStoredNeighborChunks())
+  const [globalRag, setGlobalRag] = useState<boolean>(() => getStoredGlobalRag())
   const [titleDraft, setTitleDraft] = useState<string>('')
 
   function togglePlainText() {
@@ -47,9 +146,88 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
     })
   }
 
+  function toggleNeighborChunks() {
+    setNeighborChunks((prev) => {
+      const next = !prev
+      setStoredNeighborChunks(next)
+      return next
+    })
+  }
+
+  function toggleGlobalRag() {
+    setGlobalRag((prev) => {
+      const next = !prev
+      setStoredGlobalRag(next)
+      return next
+    })
+  }
+
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const settingsPanelRef = useRef<HTMLDivElement>(null)
+  const settingsOpenerRef = useRef<HTMLButtonElement>(null)
   const [sources, setSources] = useState<SourceInfo[]>([])
   const mentionPicker = useMentionPicker(textareaRef, sources, chat.setInput)
+
+  // Focus management for the settings panel: when it opens, move focus
+  // inside; trap Tab/Shift+Tab so keyboard users can't escape into the
+  // underlying chat surface while it's overlaid; Escape closes. On close
+  // we restore focus to the toolbar button that opened it.
+  //
+  // Every focus() call passes `preventScroll: true`. The panel itself starts
+  // off-screen (transform: translateX(100%)) and animates in over 150ms; if
+  // we focused an element inside it without preventScroll, the browser would
+  // scroll the document horizontally to bring the off-screen target into
+  // view, shifting the chat sideways for ~150ms before the panel slides
+  // over. The same issue applies to focusable info-icon spans inside the
+  // panel during Tab cycling.
+  useEffect(() => {
+    if (!settingsOpen) return
+    const panel = settingsPanelRef.current
+    if (!panel) return
+
+    const focusableSelector =
+      'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+    const focusables = (): HTMLElement[] =>
+      Array.from(panel.querySelectorAll<HTMLElement>(focusableSelector)).filter(
+        (el) => !el.hasAttribute('aria-hidden')
+      )
+
+    const first = focusables()[0]
+    first?.focus({ preventScroll: true })
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setOpenPanel(null)
+        return
+      }
+      if (e.key !== 'Tab') return
+      const items = focusables()
+      if (items.length === 0) return
+      const firstEl = items[0]
+      const lastEl = items[items.length - 1]
+      const active = document.activeElement as HTMLElement | null
+      if (e.shiftKey && active === firstEl) {
+        e.preventDefault()
+        lastEl.focus({ preventScroll: true })
+      } else if (!e.shiftKey && active === lastEl) {
+        e.preventDefault()
+        firstEl.focus({ preventScroll: true })
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      // Restore focus to whatever button toggled the panel open. Skipping
+      // when focus has already moved elsewhere (e.g. user clicked outside)
+      // avoids stealing focus from another interactive target.
+      if (document.activeElement === document.body) {
+        settingsOpenerRef.current?.focus({ preventScroll: true })
+      }
+    }
+  }, [settingsOpen])
 
   // Tracks the projectId we've already auto-loaded for, so we don't re-fire
   // the effect when the user explicitly starts a fresh chat (which would
@@ -317,7 +495,13 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
       </div>
 
       <div
+        id="chat-settings-panel"
+        ref={settingsPanelRef}
         className={`${styles.panel} ${styles.panelRight} ${settingsOpen ? styles.panelOpen : ''}`}
+        role="dialog"
+        aria-modal={settingsOpen}
+        aria-label="Paramètres du chat"
+        aria-hidden={!settingsOpen}
       >
         <button
           type="button"
@@ -329,20 +513,24 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
           <X size={20} />
         </button>
         <div className={styles.settingsList}>
-          <label className={styles.settingsRow}>
-            <span className={styles.settingsLabel}>
-              <span className={styles.settingsTitle}>Texte brut</span>
-              <span className={styles.settingsHint}>
-                Demande au modèle de répondre sans mise en page (pas de gras, titres, listes…).
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              className={styles.settingsToggle}
-              checked={plainText}
-              onChange={togglePlainText}
-            />
-          </label>
+          <SettingsToggle
+            title="Texte brut"
+            hint="Demande au modèle de répondre sans mise en page (pas de gras, titres, listes…)."
+            checked={plainText}
+            onChange={togglePlainText}
+          />
+          <SettingsToggle
+            title="Chunks voisins pour les mentions"
+            hint="Inclut les passages adjacents aux extraits pertinents d’un document mentionné avec @. Améliore la continuité de lecture, consomme plus de contexte."
+            checked={neighborChunks}
+            onChange={toggleNeighborChunks}
+          />
+          <SettingsToggle
+            title="Recherche automatique dans tout le corpus"
+            hint="À chaque message, cherche les passages pertinents dans l’ensemble des documents du projet (RAG). Utile quand aucun document n’est mentionné explicitement."
+            checked={globalRag}
+            onChange={toggleGlobalRag}
+          />
         </div>
       </div>
 
@@ -374,11 +562,14 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
             disabled={chat.streaming}
           />
           <button
+            ref={settingsOpenerRef}
             type="button"
             className={`${styles.toolbarBtn} ${settingsOpen ? styles.toolbarBtnActive : ''}`}
             onClick={() => togglePanel('settings')}
             aria-label="Paramètres du chat"
             aria-pressed={settingsOpen}
+            aria-expanded={settingsOpen}
+            aria-controls="chat-settings-panel"
             title="Paramètres du chat"
           >
             <Settings size={20} />
