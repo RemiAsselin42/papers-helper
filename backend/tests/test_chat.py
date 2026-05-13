@@ -166,3 +166,156 @@ def test_anthropic_extracts_system_prompt_into_kwargs() -> None:
     # System must NOT remain in the messages array sent to Anthropic.
     assert all(m["role"] != "system" for m in captured_kwargs["messages"])
     assert captured_kwargs["messages"] == [{"role": "user", "content": "hi"}]
+
+
+def test_chat_mentions_inject_source_context(client: TestClient) -> None:
+    """When X-Chat-Mentions is set, chunks of the mentioned source are
+    concatenated, ordered by chunk_index, and injected as a system message."""
+    captured: dict[str, list[dict[str, Any]]] = {}
+
+    async def _capture(_self: Any, messages: list[dict[str, Any]]) -> AsyncGenerator[str, None]:
+        captured["messages"] = messages
+        yield "ok"
+
+    fake_collection_result: dict[str, Any] = {
+        "ids": ["paper-a__chunk_0001", "paper-a__chunk_0000"],
+        "documents": ["second part", "first part"],
+        "metadatas": [
+            {
+                "chunk_index": 1,
+                "source_filename": "paper-a.pdf",
+                "source_type": "pdf",
+                "source_stem": "paper-a",
+            },
+            {
+                "chunk_index": 0,
+                "source_filename": "paper-a.pdf",
+                "source_type": "pdf",
+                "source_stem": "paper-a",
+            },
+        ],
+    }
+
+    class _FakeCollection:
+        def get(self, **_kwargs: Any) -> dict[str, Any]:
+            return fake_collection_result
+
+    with (
+        patch("app.routes.chat.get_collection", return_value=_FakeCollection()),
+        patch(
+            "app.routes.chat.OllamaGenerationService.stream_generate_messages",
+            new=_capture,
+        ),
+    ):
+        response = client.post(
+            "/projects/p1/chat",
+            headers={"X-Chat-Mentions": "paper-a"},
+            json={"model": "llama3", "messages": [{"role": "user", "content": "résume"}]},
+        )
+
+    assert response.status_code == 200
+    messages = captured["messages"]
+    assert messages[0]["role"] == "system"
+    assert "@Pdf/paper-a.pdf" in messages[0]["content"]
+    body = messages[0]["content"]
+    assert body.index("first part") < body.index("second part")
+    assert messages[-1] == {"role": "user", "content": "résume"}
+
+
+def test_chat_mentions_reject_excessive_count(client: TestClient) -> None:
+    """Requests with more than MENTION_MAX_COUNT mentions are rejected up-front
+    so the backend cannot be coerced into N sequential Chroma reads."""
+    from app.routes.chat import MENTION_MAX_COUNT
+
+    stems = ",".join(f"s{i}" for i in range(MENTION_MAX_COUNT + 1))
+    response = client.post(
+        "/projects/p1/chat",
+        headers={"X-Chat-Mentions": stems},
+        json={"model": "llama3", "messages": [{"role": "user", "content": "hi"}]},
+    )
+    assert response.status_code == 400
+    assert "Too many mentions" in response.json()["detail"]
+
+
+def test_chat_mentions_total_payload_capped(client: TestClient) -> None:
+    """When concatenated chunks exceed MENTION_TOTAL_CHAR_CAP, the injected
+    system message is truncated with a clear marker."""
+    from app.routes.chat import MENTION_CONTENT_CHAR_CAP, MENTION_TOTAL_CHAR_CAP
+
+    captured: dict[str, list[dict[str, Any]]] = {}
+
+    async def _capture(_self: Any, messages: list[dict[str, Any]]) -> AsyncGenerator[str, None]:
+        captured["messages"] = messages
+        yield "ok"
+
+    # Each source returns MENTION_CONTENT_CHAR_CAP chars; with 5 sources the
+    # joined total exceeds MENTION_TOTAL_CHAR_CAP and must be truncated.
+    big_doc = "x" * MENTION_CONTENT_CHAR_CAP
+    stem_list = [f"s{i}" for i in range(5)]
+    fake_result: dict[str, Any] = {
+        "ids": [f"c{i}" for i in range(5)],
+        "documents": [big_doc] * 5,
+        "metadatas": [
+            {
+                "chunk_index": 0,
+                "source_filename": f"{s}.pdf",
+                "source_type": "pdf",
+                "source_stem": s,
+            }
+            for s in stem_list
+        ],
+    }
+
+    class _FakeCollection:
+        def get(self, **_kwargs: Any) -> dict[str, Any]:
+            return fake_result
+
+    stems = ",".join(stem_list)
+    with (
+        patch("app.routes.chat.get_collection", return_value=_FakeCollection()),
+        patch(
+            "app.routes.chat.OllamaGenerationService.stream_generate_messages",
+            new=_capture,
+        ),
+    ):
+        response = client.post(
+            "/projects/p1/chat",
+            headers={"X-Chat-Mentions": stems},
+            json={"model": "llama3", "messages": [{"role": "user", "content": "hi"}]},
+        )
+
+    assert response.status_code == 200
+    system_content = captured["messages"][0]["content"]
+    assert "[contexte mentionné tronqué]" in system_content
+    # The total payload (header + truncated body) stays close to the cap.
+    assert len(system_content) < MENTION_TOTAL_CHAR_CAP + 500
+
+
+def test_chat_mentions_silent_when_no_match(client: TestClient) -> None:
+    """An X-Chat-Mentions header referencing an unknown stem must not crash
+    and must not inject a system message."""
+    captured: dict[str, list[dict[str, Any]]] = {}
+
+    async def _capture(_self: Any, messages: list[dict[str, Any]]) -> AsyncGenerator[str, None]:
+        captured["messages"] = messages
+        yield "ok"
+
+    class _EmptyCollection:
+        def get(self, **_kwargs: Any) -> dict[str, Any]:
+            return {"ids": [], "documents": [], "metadatas": []}
+
+    with (
+        patch("app.routes.chat.get_collection", return_value=_EmptyCollection()),
+        patch(
+            "app.routes.chat.OllamaGenerationService.stream_generate_messages",
+            new=_capture,
+        ),
+    ):
+        response = client.post(
+            "/projects/p1/chat",
+            headers={"X-Chat-Mentions": "missing"},
+            json={"model": "llama3", "messages": [{"role": "user", "content": "ping"}]},
+        )
+
+    assert response.status_code == 200
+    assert captured["messages"] == [{"role": "user", "content": "ping"}]
