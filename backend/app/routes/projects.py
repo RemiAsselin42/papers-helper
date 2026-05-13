@@ -113,18 +113,22 @@ def _problematique_path(project_id: str) -> Path:
     return PROJECTS_DIR / project_id / "problematique.json"
 
 
+def read_problematique_sync(project_id: str) -> Problematique:
+    """Synchronous loader for problematique.json. Returns an empty model if
+    the file is absent. Callers in async contexts should wrap this in
+    asyncio.to_thread."""
+    path = _problematique_path(project_id)
+    if not path.exists():
+        return Problematique()
+    return Problematique(**json.loads(path.read_text(encoding="utf-8")))
+
+
 @router.get("/{project_id}/problematique", response_model=Problematique)
 async def get_problematique(project_id: str) -> Problematique:
     if not (PROJECTS_DIR / project_id).exists():
         raise HTTPException(status_code=404, detail="Project not found")
 
-    def _read() -> Problematique:
-        path = _problematique_path(project_id)
-        if not path.exists():
-            return Problematique()
-        return Problematique(**json.loads(path.read_text(encoding="utf-8")))
-
-    return await asyncio.to_thread(_read)
+    return await asyncio.to_thread(read_problematique_sync, project_id)
 
 
 @router.put("/{project_id}/problematique", response_model=Problematique)
