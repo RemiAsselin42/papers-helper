@@ -1,22 +1,27 @@
-import { Check, ChevronDown, Cpu, KeyRound } from 'lucide-react'
+import { Check, ChevronDown, Cpu, KeyRound, Settings } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import {
-  PROVIDER_LABELS,
-  getStoredApiKey,
-  getStoredOllamaModel,
-  getStoredProvider,
-  setStoredOllamaModel,
-  setStoredProvider,
-  type LLMProvider,
-} from '../api/llm'
+import { PROVIDER_LABELS, getStoredApiKey, type LLMProvider } from '../api/llm'
 import { listModels } from '../api/projects'
 import styles from './ModelSelector.module.scss'
 
-interface ModelSelectorProps {
+export interface ModelSelectorProps {
+  /** Currently selected provider. */
+  provider: LLMProvider
+  /** Currently selected Ollama model (only meaningful when provider === 'ollama'). */
+  ollamaModel: string | null
+  /**
+   * Called when the user picks a provider or an Ollama model. `ollamaModel` is
+   * only set when picking an Ollama model from the flyout, otherwise it is
+   * unchanged from the current value.
+   */
+  onChange: (provider: LLMProvider, ollamaModel: string | null) => void
+  /** Called after picking the Ollama provider, to let the host open the setup modal. */
   onConfigureOllama: () => void
+  /** Called when the user requests editing/setting an external provider's API key. */
   onRequestApiKey: (provider: Exclude<LLMProvider, 'ollama'>) => void
-  onProviderChange?: (provider: LLMProvider) => void
-  onOllamaModelChange?: (model: string) => void
+  /** Called the first time `listModels` returns a non-empty list (to seed defaults). */
+  onOllamaModelsLoaded?: (models: string[]) => void
+  disabled?: boolean
 }
 
 const PROVIDER_ORDER: LLMProvider[] = [
@@ -34,18 +39,17 @@ function hasKey(provider: LLMProvider): boolean {
 }
 
 export function ModelSelector({
+  provider,
+  ollamaModel,
+  onChange,
   onConfigureOllama,
   onRequestApiKey,
-  onProviderChange,
-  onOllamaModelChange,
+  onOllamaModelsLoaded,
+  disabled,
 }: ModelSelectorProps) {
   const [open, setOpen] = useState(false)
-  const [current, setCurrent] = useState<LLMProvider>(() => getStoredProvider())
   const [ollamaModels, setOllamaModels] = useState<string[]>([])
   const [ollamaError, setOllamaError] = useState<string | null>(null)
-  const [currentOllamaModel, setCurrentOllamaModel] = useState<string | null>(() =>
-    getStoredOllamaModel()
-  )
   const [ollamaHover, setOllamaHover] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
@@ -54,17 +58,13 @@ export function ModelSelector({
       .then((list) => {
         setOllamaModels(list)
         setOllamaError(null)
-        if (list.length > 0 && !getStoredOllamaModel()) {
-          setStoredOllamaModel(list[0])
-          setCurrentOllamaModel(list[0])
-          onOllamaModelChange?.(list[0])
-        }
+        if (list.length > 0) onOllamaModelsLoaded?.(list)
       })
       .catch(() => {
         setOllamaModels([])
         setOllamaError('Ollama injoignable')
       })
-  }, [onOllamaModelChange])
+  }, [onOllamaModelsLoaded])
 
   useEffect(() => {
     refreshOllamaModels()
@@ -96,36 +96,29 @@ export function ModelSelector({
     }
   }, [open])
 
-  function handleSelect(provider: LLMProvider) {
-    setStoredProvider(provider)
-    setCurrent(provider)
+  function handleSelect(p: LLMProvider) {
     setOpen(false)
     setOllamaHover(false)
-    onProviderChange?.(provider)
-    if (provider === 'ollama') {
+    if (p === 'ollama') {
+      onChange('ollama', ollamaModel)
       onConfigureOllama()
-    } else if (!getStoredApiKey(provider)) {
-      onRequestApiKey(provider)
+    } else {
+      onChange(p, null)
+      if (!getStoredApiKey(p)) onRequestApiKey(p)
     }
   }
 
   function handleSelectOllamaModel(model: string) {
-    setStoredOllamaModel(model)
-    setCurrentOllamaModel(model)
     setOpen(false)
     setOllamaHover(false)
-    if (current !== 'ollama') {
-      setStoredProvider('ollama')
-      setCurrent('ollama')
-      onProviderChange?.('ollama')
-    }
-    onOllamaModelChange?.(model)
+    // Picking an Ollama model implicitly switches the provider to 'ollama'.
+    onChange('ollama', model)
   }
 
   const triggerLabel =
-    current === 'ollama' && currentOllamaModel
-      ? `${PROVIDER_LABELS.ollama} · ${currentOllamaModel}`
-      : PROVIDER_LABELS[current]
+    provider === 'ollama' && ollamaModel
+      ? `${PROVIDER_LABELS.ollama} · ${ollamaModel}`
+      : PROVIDER_LABELS[provider]
 
   return (
     <div ref={rootRef} className={styles.selector}>
@@ -137,6 +130,7 @@ export function ModelSelector({
         aria-expanded={open}
         aria-label="Sélectionner le modèle d'IA"
         title="Modèle d'IA"
+        disabled={disabled}
       >
         <span className={styles.icon}>
           <Cpu size={20} />
@@ -150,7 +144,7 @@ export function ModelSelector({
       {open && (
         <ul className={styles.list} role="listbox" aria-label="Modèles d'IA disponibles">
           {PROVIDER_ORDER.map((p) => {
-            const isCurrent = p === current
+            const isCurrent = p === provider
             const ready = hasKey(p)
             const isOllama = p === 'ollama'
             return (
@@ -160,21 +154,41 @@ export function ModelSelector({
                 onMouseEnter={isOllama ? () => setOllamaHover(true) : undefined}
                 onMouseLeave={isOllama ? () => setOllamaHover(false) : undefined}
               >
-                <button
-                  type="button"
-                  className={`${styles.item} ${isCurrent ? styles.itemActive : ''}`}
-                  onClick={() => handleSelect(p)}
-                  role="option"
-                  aria-selected={isCurrent}
-                >
-                  <span className={styles.itemMark}>{isCurrent ? <Check size={14} /> : null}</span>
-                  <span className={styles.itemLabel}>{PROVIDER_LABELS[p]}</span>
-                  {!ready && (
-                    <span className={styles.itemBadge} title="Clé API requise">
-                      <KeyRound size={12} />
+                <div className={styles.itemRow}>
+                  <button
+                    type="button"
+                    className={`${styles.item} ${isCurrent ? styles.itemActive : ''}`}
+                    onClick={() => handleSelect(p)}
+                    role="option"
+                    aria-selected={isCurrent}
+                  >
+                    <span className={styles.itemMark}>
+                      {isCurrent ? <Check size={16} /> : null}
                     </span>
-                  )}
-                </button>
+                    <span className={styles.itemLabel}>{PROVIDER_LABELS[p]}</span>
+                  </button>
+                  {!isOllama &&
+                    (ready ? (
+                      <button
+                        type="button"
+                        className={styles.itemAction}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setOpen(false)
+                          setOllamaHover(false)
+                          onRequestApiKey(p)
+                        }}
+                        title="Modifier la clé API"
+                        aria-label={`Modifier la clé API ${PROVIDER_LABELS[p]}`}
+                      >
+                        <Settings size={16} />
+                      </button>
+                    ) : (
+                      <span className={styles.itemBadge} title="Clé API requise">
+                        <KeyRound size={16} />
+                      </span>
+                    ))}
+                </div>
 
                 {isOllama && ollamaHover && (
                   <ul
@@ -187,7 +201,7 @@ export function ModelSelector({
                       <li className={styles.flyoutInfo}>Aucun modèle installé.</li>
                     )}
                     {ollamaModels.map((m) => {
-                      const isModelActive = m === currentOllamaModel
+                      const isModelActive = provider === 'ollama' && m === ollamaModel
                       return (
                         <li key={m}>
                           <button
@@ -201,7 +215,7 @@ export function ModelSelector({
                             aria-selected={isModelActive}
                           >
                             <span className={styles.itemMark}>
-                              {isModelActive ? <Check size={14} /> : null}
+                              {isModelActive ? <Check size={16} /> : null}
                             </span>
                             <span className={styles.itemLabel}>{m}</span>
                           </button>

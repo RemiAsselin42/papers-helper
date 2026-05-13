@@ -1,8 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import {
+  getStoredOllamaModel,
+  getStoredProvider,
+  setStoredOllamaModel,
+  setStoredProvider,
+  type LLMProvider,
+} from '../api/llm'
 import { type ProjectInfo } from '../api/projects'
-import { type LLMProvider } from '../api/llm'
-import { ModelSelector } from './ModelSelector'
 import styles from './AppHeader.module.scss'
+import { ModelSelector } from './ModelSelector'
 
 interface AppHeaderProps {
   currentProject: ProjectInfo | null
@@ -31,6 +37,12 @@ export function AppHeader({
 }: AppHeaderProps) {
   const [now, setNow] = useState(() => new Date())
 
+  // Mirrors the globally-stored provider/model. The unified ModelSelector is
+  // controlled, so this component owns the state and pushes changes back to
+  // localStorage on every onChange.
+  const [provider, setProvider] = useState<LLMProvider>(() => getStoredProvider())
+  const [ollamaModel, setOllamaModel] = useState<string | null>(() => getStoredOllamaModel())
+
   useEffect(() => {
     const msToNextMinute = 60_000 - (Date.now() % 60_000)
     let intervalId: number | undefined
@@ -43,6 +55,35 @@ export function AppHeader({
       if (intervalId !== undefined) window.clearInterval(intervalId)
     }
   }, [])
+
+  const handleChange = useCallback(
+    (nextProvider: LLMProvider, nextOllamaModel: string | null) => {
+      if (nextProvider !== provider) {
+        setStoredProvider(nextProvider)
+        setProvider(nextProvider)
+        onProviderChange?.(nextProvider)
+      }
+      if (nextOllamaModel && nextOllamaModel !== ollamaModel) {
+        setStoredOllamaModel(nextOllamaModel)
+        setOllamaModel(nextOllamaModel)
+        onOllamaModelChange?.(nextOllamaModel)
+      }
+    },
+    [provider, ollamaModel, onProviderChange, onOllamaModelChange]
+  )
+
+  // Auto-seed the global Ollama model the first time the model list arrives.
+  // Without this, the header label is missing the model after a fresh install.
+  const handleOllamaModelsLoaded = useCallback(
+    (models: string[]) => {
+      if (ollamaModel || models.length === 0) return
+      const first = models[0]
+      setStoredOllamaModel(first)
+      setOllamaModel(first)
+      onOllamaModelChange?.(first)
+    },
+    [ollamaModel, onOllamaModelChange]
+  )
 
   return (
     <header className={styles.header}>
@@ -66,10 +107,12 @@ export function AppHeader({
 
       <div className={styles.right}>
         <ModelSelector
+          provider={provider}
+          ollamaModel={ollamaModel}
+          onChange={handleChange}
           onConfigureOllama={onConfigureOllama}
           onRequestApiKey={onRequestApiKey}
-          onProviderChange={onProviderChange}
-          onOllamaModelChange={onOllamaModelChange}
+          onOllamaModelsLoaded={handleOllamaModelsLoaded}
         />
       </div>
     </header>

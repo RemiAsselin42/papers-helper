@@ -14,9 +14,19 @@
   @include btn-secondary;
   justify-content: flex-start;
   gap: var(--space-sm);
-  padding: var(--space-sm);
+  padding: 11px var(--space-sm);
   font-size: var(--font-size-body-sm);
   flex-shrink: 0;
+  color: var(--color-text);
+  background-color: var(--color-background);
+
+  &:hover {
+    background: var(--color-emphasis);
+
+    * {
+      color: var(--color-background);
+    }
+  }
 }
 
 .list {
@@ -59,9 +69,27 @@
   align-items: stretch;
   border-radius: var(--radius-sm);
 
-  &:hover .deleteBtn,
-  &:hover .renameBtn {
-    opacity: 1;
+  &:hover {
+    background: var(--color-emphasis);
+    span {
+      color: var(--color-background);
+    }
+    .meta {
+      opacity: 0.8;
+    }
+    .renameBtn,
+    .deleteBtn {
+      opacity: 1;
+      color: var(--color-background);
+    }
+    .renameBtn:hover {
+      opacity: 1;
+      color: var(--color-success);
+    }
+    .deleteBtn:hover {
+      opacity: 1;
+      color: var(--color-error);
+    }
   }
 }
 
@@ -78,6 +106,7 @@
   padding: var(--space-xs) var(--space-sm);
   cursor: pointer;
   color: var(--color-text);
+  font-family: var(--font);
 }
 
 .item.active {
@@ -134,7 +163,6 @@
   @include btn-icon;
   width: 28px;
   height: 28px;
-  color: var(--color-text);
   align-self: center;
   margin-left: 4px;
   opacity: 0;

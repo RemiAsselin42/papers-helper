@@ -1,5 +1,5 @@
 import { AlertCircle, BookOpen } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import styles from './App.module.scss'
 import { checkHealth, getStoredOllamaUrl, type HealthData } from './api/health'
 import { getStoredProvider, isActiveProviderReady, type LLMProvider } from './api/llm'
@@ -15,7 +15,7 @@ import { NewProjectView } from './components/NewProjectView'
 import { NoProjectState } from './components/NoProjectState'
 import { Skeleton } from './components/Skeleton'
 import { OllamaSetupModal } from './components/OllamaSetupModal'
-import { SourceList } from './components/SourceList'
+import { SourceList, setCachedSourceCount } from './components/SourceList'
 import { ProblematiqueView } from './components/ProblematiqueView'
 import { Sidebar, type View } from './components/Sidebar'
 
@@ -38,27 +38,45 @@ export default function App() {
     'ollama'
   > | null>(null)
   const [activeProvider, setActiveProvider] = useState<LLMProvider>(() => getStoredProvider())
-  const [ollamaModelBump, setOllamaModelBump] = useState(0)
 
-  const bump = () => setRefreshKey(k => k + 1)
+  const bump = () => setRefreshKey((k) => k + 1)
+
+  // Coalesce rapid per-file completions (Zotero ZIP = dozens of files in a
+  // few seconds) into a single SourceList refetch, so the list updates a few
+  // times per second instead of once per file.
+  const bumpDebounceRef = useRef<number | undefined>(undefined)
+  const bumpDebounced = useCallback(() => {
+    if (bumpDebounceRef.current !== undefined) {
+      window.clearTimeout(bumpDebounceRef.current)
+    }
+    bumpDebounceRef.current = window.setTimeout(() => {
+      bumpDebounceRef.current = undefined
+      setRefreshKey((k) => k + 1)
+    }, 350)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (bumpDebounceRef.current !== undefined) {
+        window.clearTimeout(bumpDebounceRef.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY)
     const dismissed = sessionStorage.getItem('ollamaDismissed') === '1'
-    Promise.all([
-      listProjects(),
-      checkHealth(getStoredOllamaUrl() ?? undefined),
-    ])
+    Promise.all([listProjects(), checkHealth(getStoredOllamaUrl() ?? undefined)])
       .then(([list, health]) => {
         setProjects(list)
-        if (stored && list.some(p => p.id === stored)) {
+        if (stored && list.some((p) => p.id === stored)) {
           setCurrentProjectId(stored)
         } else if (list.length > 0) {
           setCurrentProjectId(list[0].id)
         }
         setHealthData(health)
         const ollamaHealthy =
-          health.ollama === 'connected' && health.ollama_models.every(m => m.available)
+          health.ollama === 'connected' && health.ollama_models.every((m) => m.available)
         // Modal only matters when the active provider isn't ready — i.e. user
         // picked Ollama and it's broken, OR they picked an external provider
         // but haven't saved a key yet.
@@ -93,14 +111,17 @@ export default function App() {
   }
 
   function handleProjectCreated(project: ProjectInfo) {
-    setProjects(prev => [project, ...prev])
+    // Freshly created project has no sources — pre-warm so the Sources view
+    // shows the empty CTA immediately on first navigation, without skeleton flash.
+    setCachedSourceCount(project.id, 0)
+    setProjects((prev) => [project, ...prev])
     setCurrentProjectId(project.id)
     setActiveView('import')
     bump()
   }
 
   function handleProjectDeleted(id: string) {
-    const next = projects.filter(p => p.id !== id)
+    const next = projects.filter((p) => p.id !== id)
     setProjects(next)
     if (currentProjectId === id) {
       setCurrentProjectId(next[0]?.id ?? null)
@@ -118,12 +139,11 @@ export default function App() {
     />
   )
 
-  const currentProject = projects.find(p => p.id === currentProjectId) ?? null
+  const currentProject = projects.find((p) => p.id === currentProjectId) ?? null
 
   function reevaluateOllamaStatus() {
     const ollamaHealthy =
-      healthData?.ollama === 'connected' &&
-      healthData.ollama_models.every(m => m.available)
+      healthData?.ollama === 'connected' && healthData.ollama_models.every((m) => m.available)
     if (isActiveProviderReady(!!ollamaHealthy)) {
       setOllamaStatus('connected')
     }
@@ -135,8 +155,7 @@ export default function App() {
   }
 
   const ollamaHealthy =
-    healthData?.ollama === 'connected' &&
-    healthData.ollama_models.every(m => m.available)
+    healthData?.ollama === 'connected' && healthData.ollama_models.every((m) => m.available)
 
   const header = (
     <AppHeader
@@ -146,7 +165,6 @@ export default function App() {
       }}
       onRequestApiKey={setApiKeyModalProvider}
       onProviderChange={handleProviderChange}
-      onOllamaModelChange={() => setOllamaModelBump(b => b + 1)}
     />
   )
 
@@ -194,27 +212,38 @@ export default function App() {
               <h1 className={styles.importTitle}>Papers Helper</h1>
               <p className={styles.importSubtitle}>Ton outil local de recherche académique</p>
             </div>
-            <DropZone projectId={projectId} onSuccess={bump} onProgress={setImportStates} />
+            <DropZone
+              projectId={projectId}
+              onSuccess={bump}
+              onProgress={setImportStates}
+              onFileCompleted={bumpDebounced}
+            />
           </div>
         )}
         {activeView === 'sources' && (
-          <SourceList projectId={projectId} refreshKey={refreshKey} onDelete={bump} />
+          <SourceList
+            key={projectId}
+            projectId={projectId}
+            refreshKey={refreshKey}
+            ollamaReady={isActiveProviderReady(!!ollamaHealthy)}
+            inFlightImports={importStates}
+            onDelete={bump}
+            onReindexed={bump}
+            onRequestImport={() => setActiveView('import')}
+          />
         )}
-        {activeView === 'problematique' && (
-          <ProblematiqueView projectId={projectId} />
-        )}
+        {activeView === 'problematique' && <ProblematiqueView projectId={projectId} />}
         {activeView === 'chat' && (
           <ChatView
             projectId={projectId}
             provider={activeProvider}
-            ollamaModelBump={ollamaModelBump}
-            onResumeProvider={handleProviderChange}
-            onResumeOllamaModel={() => setOllamaModelBump(b => b + 1)}
+            onConfigureOllama={() => {
+              if (!ollamaHealthy) setOllamaStatus('unavailable')
+            }}
+            onRequestApiKey={setApiKeyModalProvider}
           />
         )}
-        {activeView === 'debug' && (
-          <DebugPanel projectId={projectId} refreshKey={refreshKey} />
-        )}
+        {activeView === 'debug' && <DebugPanel projectId={projectId} refreshKey={refreshKey} />}
       </>
     )
   }
@@ -253,7 +282,7 @@ export default function App() {
             // Ollama modal/banner if so.
             const ollamaHealthy =
               healthData?.ollama === 'connected' &&
-              healthData.ollama_models.every(m => m.available)
+              healthData.ollama_models.every((m) => m.available)
             if (isActiveProviderReady(!!ollamaHealthy)) {
               setOllamaStatus('connected')
             }

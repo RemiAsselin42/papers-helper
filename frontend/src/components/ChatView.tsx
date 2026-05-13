@@ -1,50 +1,44 @@
-import { ArrowUp, Bot, History, RotateCcw, Settings, User } from 'lucide-react'
+import { ArrowUp, Bot, History, Settings, User, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
+  getStoredApiKey,
   getStoredExternalModel,
   getStoredOllamaModel,
   getStoredPlainText,
   type LLMProvider,
-  setStoredExternalModel,
-  setStoredOllamaModel,
+  PROVIDER_LABELS,
   setStoredPlainText,
-  setStoredProvider,
 } from '../api/llm'
+import { listSources, type SourceInfo } from '../api/projects'
 import { useChatStream } from '../hooks/useChatStream'
 import { useConversationStore } from '../hooks/useConversationStore'
+import {
+  findActiveMention,
+  mentionInsertion,
+  mentionItemCount,
+  parseMentions,
+  resolveMentions,
+} from '../utils/mentions'
+import { ModelSelector } from './ModelSelector'
 import styles from './ChatView.module.scss'
 import { ConversationList } from './ConversationList'
+import { MentionPopover } from './MentionPopover'
 
 interface Props {
   projectId: string
   provider: LLMProvider
-  /** Increments when the user picks a new Ollama model in the header — used
-   *  to re-read the stored value here. */
-  ollamaModelBump: number
-  /** Notify App when a saved conversation pins a different provider. */
-  onResumeProvider: (p: LLMProvider) => void
-  /** Bump the header ModelSelector so it re-reads the stored Ollama model. */
-  onResumeOllamaModel: () => void
+  onConfigureOllama: () => void
+  onRequestApiKey: (provider: Exclude<LLMProvider, 'ollama'>) => void
 }
 
 // Backend default — must match OLLAMA_GENERATION_MODEL in app/config.py.
 const OLLAMA_FALLBACK_MODEL = 'llama3'
 
-/** Strip a `:tag` suffix for comparison. `llama3:latest` and `llama3` are the
- *  same underlying model for our purposes. */
-function modelBase(name: string): string {
-  return name.split(':')[0]
-}
+type ExternalModelOverrides = Partial<Record<Exclude<LLMProvider, 'ollama'>, string>>
 
-export function ChatView({
-  projectId,
-  provider,
-  ollamaModelBump,
-  onResumeProvider,
-  onResumeOllamaModel,
-}: Props) {
+export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiKey }: Props) {
   const chat = useChatStream()
   const store = useConversationStore(projectId)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -54,8 +48,19 @@ export function ChatView({
   const settingsOpen = openPanel === 'settings'
   const [plainText, setPlainText] = useState<boolean>(() => getStoredPlainText())
 
+  // Per-chat provider/model. Independent of localStorage — only affects this
+  // conversation. New chats seed from the header (`provider` prop + stored
+  // defaults); loaded conversations seed from their persisted values.
+  const [chatProvider, setChatProvider] = useState<LLMProvider>(provider)
+  const [chatOllamaModel, setChatOllamaModel] = useState<string | null>(() =>
+    getStoredOllamaModel()
+  )
+  const [chatExternalModel, setChatExternalModel] = useState<ExternalModelOverrides>({})
+
+  const [titleDraft, setTitleDraft] = useState<string>('')
+
   function togglePlainText() {
-    setPlainText(prev => {
+    setPlainText((prev) => {
       const next = !prev
       setStoredPlainText(next)
       return next
@@ -64,6 +69,67 @@ export function ChatView({
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Source list + @mention popover state.
+  const [sources, setSources] = useState<SourceInfo[]>([])
+  const [mention, setMention] = useState<{ start: number; query: string } | null>(null)
+  const [mentionHighlight, setMentionHighlight] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    listSources(projectId)
+      .then((list) => {
+        if (!cancelled) setSources(list)
+      })
+      .catch(() => {
+        if (!cancelled) setSources([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [projectId])
+
+  function refreshMentionFromCaret() {
+    const el = textareaRef.current
+    if (!el) return
+    const caret = el.selectionStart ?? el.value.length
+    const found = findActiveMention(el.value, caret)
+    setMention((prev) => {
+      if (!found) return null
+      if (prev && prev.start === found.start && prev.query === found.query) {
+        return prev
+      }
+      setMentionHighlight(0)
+      return found
+    })
+  }
+
+  function closeMention() {
+    setMention(null)
+    setMentionHighlight(0)
+  }
+
+  function applyMentionInsertion(insertion: string) {
+    const el = textareaRef.current
+    if (!el || !mention) return
+    const value = el.value
+    const caret = el.selectionStart ?? value.length
+    const before = value.slice(0, mention.start)
+    const after = value.slice(caret)
+    const next = `${before}@${insertion}${after}`
+    chat.setInput(next)
+    closeMention()
+    // Place caret right after the inserted text and re-run detection so the
+    // popover progresses (e.g. type → file step).
+    const nextCaret = before.length + 1 + insertion.length
+    queueMicrotask(() => {
+      const node = textareaRef.current
+      if (!node) return
+      node.focus()
+      node.setSelectionRange(nextCaret, nextCaret)
+      refreshMentionFromCaret()
+    })
+  }
 
   // Auto-grow textarea: reset then snap to scrollHeight. CSS `max-height`
   // caps it at 10 lines and switches to scroll. We add `offsetHeight -
@@ -78,14 +144,9 @@ export function ChatView({
   }, [chat.input])
 
   const resolvedModel = useMemo(() => {
-    if (provider !== 'ollama') {
-      return getStoredExternalModel(provider)
-    }
-    return getStoredOllamaModel() ?? OLLAMA_FALLBACK_MODEL
-    // ollamaModelBump is read indirectly via getStoredOllamaModel(); listing
-    // it in deps forces useMemo to refresh when the header selection changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [provider, ollamaModelBump])
+    if (chatProvider === 'ollama') return chatOllamaModel ?? OLLAMA_FALLBACK_MODEL
+    return chatExternalModel[chatProvider] ?? getStoredExternalModel(chatProvider)
+  }, [chatProvider, chatOllamaModel, chatExternalModel])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -95,23 +156,26 @@ export function ChatView({
   useEffect(() => {
     chat.clear()
     setSaveError(null)
+    setChatProvider(provider)
+    setChatOllamaModel(getStoredOllamaModel())
+    setChatExternalModel({})
+    setTitleDraft('')
     // chat.clear is stable per render but not deeply memoized — intentional reset.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
 
-  function applyPin(p: LLMProvider, model: string) {
-    setStoredProvider(p)
-    if (p === 'ollama') {
-      setStoredOllamaModel(model)
-      onResumeOllamaModel()
-    } else {
-      setStoredExternalModel(p, model)
+  // Sync the editable title with the pinned conversation's stored title.
+  useEffect(() => {
+    if (!store.pinned) {
+      setTitleDraft('')
+      return
     }
-    onResumeProvider(p)
-  }
+    const summary = store.conversations.find((c) => c.id === store.pinned!.id)
+    if (summary) setTitleDraft(summary.title)
+  }, [store.pinned, store.conversations])
 
   function togglePanel(panel: 'history' | 'settings') {
-    setOpenPanel(prev => (prev === panel ? null : panel))
+    setOpenPanel((prev) => (prev === panel ? null : panel))
   }
 
   async function handleSelect(id: string) {
@@ -120,7 +184,12 @@ export function ChatView({
       const conv = await store.load(id)
       chat.resetMessages(conv.messages)
       setSaveError(null)
-      applyPin(conv.provider, conv.model)
+      setChatProvider(conv.provider)
+      if (conv.provider === 'ollama') {
+        setChatOllamaModel(conv.model)
+      } else {
+        setChatExternalModel((prev) => ({ ...prev, [conv.provider]: conv.model }))
+      }
       setOpenPanel(null)
     } catch {
       store.refresh()
@@ -132,6 +201,10 @@ export function ChatView({
     chat.clear()
     store.clear()
     setSaveError(null)
+    setChatProvider(provider)
+    setChatOllamaModel(getStoredOllamaModel())
+    setChatExternalModel({})
+    setTitleDraft('')
   }
 
   async function handleDelete(id: string) {
@@ -141,28 +214,58 @@ export function ChatView({
     if (wasActive) {
       chat.clear()
       setSaveError(null)
+      setChatProvider(provider)
+      setChatOllamaModel(getStoredOllamaModel())
+      setChatExternalModel({})
+      setTitleDraft('')
     }
   }
 
-  const pinnedMismatch =
-    store.pinned !== null &&
-    (store.pinned.provider !== provider ||
-      modelBase(store.pinned.model) !== modelBase(resolvedModel))
-
-  function restorePinned() {
+  async function commitTitle() {
     if (!store.pinned) return
-    applyPin(store.pinned.provider, store.pinned.model)
+    const next = titleDraft.trim()
+    const current = store.conversations.find((c) => c.id === store.pinned!.id)?.title ?? ''
+    if (!next || next === current) {
+      setTitleDraft(current)
+      return
+    }
+    try {
+      await store.rename(store.pinned.id, next)
+    } catch {
+      setTitleDraft(current)
+    }
+  }
+
+  function handleModelChange(p: LLMProvider, ollama: string | null) {
+    setChatProvider(p)
+    if (p === 'ollama') {
+      setChatOllamaModel(ollama)
+    }
   }
 
   async function send() {
     const text = chat.input.trim()
-    if (!text || !resolvedModel || chat.streaming || pinnedMismatch) return
+    if (!text || !resolvedModel || chat.streaming) return
 
-    const turnProvider = provider
+    const turnProvider = chatProvider
     const turnModel = resolvedModel
-    setSaveError(null)
 
-    const result = await chat.send(projectId, text, turnModel)
+    // Pre-send guard: surface a friendly message rather than letting the
+    // request fail with an opaque 401 / fallback model not found.
+    if (turnProvider !== 'ollama' && !getStoredApiKey(turnProvider)) {
+      setSaveError(`Clé API manquante pour ${PROVIDER_LABELS[turnProvider]}.`)
+      return
+    }
+    if (turnProvider === 'ollama' && !chatOllamaModel) {
+      setSaveError('Aucun modèle Ollama sélectionné.')
+      return
+    }
+
+    setSaveError(null)
+    closeMention()
+
+    const mentions = resolveMentions(parseMentions(text), sources)
+    const result = await chat.send(projectId, text, turnModel, mentions, turnProvider)
     if (result.status !== 'ok') return
 
     try {
@@ -174,12 +277,38 @@ export function ChatView({
     } catch (err) {
       console.error('Failed to persist conversation', err)
       setSaveError(
-        'Échec de l’enregistrement de la conversation — votre dernier message ne sera peut-être pas restauré.',
+        'Échec de l’enregistrement de la conversation — votre dernier message ne sera peut-être pas restauré.'
       )
     }
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (mention) {
+      const count = mentionItemCount(mention.query, sources)
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        closeMention()
+        return
+      }
+      if (e.key === 'ArrowDown' && count > 0) {
+        e.preventDefault()
+        setMentionHighlight((h) => (h + 1) % count)
+        return
+      }
+      if (e.key === 'ArrowUp' && count > 0) {
+        e.preventDefault()
+        setMentionHighlight((h) => (h - 1 + count) % count)
+        return
+      }
+      if ((e.key === 'Enter' || e.key === 'Tab') && count > 0) {
+        const insertion = mentionInsertion(mention.query, sources, mentionHighlight)
+        if (insertion !== null) {
+          e.preventDefault()
+          applyMentionInsertion(insertion)
+          return
+        }
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       send()
@@ -189,13 +318,19 @@ export function ChatView({
   return (
     <div className={styles.wrapper}>
       {(historyOpen || settingsOpen) && (
-        <div
-          className={styles.backdrop}
-          onClick={() => setOpenPanel(null)}
-        />
+        <div className={styles.backdrop} onClick={() => setOpenPanel(null)} />
       )}
 
       <div className={`${styles.panel} ${styles.panelLeft} ${historyOpen ? styles.panelOpen : ''}`}>
+        <button
+          type="button"
+          className={styles.panelClose}
+          onClick={() => setOpenPanel(null)}
+          aria-label="Fermer le panneau"
+          title="Fermer"
+        >
+          <X size={20} />
+        </button>
         <ConversationList
           conversations={store.conversations}
           loading={store.loading}
@@ -207,7 +342,18 @@ export function ChatView({
         />
       </div>
 
-      <div className={`${styles.panel} ${styles.panelRight} ${settingsOpen ? styles.panelOpen : ''}`}>
+      <div
+        className={`${styles.panel} ${styles.panelRight} ${settingsOpen ? styles.panelOpen : ''}`}
+      >
+        <button
+          type="button"
+          className={styles.panelClose}
+          onClick={() => setOpenPanel(null)}
+          aria-label="Fermer le panneau"
+          title="Fermer"
+        >
+          <X size={20} />
+        </button>
         <div className={styles.settingsList}>
           <label className={styles.settingsRow}>
             <span className={styles.settingsLabel}>
@@ -238,7 +384,37 @@ export function ChatView({
           >
             <History size={20} />
           </button>
-          <div className={styles.toolbarSpacer} />
+          <input
+            type="text"
+            className={styles.toolbarTitle}
+            value={titleDraft}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onBlur={commitTitle}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                ;(e.target as HTMLInputElement).blur()
+              } else if (e.key === 'Escape') {
+                e.preventDefault()
+                const current =
+                  store.conversations.find((c) => c.id === store.pinned?.id)?.title ?? ''
+                setTitleDraft(current)
+                ;(e.target as HTMLInputElement).blur()
+              }
+            }}
+            placeholder="Nouvelle conversation"
+            disabled={!store.pinned || chat.streaming}
+            title={titleDraft || 'Nouvelle conversation'}
+            aria-label="Nom de la conversation"
+          />
+          <ModelSelector
+            provider={chatProvider}
+            ollamaModel={chatProvider === 'ollama' ? chatOllamaModel : null}
+            onChange={handleModelChange}
+            onConfigureOllama={onConfigureOllama}
+            onRequestApiKey={onRequestApiKey}
+            disabled={chat.streaming}
+          />
           <button
             type="button"
             className={`${styles.toolbarBtn} ${settingsOpen ? styles.toolbarBtnActive : ''}`}
@@ -254,14 +430,16 @@ export function ChatView({
         <div className={styles.messages}>
           {chat.messages.length === 0 && (
             <div className={styles.empty}>
-              Commencez la conversation — le modèle est défini dans l’en-tête.
+              Commencez la conversation
+              <br />
+              Ctrl + Entrée pour un saut de ligne
+              <br />@ pour mentionner une source
             </div>
           )}
           {chat.messages.map((msg, i) => {
             const isAssistant = msg.role === 'assistant'
             const renderMarkdown = isAssistant && !plainText
-            const showCursor =
-              !msg.content && chat.streaming && i === chat.messages.length - 1
+            const showCursor = !msg.content && chat.streaming && i === chat.messages.length - 1
             return (
               <div
                 key={i}
@@ -270,9 +448,7 @@ export function ChatView({
                 <span className={styles.avatar}>
                   {msg.role === 'user' ? <User size={20} /> : <Bot size={20} />}
                 </span>
-                <div
-                  className={`${styles.bubble} ${renderMarkdown ? styles.bubbleMarkdown : ''}`}
-                >
+                <div className={`${styles.bubble} ${renderMarkdown ? styles.bubbleMarkdown : ''}`}>
                   {showCursor ? (
                     <span className={styles.cursor} />
                   ) : renderMarkdown ? (
@@ -286,24 +462,6 @@ export function ChatView({
           })}
           <div ref={bottomRef} />
         </div>
-
-        {pinnedMismatch && store.pinned && (
-          <div className={styles.pinnedBanner}>
-            <span>
-              Modèle initial <code>{store.pinned.model}</code> ({store.pinned.provider}) — la
-              sélection actuelle de l’en-tête ne correspond pas.
-            </span>
-            <button
-              type="button"
-              className={styles.pinnedRestoreBtn}
-              onClick={restorePinned}
-              title="Restaurer le modèle initial"
-            >
-              <RotateCcw size={14} />
-              <span>Restaurer</span>
-            </button>
-          </div>
-        )}
 
         {saveError && (
           <div className={styles.saveErrorBanner} role="alert">
@@ -320,20 +478,35 @@ export function ChatView({
         )}
 
         <div className={styles.inputBar}>
+          {mention && (
+            <MentionPopover
+              query={mention.query}
+              sources={sources}
+              highlight={mentionHighlight}
+              onHighlightChange={setMentionHighlight}
+              onSelect={applyMentionInsertion}
+            />
+          )}
           <textarea
             ref={textareaRef}
             className={styles.textarea}
             value={chat.input}
-            onChange={e => chat.setInput(e.target.value)}
+            onChange={(e) => {
+              chat.setInput(e.target.value)
+              refreshMentionFromCaret()
+            }}
             onKeyDown={handleKeyDown}
-            placeholder="Écrivez votre message… (Entrée pour envoyer, Maj+Entrée pour un saut de ligne)"
+            onKeyUp={refreshMentionFromCaret}
+            onClick={refreshMentionFromCaret}
+            onBlur={closeMention}
+            placeholder="Écrivez votre message…"
             rows={1}
             disabled={chat.streaming}
           />
           <button
             className={styles.sendBtn}
             onClick={send}
-            disabled={!chat.input.trim() || chat.streaming || !resolvedModel || pinnedMismatch}
+            disabled={!chat.input.trim() || chat.streaming || !resolvedModel}
             aria-label="Envoyer"
           >
             <ArrowUp size={20} />
