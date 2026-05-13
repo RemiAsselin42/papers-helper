@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { SourceInfo } from '../api/papers'
 import {
+  detoxMentions,
   displayType,
   findActiveMention,
   mentionInsertion,
@@ -24,6 +25,8 @@ function makeSource(overrides: Partial<SourceInfo>): SourceInfo {
     doi: '',
     abstract: '',
     notes: '',
+    indexed: true,
+    index_error: '',
     ...overrides,
   }
 }
@@ -55,22 +58,48 @@ describe('findActiveMention', () => {
 })
 
 describe('parseMentions', () => {
+  const sources: SourceInfo[] = [
+    makeSource({ stem: 'file', filename: 'file.pdf', source_type: 'pdf' }),
+    makeSource({ stem: 'a', filename: 'a.pdf', source_type: 'pdf' }),
+    makeSource({ stem: 'b', filename: 'b.docx', source_type: 'docx' }),
+    makeSource({
+      stem: 'l-ux-design',
+      filename: "L'ux-design.pdf",
+      source_type: 'pdf',
+    }),
+    makeSource({
+      stem: 'baltes-dashuber-2021',
+      filename: 'Baltes et Dashuber - 2021 - UX Debt.pdf',
+      source_type: 'pdf',
+    }),
+    makeSource({
+      stem: 'foo',
+      filename: 'foo',
+      source_type: 'pdf',
+    }),
+    makeSource({
+      stem: 'foo-pdf',
+      filename: 'foo.pdf',
+      source_type: 'pdf',
+    }),
+  ]
+
   it('returns empty array on text without mentions', () => {
-    expect(parseMentions('hello world')).toEqual([])
+    expect(parseMentions('hello world', sources)).toEqual([])
   })
 
   it('ignores emails', () => {
-    expect(parseMentions('contact remi@gmail.com')).toEqual([])
+    expect(parseMentions('contact remi@gmail.com', sources)).toEqual([])
   })
 
   it('extracts a single mention', () => {
-    expect(parseMentions('see @Pdf/file.pdf')).toEqual([
+    expect(parseMentions('see @Pdf/file.pdf', sources)).toEqual([
       { raw: '@Pdf/file.pdf', type: 'Pdf', name: 'file.pdf' },
     ])
   })
 
   it('extracts multiple mentions', () => {
-    const parsed = parseMentions('Compare @Pdf/a.pdf and @Docx/b.docx please')
+    const parsed = parseMentions('Compare @Pdf/a.pdf and @Docx/b.docx please', sources)
     expect(parsed).toEqual([
       { raw: '@Pdf/a.pdf', type: 'Pdf', name: 'a.pdf' },
       { raw: '@Docx/b.docx', type: 'Docx', name: 'b.docx' },
@@ -78,8 +107,77 @@ describe('parseMentions', () => {
   })
 
   it('allows accented characters in the filename', () => {
-    const parsed = parseMentions("Voir @Pdf/L'ux-design.pdf")
+    const parsed = parseMentions("Voir @Pdf/L'ux-design.pdf", sources)
     expect(parsed[0].name).toBe("L'ux-design.pdf")
+  })
+
+  it('matches filenames containing spaces via longest-prefix lookup', () => {
+    const parsed = parseMentions(
+      'résume @Pdf/Baltes et Dashuber - 2021 - UX Debt.pdf stp',
+      sources
+    )
+    expect(parsed).toEqual([
+      {
+        raw: '@Pdf/Baltes et Dashuber - 2021 - UX Debt.pdf',
+        type: 'Pdf',
+        name: 'Baltes et Dashuber - 2021 - UX Debt.pdf',
+      },
+    ])
+  })
+
+  it('prefers the longest matching filename when several share a prefix', () => {
+    // `foo` and `foo.pdf` are both registered; the parser must pick `foo.pdf`.
+    const parsed = parseMentions('voir @Pdf/foo.pdf maintenant', sources)
+    expect(parsed[0].name).toBe('foo.pdf')
+  })
+
+  it('skips occurrences that resolve to no known source', () => {
+    expect(parseMentions('see @Pdf/missing.pdf', sources)).toEqual([])
+  })
+
+  it('skips when the type does not match any source', () => {
+    expect(parseMentions('see @Bogus/file.pdf', sources)).toEqual([])
+  })
+})
+
+describe('detoxMentions', () => {
+  const sources: SourceInfo[] = [
+    makeSource({ stem: 'a', filename: 'a.pdf', source_type: 'pdf' }),
+    makeSource({
+      stem: 'baltes',
+      filename: 'Baltes et Dashuber - 2021 - UX Debt.pdf',
+      source_type: 'pdf',
+    }),
+  ]
+
+  it('replaces a single @-token with the quoted filename', () => {
+    const text = 'résume @Pdf/a.pdf'
+    const parsed = parseMentions(text, sources)
+    expect(detoxMentions(text, parsed)).toBe('résume « a.pdf »')
+  })
+
+  it('handles filenames with spaces', () => {
+    const text = 'résume @Pdf/Baltes et Dashuber - 2021 - UX Debt.pdf stp'
+    const parsed = parseMentions(text, sources)
+    expect(detoxMentions(text, parsed)).toBe(
+      'résume « Baltes et Dashuber - 2021 - UX Debt.pdf » stp'
+    )
+  })
+
+  it('is a no-op when no mentions resolved', () => {
+    expect(detoxMentions('hello @Pdf/missing.pdf', [])).toBe('hello @Pdf/missing.pdf')
+  })
+
+  it('replaces longest first so a shorter prefix mention cannot mangle a longer one', () => {
+    // Hand-craft an input where two parsed mentions share a prefix. The
+    // longest one MUST be replaced first, otherwise replacing `@Pdf/foo.pdf`
+    // would chop the `@Pdf/foo.pdf.backup` mention into `« foo.pdf ».backup`.
+    const parsed = [
+      { raw: '@Pdf/foo.pdf', type: 'Pdf', name: 'foo.pdf' },
+      { raw: '@Pdf/foo.pdf.backup', type: 'Pdf', name: 'foo.pdf.backup' },
+    ]
+    const text = 'use @Pdf/foo.pdf or @Pdf/foo.pdf.backup'
+    expect(detoxMentions(text, parsed)).toBe('use « foo.pdf » or « foo.pdf.backup »')
   })
 })
 
@@ -90,22 +188,22 @@ describe('resolveMentions', () => {
   ]
 
   it('matches type case-insensitively', () => {
-    const parsed = parseMentions('see @Pdf/paper-a.pdf')
+    const parsed = parseMentions('see @Pdf/paper-a.pdf', sources)
     expect(resolveMentions(parsed, sources)).toEqual(['paper-a'])
   })
 
   it('returns empty when nothing matches', () => {
-    const parsed = parseMentions('see @Pdf/missing.pdf')
+    const parsed = parseMentions('see @Pdf/missing.pdf', sources)
     expect(resolveMentions(parsed, sources)).toEqual([])
   })
 
   it('deduplicates repeated mentions', () => {
-    const parsed = parseMentions('@Pdf/paper-a.pdf again @pdf/paper-a.pdf')
+    const parsed = parseMentions('@Pdf/paper-a.pdf again @pdf/paper-a.pdf', sources)
     expect(resolveMentions(parsed, sources)).toEqual(['paper-a'])
   })
 
   it('preserves insertion order across multiple sources', () => {
-    const parsed = parseMentions('@Docx/notes-b.docx and @Pdf/paper-a.pdf')
+    const parsed = parseMentions('@Docx/notes-b.docx and @Pdf/paper-a.pdf', sources)
     expect(resolveMentions(parsed, sources)).toEqual(['notes-b', 'paper-a'])
   })
 })

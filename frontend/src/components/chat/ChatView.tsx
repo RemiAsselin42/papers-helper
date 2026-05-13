@@ -255,8 +255,8 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
     setSaveError(null)
     mentionPicker.close()
 
-    const mentions = resolveMentions(parseMentions(text), sources)
-    const result = await chat.send(projectId, text, turnModel, mentions, turnProvider)
+    const mentions = resolveMentions(parseMentions(text, sources), sources)
+    const result = await chat.send(projectId, text, turnModel, mentions, turnProvider, sources)
     if (result.status !== 'ok') return
 
     try {

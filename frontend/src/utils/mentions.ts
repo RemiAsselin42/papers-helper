@@ -33,15 +33,73 @@ export function findActiveMention(text: string, caret: number): ActiveMention | 
   return { start: at, query }
 }
 
-const MENTION_RE = /(^|\s)@([A-Za-z]+)\/([^\s@]+)/g
+// Matches the `@Type/` prefix only — the filename span is determined by a
+// longest-prefix lookup against the actual source list, so filenames with
+// spaces (e.g. "Baltes et Dashuber - 2021 - UX Debt.pdf") resolve correctly.
+const MENTION_PREFIX_RE = /(^|\s)@([A-Za-z]+)\//g
 
-/** Find every well-formed `@Type/name` substring in the text. */
-export function parseMentions(text: string): ParsedMention[] {
+/**
+ * Find every well-formed `@Type/name` substring in the text, resolving the
+ * name against the project's known sources. Filenames may contain spaces:
+ * for each `@Type/` prefix we pick the longest source filename (of the
+ * matching type, case-insensitive) that is a prefix of the text immediately
+ * after the slash. If no source matches at a given prefix, that occurrence
+ * is skipped.
+ */
+export function parseMentions(text: string, sources: SourceInfo[]): ParsedMention[] {
   const out: ParsedMention[] = []
-  MENTION_RE.lastIndex = 0
+  MENTION_PREFIX_RE.lastIndex = 0
   let m: RegExpExecArray | null
-  while ((m = MENTION_RE.exec(text)) !== null) {
-    out.push({ raw: `@${m[2]}/${m[3]}`, type: m[2], name: m[3] })
+  while ((m = MENTION_PREFIX_RE.exec(text)) !== null) {
+    const leadingWs = m[1].length
+    const tokenStart = m.index + leadingWs // position of `@`
+    const type = m[2]
+    const afterSlash = tokenStart + 1 + type.length + 1 // past `@Type/`
+    const remaining = text.slice(afterSlash)
+    const typeLower = type.toLowerCase()
+    let bestName: string | null = null
+    for (const s of sources) {
+      if (s.source_type.toLowerCase() !== typeLower) continue
+      if (!remaining.startsWith(s.filename)) continue
+      if (bestName === null || s.filename.length > bestName.length) {
+        bestName = s.filename
+      }
+    }
+    if (bestName === null) continue
+    const end = afterSlash + bestName.length
+    out.push({
+      raw: text.slice(tokenStart, end),
+      type,
+      name: bestName,
+    })
+    // Skip past the resolved filename so the next iteration doesn't re-scan
+    // characters we've already consumed (especially relevant for filenames
+    // with spaces, which extend past the regex match).
+    MENTION_PREFIX_RE.lastIndex = end
+  }
+  return out
+}
+
+/**
+ * Replace each parsed `@Type/filename` token in `text` with `« filename »`.
+ *
+ * Some models interpret the `@Type/file.pdf` syntax as an unresolved
+ * attachment reference and refuse to use the injected document content. The
+ * detoxified form keeps the user's referential intent visible while removing
+ * the at-sigil that triggers the heuristic. Caller is responsible for
+ * passing only user-typed text (not assistant/system).
+ *
+ * Mentions are replaced longest-first so that when one parsed `raw` is a
+ * prefix of another (e.g. `@Pdf/foo.pdf` vs `@Pdf/foo.pdf.backup`) the
+ * longer match consumes its text before the shorter one can mangle it.
+ * `parseMentions` already prefers the longest-prefix source, so this is
+ * belt-and-suspenders — but cheap, and it survives future parser changes.
+ */
+export function detoxMentions(text: string, parsed: ParsedMention[]): string {
+  const ordered = [...parsed].sort((a, b) => b.raw.length - a.raw.length)
+  let out = text
+  for (const p of ordered) {
+    out = out.split(p.raw).join(`« ${p.name} »`)
   }
   return out
 }

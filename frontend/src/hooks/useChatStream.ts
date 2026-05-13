@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { LLMProvider } from '../api/llm'
+import type { SourceInfo } from '../api/papers'
 import { type ChatMessage, streamChat } from '../api/chat'
 import { readSseLines } from '../utils/sse'
 
@@ -77,7 +78,8 @@ export interface UseChatStream {
     text: string,
     model: string,
     mentions?: string[],
-    provider?: LLMProvider
+    provider?: LLMProvider,
+    sources?: SourceInfo[]
   ) => Promise<StreamResult>
 }
 
@@ -153,7 +155,8 @@ export function useChatStream(): UseChatStream {
     text: string,
     model: string,
     mentions: string[] = [],
-    provider?: LLMProvider
+    provider?: LLMProvider,
+    sources: SourceInfo[] = []
   ): Promise<StreamResult> {
     const syncedBeforeSend = syncedCountRef.current
     const userMsg: ChatMessage = { role: 'user', content: text }
@@ -174,7 +177,8 @@ export function useChatStream(): UseChatStream {
         nextMessages,
         abortRef.current.signal,
         mentions,
-        provider
+        provider,
+        sources
       )
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       if (!res.body) throw new Error('No response body')
