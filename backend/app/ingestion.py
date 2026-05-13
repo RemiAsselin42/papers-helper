@@ -102,10 +102,6 @@ def write_sidecar(files_dir: Path, meta: SidecarMeta) -> None:
     )
 
 
-def delete_sidecar(files_dir: Path, stem: str) -> None:
-    sidecar_path(files_dir, stem).unlink(missing_ok=True)
-
-
 def _sse(data: dict[str, object]) -> str:
     return f"data: {json.dumps(data)}\n\n"
 

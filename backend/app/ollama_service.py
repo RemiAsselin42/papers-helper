@@ -38,25 +38,6 @@ class OllamaGenerationService:
         effective_url = base_url if base_url is not None else get_ollama_url()
         self._client = ollama.AsyncClient(host=effective_url)
 
-    async def generate(self, prompt: str, system: str = "") -> str:
-        messages: list[dict[str, Any]] = []
-        if system:
-            messages.append({"role": "system", "content": system})
-        messages.append({"role": "user", "content": prompt})
-        response = await self._client.chat(model=self.model, messages=messages)
-        return response.message.content  # type: ignore[return-value]
-
-    async def stream_generate(self, prompt: str, system: str = "") -> AsyncGenerator[str, None]:
-        messages: list[dict[str, Any]] = []
-        if system:
-            messages.append({"role": "system", "content": system})
-        messages.append({"role": "user", "content": prompt})
-        async for chunk in await self._client.chat(
-            model=self.model, messages=messages, stream=True
-        ):
-            if chunk.message.content:
-                yield chunk.message.content
-
     async def stream_generate_messages(
         self, messages: list[dict[str, Any]]
     ) -> AsyncGenerator[str, None]:

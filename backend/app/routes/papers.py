@@ -34,6 +34,7 @@ router = APIRouter(prefix="/projects/{project_id}/papers", tags=["papers"])
 # ---------------------------------------------------------------------------
 
 _ALLOWED_SCHEMES = frozenset({"http", "https"})
+_BLOCKED_HOSTNAMES = frozenset({"localhost", "127.0.0.1", "::1", "0.0.0.0"})
 
 
 def _validate_url_ssrf(url: str) -> None:
@@ -56,7 +57,6 @@ def _validate_url_ssrf(url: str) -> None:
     if not hostname:
         raise HTTPException(status_code=400, detail="URL invalide : hôte manquant.")
 
-    _BLOCKED_HOSTNAMES = frozenset({"localhost", "127.0.0.1", "::1", "0.0.0.0"})
     if hostname.lower() in _BLOCKED_HOSTNAMES:
         raise HTTPException(status_code=400, detail="URL non autorisée : hôte privé ou local.")
 

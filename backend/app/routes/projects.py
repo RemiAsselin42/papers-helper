@@ -97,7 +97,7 @@ async def create_project(body: CreateProjectRequest) -> ProjectInfo:
 
     def _create() -> ProjectInfo:
         project_dir = PROJECTS_DIR / project_id
-        (project_dir / "pdfs").mkdir(parents=True, exist_ok=True)
+        (project_dir / "files").mkdir(parents=True, exist_ok=True)
         (project_dir / "vectors").mkdir(parents=True, exist_ok=True)
         info = ProjectInfo(id=project_id, name=name, created_at=created_at)
         (project_dir / "project.json").write_text(
