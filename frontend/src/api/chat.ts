@@ -1,4 +1,5 @@
 import { detoxMentions, parseMentions } from '../utils/mentions'
+import { readSseLines } from '../utils/sse'
 import { ollamaHeaders } from './health'
 import {
   allLlmHeaders,
@@ -9,6 +10,8 @@ import {
   type LLMProvider,
 } from './llm'
 import type { SourceInfo } from './papers'
+
+const DONE_SENTINEL = '[DONE]'
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
@@ -67,5 +70,27 @@ export function streamChat(
     },
     body: JSON.stringify({ model, messages: outgoing }),
     signal,
+  })
+}
+
+/**
+ * Drains the backend chat token stream (newline-delimited `data: …` lines
+ * with a `[DONE]` sentinel), invoking `onToken` for each token. Re-throws
+ * provider error events; swallows only SyntaxError from malformed lines.
+ */
+export async function consumeChatTokenStream(
+  body: ReadableStream<Uint8Array>,
+  onToken: (token: string) => void
+): Promise<void> {
+  await readSseLines(body, (raw) => {
+    if (raw === DONE_SENTINEL) return true
+    try {
+      const evt = JSON.parse(raw) as { token?: string; error?: string }
+      if (evt.error) throw new Error(evt.error)
+      if (typeof evt.token === 'string') onToken(evt.token)
+    } catch (parseErr) {
+      if (parseErr instanceof SyntaxError) return
+      throw parseErr
+    }
   })
 }

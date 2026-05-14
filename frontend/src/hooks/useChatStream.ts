@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { LLMProvider } from '../api/llm'
 import type { SourceInfo } from '../api/papers'
-import { type ChatMessage, streamChat } from '../api/chat'
-import { readSseLines } from '../utils/sse'
-
-const DONE_SENTINEL = '[DONE]'
+import { type ChatMessage, consumeChatTokenStream, streamChat } from '../api/chat'
 
 export type StreamStatus = 'ok' | 'aborted' | 'error'
 
@@ -183,27 +180,15 @@ export function useChatStream(): UseChatStream {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       if (!res.body) throw new Error('No response body')
 
-      await readSseLines(res.body, (raw) => {
-        if (raw === DONE_SENTINEL) return true
-        try {
-          const evt = JSON.parse(raw) as { token?: string; error?: string }
-          if (evt.error) throw new Error(evt.error)
-          const token = evt.token
-          if (typeof token !== 'string') return
-          commit((prev) => {
-            const copy = [...prev]
-            copy[assistantIndex] = {
-              ...copy[assistantIndex],
-              content: copy[assistantIndex].content + token,
-            }
-            return copy
-          })
-        } catch (parseErr) {
-          // Re-throw real provider errors; swallow only SyntaxError from
-          // malformed SSE lines.
-          if (parseErr instanceof SyntaxError) return
-          throw parseErr
-        }
+      await consumeChatTokenStream(res.body, (token) => {
+        commit((prev) => {
+          const copy = [...prev]
+          copy[assistantIndex] = {
+            ...copy[assistantIndex],
+            content: copy[assistantIndex].content + token,
+          }
+          return copy
+        })
       })
     } catch (err) {
       if ((err as Error).name === 'AbortError') {
