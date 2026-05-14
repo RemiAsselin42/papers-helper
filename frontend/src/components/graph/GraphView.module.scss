@@ -1,0 +1,413 @@
+@use '../../styles/mixins' as *;
+
+.root {
+  // Match ChatView's full-viewport sizing — fills the area below the header
+  // and inside `.content`'s padding without leaving any wasted vertical space.
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--space-sm);
+  height: calc(100dvh - var(--space-2xl) * 2 - var(--space-md));
+  padding: 0;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--font-size-heading-lg);
+  line-height: var(--line-height-heading-lg);
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-sm);
+  justify-content: space-between;
+  width: calc(100% - 120px);
+  align-items: end;
+}
+
+.button {
+  @include btn-secondary;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 8px 14px;
+  font: inherit;
+  font-size: var(--font-size-body-sm);
+  border: var(--border);
+  cursor: pointer;
+  transition: var(--transition-short);
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.canvas {
+  position: relative;
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  overflow: hidden;
+  min-height: 0;
+}
+
+.empty {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  padding: var(--space-2xl);
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.error {
+  color: var(--color-error);
+  font-size: var(--font-size-body-sm);
+}
+
+.retryButton {
+  @include btn-secondary;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 6px 14px;
+  margin-top: var(--space-sm);
+  font: inherit;
+  font-size: var(--font-size-body-sm);
+  border: var(--border);
+  cursor: pointer;
+}
+
+// ── Rebuild progress bar (top of canvas while a rebuild streams) ─────────────
+.progressBar {
+  position: absolute;
+  top: var(--space-sm);
+  right: var(--space-sm);
+  z-index: 12;
+  width: 240px;
+  height: 22px;
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+}
+
+.progressFill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  background: var(--color-emphasis);
+  transition: width 120ms linear;
+}
+
+.progressLabel {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  text-align: center;
+  font-size: var(--font-size-label);
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 var(--space-xs);
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  font-size: var(--font-size-label);
+  margin-bottom: 6px;
+  color: var(--color-text-muted);
+}
+
+// ── Floating filters menu (top-left of canvas) ──────────────────────────────
+.filtersFloating {
+  position: absolute;
+  top: var(--space-sm);
+  left: var(--space-sm);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-xs);
+}
+
+.filtersToggle {
+  @include btn-secondary;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 6px 10px;
+  font: inherit;
+  font-size: var(--font-size-body-sm);
+  background: var(--color-background);
+  color: var(--color-text);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: var(--transition-short);
+}
+
+.filtersPanel {
+  width: 240px;
+}
+
+// ── Filters card (also rendered inside .filtersPanel for the floating menu)
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+}
+
+.filtersTitle {
+  font-size: var(--font-size-label);
+  font-weight: 600;
+  letter-spacing: var(--letter-spacing-label);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.toggleRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--font-size-body-sm);
+  cursor: pointer;
+  user-select: none;
+
+  input {
+    accent-color: var(--color-emphasis);
+  }
+}
+
+.swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.swatchPaper {
+  background: var(--color-accent);
+}
+
+.swatchAuthor {
+  background: var(--color-emphasis-2);
+}
+
+.swatchTheme {
+  background: var(--color-success);
+}
+
+.swatchConcept {
+  background: var(--color-error);
+}
+
+.slider {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+
+  label {
+    font-size: var(--font-size-label);
+    color: var(--color-text-muted);
+  }
+
+  input {
+    width: 100%;
+    accent-color: var(--color-emphasis);
+  }
+}
+
+// ── Node popover (portaled to document.body, anchored above the node) ──────
+// `position: fixed` so it escapes `.canvas` / `.root` overflow:hidden.
+// Coordinates are viewport-relative (the canvas adds getBoundingClientRect
+// to renderedPosition before emitting).
+.popover {
+  position: fixed;
+  transform: translate(-50%, calc(-100% - 14px));
+  background: var(--color-background);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  min-width: 180px;
+  max-width: 280px;
+  pointer-events: auto;
+
+  // Little caret pointing down to the node.
+  &::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 6px solid var(--color-border);
+  }
+}
+
+.popoverHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+
+  .infoBadge {
+    background-color: var(--color-surface);
+  }
+}
+
+.popoverClose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xs);
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+
+  &:hover {
+    background: var(--color-emphasis);
+    color: var(--color-background);
+  }
+}
+
+.popoverActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+
+  button {
+    @include btn-primary;
+    padding: 6px 12px;
+    gap: var(--space-sm);
+    flex-direction: row-reverse;
+    line-height: 1;
+  }
+}
+
+// ── Bottom footer overlay (secondary info, inside the canvas) ───────────────
+.footer {
+  position: absolute;
+  left: var(--space-sm);
+  right: var(--space-sm);
+  bottom: var(--space-sm);
+  z-index: 15;
+  padding: var(--space-md);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  max-height: 45%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  pointer-events: auto;
+}
+
+// ── Shared info atoms (used by popover + footer) ────────────────────────────
+.infoLabel {
+  word-break: break-word;
+  line-height: 1.3;
+  font-size: var(--font-size-body-sm);
+}
+
+.infoMeta {
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+}
+
+.infoBadge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-label);
+  letter-spacing: var(--letter-spacing-label);
+  text-transform: uppercase;
+  background: var(--color-background);
+  border: var(--border);
+}
+
+.infoData {
+  font-size: var(--font-size-body-sm);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-sm);
+
+  dt {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-label);
+    text-transform: uppercase;
+    letter-spacing: var(--letter-spacing-label);
+  }
+
+  dd {
+    margin: 0;
+    word-break: break-word;
+  }
+}
+
+.neighbors {
+  font-size: var(--font-size-body-sm);
+
+  ul {
+    margin: 4px 0 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+  }
+
+  li {
+    cursor: pointer;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    border: var(--border);
+
+    &:hover {
+      background: var(--color-emphasis);
+      color: var(--color-background);
+    }
+  }
+}
