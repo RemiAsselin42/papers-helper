@@ -11,12 +11,17 @@ import { AppHeader } from './components/layout/AppHeader'
 import { ChatView } from './components/chat/ChatView'
 import { DebugPanel } from './components/layout/DebugPanel'
 import { DropZone, type FileState } from './components/sources/DropZone'
+import { GraphView } from './components/graph/GraphView'
 import { ImportProgressToast } from './components/sources/ImportProgressToast'
 import { NewProjectView } from './components/layout/NewProjectView'
 import { NoProjectState } from './components/layout/NoProjectState'
 import { Skeleton } from './components/layout/Skeleton'
 import { OllamaSetupModal } from './components/modals/OllamaSetupModal'
 import { SourceList } from './components/sources/SourceList'
+import {
+  DEFAULT_FILTERS,
+  type SourceFilterState,
+} from './components/sources/SourceList.filters'
 import { setCachedSourceCount, clearCachedSourceCount } from './components/sources/SourceList.cache'
 import { ProblematiqueView } from './components/problematique/ProblematiqueView'
 import { Sidebar, type View } from './components/layout/Sidebar'
@@ -26,7 +31,10 @@ const STORAGE_KEY = 'currentProjectId'
 export default function App() {
   const [activeView, setActiveView] = useState<View>('import')
   const [refreshKey, setRefreshKey] = useState(0)
+  const [graphRefreshKey, setGraphRefreshKey] = useState(0)
   const [importStates, setImportStates] = useState<FileState[]>([])
+  const [openStem, setOpenStem] = useState<string | null>(null)
+  const [sourceFilter, setSourceFilter] = useState<SourceFilterState>(DEFAULT_FILTERS)
 
   const [projects, setProjects] = useState<ProjectInfo[]>([])
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null)
@@ -42,7 +50,11 @@ export default function App() {
   const [activeProvider, setActiveProvider] = useState<LLMProvider>(() => getStoredProvider())
   const { ollamaHealthy, providerReady } = useProviderReadiness(healthData, activeProvider)
 
-  const bump = () => setRefreshKey((k) => k + 1)
+  const bump = () => {
+    setRefreshKey((k) => k + 1)
+    setGraphRefreshKey((k) => k + 1)
+  }
+  const bumpGraph = useCallback(() => setGraphRefreshKey((k) => k + 1), [])
 
   // Coalesce rapid per-file completions (Zotero ZIP = dozens of files in a
   // few seconds) into a single SourceList refetch, so the list updates a few
@@ -104,6 +116,11 @@ export default function App() {
     } else {
       localStorage.removeItem(STORAGE_KEY)
     }
+    // Reset lifted state tied to a specific project so it doesn't leak across
+    // projects (e.g. a graph-driven author filter applied to project A would
+    // otherwise still be active after switching to project B).
+    setOpenStem(null)
+    setSourceFilter(DEFAULT_FILTERS)
   }, [currentProjectId])
 
   function handleProjectSelect(id: string) {
@@ -213,6 +230,7 @@ export default function App() {
               onSuccess={bump}
               onProgress={setImportStates}
               onFileCompleted={bumpDebounced}
+              onGraphUpdated={bumpGraph}
             />
           </div>
         )}
@@ -226,6 +244,10 @@ export default function App() {
             onDelete={bump}
             onReindexed={bump}
             onRequestImport={() => setActiveView('import')}
+            openStem={openStem}
+            onChangeOpenStem={setOpenStem}
+            filterState={sourceFilter}
+            onChangeFilterState={setSourceFilter}
           />
         )}
         {activeView === 'problematique' && <ProblematiqueView projectId={projectId} />}
@@ -237,6 +259,24 @@ export default function App() {
               if (!ollamaHealthy) setOllamaStatus('unavailable')
             }}
             onRequestApiKey={setApiKeyModalProvider}
+          />
+        )}
+        {activeView === 'graph' && (
+          <GraphView
+            projectId={projectId}
+            refreshKey={graphRefreshKey}
+            onOpenSource={(stem) => {
+              setOpenStem(stem)
+              setActiveView('sources')
+            }}
+            onFilterSources={(filter) => {
+              setSourceFilter({
+                ...DEFAULT_FILTERS,
+                author: filter.author ?? '',
+                category: filter.category ?? '',
+              })
+              setActiveView('sources')
+            }}
           />
         )}
         {activeView === 'debug' && <DebugPanel projectId={projectId} refreshKey={refreshKey} />}

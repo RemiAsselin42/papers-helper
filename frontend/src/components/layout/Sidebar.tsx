@@ -3,6 +3,7 @@ import {
   Bug,
   Files,
   MessageSquare,
+  Network,
   PanelLeftClose,
   PanelLeftOpen,
   Target,
@@ -17,6 +18,7 @@ export type View =
   | 'sources'
   | 'problematique'
   | 'chat'
+  | 'graph'
   | 'debug'
   | 'new-project'
   | 'all-projects'
@@ -110,6 +112,17 @@ export function Sidebar({
             <MessageSquare size={20} />
           </span>
           <span className={styles.label}>Chat</span>
+        </button>
+        <button
+          className={`${styles.tab} ${activeView === 'graph' ? styles.tabActive : ''}`}
+          onClick={() => onViewChange('graph')}
+          aria-label="Graph"
+          title="Graphe de connaissances"
+        >
+          <span className={styles.icon}>
+            <Network size={20} />
+          </span>
+          <span className={styles.label}>Graph</span>
         </button>
       </div>
 

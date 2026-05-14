@@ -1,6 +1,7 @@
 import { useRef, useState, useCallback, DragEvent } from 'react'
 import { HelpCircle } from 'lucide-react'
 import { addUrlSource } from '../../api/papers'
+import type { GraphUpdatedEvent } from '../../api/graph'
 import { allLlmHeaders } from '../../api/llm'
 import { ACCEPTED_INPUT_ATTR, isAcceptedDocument } from '../../constants/acceptedFormats'
 import { readSseEvents } from '../../utils/sse'
@@ -26,6 +27,10 @@ interface DropZoneProps {
   onSuccess?: () => void
   onProgress?: (states: FileState[]) => void
   onFileCompleted?: (filename: string) => void
+  /** Fires when the backend emits a `graph_updated` SSE event after a
+   * successful index step. Parent uses this to refetch the graph view
+   * without a polling interval. */
+  onGraphUpdated?: () => void
 }
 
 // Bulk upload includes parsing time for the whole batch — give it twice the
@@ -71,8 +76,15 @@ type UploadEvent =
   | UploadBibResult
   | UploadError
   | UploadDone
+  | GraphUpdatedEvent
 
-export function DropZone({ projectId, onSuccess, onProgress, onFileCompleted }: DropZoneProps) {
+export function DropZone({
+  projectId,
+  onSuccess,
+  onProgress,
+  onFileCompleted,
+  onGraphUpdated,
+}: DropZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const fileStatesRef = useRef<FileState[]>([])
@@ -129,13 +141,16 @@ export function DropZone({ projectId, onSuccess, onProgress, onFileCompleted }: 
         case 'error':
           upsertFile(event.filename, { status: 'error', error: event.error })
           return
+        case 'graph_updated':
+          onGraphUpdated?.()
+          return
         case 'done':
           setStatus('idle')
           onSuccess?.()
           return
       }
     },
-    [upsertFile, onFileCompleted, onSuccess]
+    [upsertFile, onFileCompleted, onGraphUpdated, onSuccess]
   )
 
   async function runImport(
