@@ -35,13 +35,13 @@
 }
 
 .panelLeft {
-  left: 0.2px;
+  left: 0px;
   transform: translateX(-100%);
   overflow: hidden;
 }
 
 .panelRight {
-  right: 0.2px;
+  right: 0px;
   transform: translateX(100%);
   overflow: hidden;
 }
@@ -141,7 +141,6 @@
 
   &:focus-visible {
     border-radius: 50%;
-    box-shadow: 0 0 0 2px var(--color-emphasis-2, var(--color-emphasis));
   }
 }
 
@@ -448,13 +447,12 @@
 .bubbleSkeleton {
   flex-shrink: 0;
   border-radius: var(--radius-md);
-  background:
-    linear-gradient(
-      90deg,
-      var(--color-surface) 0%,
-      var(--color-emphasis) 50%,
-      var(--color-surface) 100%
-    );
+  background: linear-gradient(
+    90deg,
+    var(--color-surface) 0%,
+    var(--color-emphasis) 50%,
+    var(--color-surface) 100%
+  );
   background-size: 200% 100%;
   animation: chatSkeletonShimmer 1.4s ease-in-out infinite;
   opacity: 0.5;
