@@ -1,7 +1,22 @@
-import { useEffect, useRef, useState } from 'react'
-import { Plus, Trash2, X } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Loader2, Plus, Sparkles, Trash2, X } from 'lucide-react'
+import {
+  consumeCondenseStream,
+  streamCondense,
+  type CondenseProgress,
+} from '../../api/condense'
+import {
+  getStoredApiKey,
+  getStoredExternalModel,
+  getStoredOllamaModel,
+  getStoredProvider,
+  PROVIDER_LABELS,
+  type LLMProvider,
+} from '../../api/llm'
+import { OLLAMA_FALLBACK_MODEL } from '../../hooks/usePerChatModel'
 import { updateSourceMetadata, type SourceInfo, type UpdateMetadataPayload } from '../../api/papers'
 import { extractBibtexCategories } from '../../utils/bibtex'
+import { ABSTRACT_PROMPT } from '../../prompts/abstract'
 import styles from './MetadataModal.module.scss'
 
 interface AuthorEntry {
@@ -24,6 +39,13 @@ interface MetadataModalProps {
   source: SourceInfo
   onSave: (updated: SourceInfo) => void
   onClose: () => void
+  /**
+   * Hard-gate: when false, the IA button is not rendered. /condense's map step
+   * always runs on Ollama, so without it the abstract generation is broken
+   * for any non-trivially short doc — better to hide the affordance entirely
+   * than to surface runtime errors.
+   */
+  ollamaAvailable: boolean
 }
 
 function parseAuthors(source: SourceInfo): AuthorEntry[] {
@@ -50,6 +72,52 @@ function parseAuthors(source: SourceInfo): AuthorEntry[] {
   return [{ first_name: '', last_name: '' }]
 }
 
+/**
+ * Build the human-readable lines shown in the IA progress hover panel. Returns
+ * 1–3 strings: a top-line phase label, an optional doc-counter, and an
+ * optional chunk-counter. The provider name is interpolated in the reduce
+ * label so the user sees which model is running each step.
+ */
+function progressLines(p: CondenseProgress, provider: LLMProvider | null): string[] {
+  const lines: string[] = []
+  const providerLabel = provider ? PROVIDER_LABELS[provider] : null
+
+  if (p.stem_index !== undefined && p.stems_total !== undefined) {
+    const stemLabel = p.stem ? ` · ${p.stem}` : ''
+    lines.push(`Document ${p.stem_index} / ${p.stems_total}${stemLabel}`)
+  }
+
+  switch (p.phase) {
+    case 'start': {
+      const strategyLabel =
+        p.strategy === 'full'
+          ? 'Synthèse en un appel'
+          : p.strategy === 'map_reduce_single'
+            ? 'Pré-réduction par chunk'
+            : 'Pré-réduction multi-documents'
+      lines.push(`Démarrage · ${strategyLabel}`)
+      break
+    }
+    case 'generating':
+      lines.push(providerLabel ? `Synthèse via ${providerLabel}…` : 'Synthèse en cours…')
+      break
+    case 'map':
+      if (p.done !== undefined && p.total !== undefined) {
+        lines.push(`Pré-réduction · chunk ${p.done} / ${p.total}`)
+      } else {
+        lines.push('Pré-réduction…')
+      }
+      break
+    case 'reduce':
+      lines.push(providerLabel ? `Synthèse via ${providerLabel}…` : 'Synthèse…')
+      break
+    case 'global_reduce':
+      lines.push(providerLabel ? `Synthèse finale via ${providerLabel}…` : 'Synthèse finale…')
+      break
+  }
+  return lines
+}
+
 function authorsToFlat(authors: AuthorEntry[]): string {
   return authors
     .filter((a) => a.first_name || a.last_name)
@@ -59,7 +127,13 @@ function authorsToFlat(authors: AuthorEntry[]): string {
     .join(' ; ')
 }
 
-export function MetadataModal({ projectId, source, onSave, onClose }: MetadataModalProps) {
+export function MetadataModal({
+  projectId,
+  source,
+  onSave,
+  onClose,
+  ollamaAvailable,
+}: MetadataModalProps) {
   const [draft, setDraft] = useState<MetadataDraft>(() => ({
     pdf_title: source.pdf_title,
     authors: parseAuthors(source),
@@ -71,16 +145,28 @@ export function MetadataModal({ projectId, source, onSave, onClose }: MetadataMo
   }))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [generatingAbstract, setGeneratingAbstract] = useState(false)
+  const [abstractError, setAbstractError] = useState<string | null>(null)
+  const [progress, setProgress] = useState<CondenseProgress | null>(null)
+  const [progressProvider, setProgressProvider] = useState<LLMProvider | null>(null)
   const firstInputRef = useRef<HTMLInputElement>(null)
+  const generateAbortRef = useRef<AbortController | null>(null)
+
+  const requestClose = useCallback(() => {
+    generateAbortRef.current?.abort()
+    onClose()
+  }, [onClose])
 
   useEffect(() => {
     firstInputRef.current?.focus()
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') requestClose()
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [requestClose])
+
+  useEffect(() => () => generateAbortRef.current?.abort(), [])
 
   function setField<K extends keyof MetadataDraft>(key: K, value: MetadataDraft[K]) {
     setDraft((d) => ({ ...d, [key]: value }))
@@ -104,7 +190,78 @@ export function MetadataModal({ projectId, source, onSave, onClose }: MetadataMo
     })
   }
 
+  async function handleGenerateAbstract() {
+    if (generatingAbstract) {
+      generateAbortRef.current?.abort()
+      return
+    }
+    if (!source.indexed) {
+      setAbstractError(
+        "La source n'est pas indexée — le contenu n'est pas disponible pour l'IA."
+      )
+      return
+    }
+    const provider = getStoredProvider()
+    const model =
+      provider === 'ollama'
+        ? (getStoredOllamaModel() ?? OLLAMA_FALLBACK_MODEL)
+        : getStoredExternalModel(provider)
+    if (provider !== 'ollama' && !getStoredApiKey(provider)) {
+      setAbstractError(`Clé API manquante pour ${PROVIDER_LABELS[provider]}.`)
+      return
+    }
+    if (provider === 'ollama' && !getStoredOllamaModel()) {
+      setAbstractError('Aucun modèle Ollama sélectionné.')
+      return
+    }
+    if (provider !== 'ollama' && !model) {
+      setAbstractError(`Aucun modèle sélectionné pour ${PROVIDER_LABELS[provider]}.`)
+      return
+    }
+
+    setAbstractError(null)
+    setGeneratingAbstract(true)
+    setProgress(null)
+    setProgressProvider(provider)
+    setField('abstract', '')
+
+    const controller = new AbortController()
+    generateAbortRef.current = controller
+    let acc = ''
+    try {
+      const res = await streamCondense(
+        projectId,
+        ABSTRACT_PROMPT,
+        [source.stem],
+        model,
+        controller.signal,
+        provider
+      )
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      if (!res.body) throw new Error('Pas de corps de réponse')
+      await consumeCondenseStream(
+        res.body,
+        (token) => {
+          acc += token
+          setField('abstract', acc)
+        },
+        setProgress
+      )
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        const msg = (err as Error).message?.trim()
+        setAbstractError(msg ? `Erreur de génération : ${msg}` : 'Erreur de génération.')
+      }
+    } finally {
+      setGeneratingAbstract(false)
+      setProgress(null)
+      setProgressProvider(null)
+      generateAbortRef.current = null
+    }
+  }
+
   async function handleSave() {
+    if (generatingAbstract) generateAbortRef.current?.abort()
     setSaving(true)
     setError(null)
     const authors = draft.authors.filter((a) => a.first_name || a.last_name)
@@ -128,11 +285,14 @@ export function MetadataModal({ projectId, source, onSave, onClose }: MetadataMo
   }
 
   return (
-    <div className={styles.overlay} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div
+      className={styles.overlay}
+      onMouseDown={(e) => e.target === e.currentTarget && requestClose()}
+    >
       <div className={styles.dialog} role="dialog" aria-modal aria-label="Modifier les métadonnées">
         <div className={styles.header}>
           <span className={styles.headerTitle}>Modifier les métadonnées</span>
-          <button className={styles.closeBtn} onClick={onClose} aria-label="Fermer">
+          <button className={styles.closeBtn} onClick={requestClose} aria-label="Fermer">
             <X size={20} />
           </button>
         </div>
@@ -236,14 +396,61 @@ export function MetadataModal({ projectId, source, onSave, onClose }: MetadataMo
 
           <div className={styles.field}>
             <label className={styles.label}>Résumé</label>
-            <textarea
-              className={styles.textarea}
-              value={draft.abstract}
-              onChange={(e) => setField('abstract', e.target.value)}
-              placeholder="Résumé ou description de la source"
-              disabled={saving}
-              rows={4}
-            />
+            <div className={styles.textareaWrap}>
+              <textarea
+                className={
+                  ollamaAvailable
+                    ? `${styles.textarea} ${styles.textareaWithIa}`
+                    : styles.textarea
+                }
+                value={draft.abstract}
+                onChange={(e) => setField('abstract', e.target.value)}
+                placeholder="Résumé ou description de la source"
+                disabled={saving || generatingAbstract}
+                rows={4}
+              />
+              {ollamaAvailable && (
+                <div className={styles.iaBtnWrap}>
+                  <button
+                    type="button"
+                    className={styles.iaBtn}
+                    onClick={handleGenerateAbstract}
+                    disabled={saving}
+                    title={
+                      generatingAbstract ? 'Annuler la génération' : 'Générer un résumé avec l’IA'
+                    }
+                    aria-label={
+                      generatingAbstract
+                        ? 'Annuler la génération du résumé'
+                        : 'Générer un résumé avec l’IA'
+                    }
+                  >
+                    {generatingAbstract ? (
+                      <Loader2 size={14} className={styles.iaSpin} />
+                    ) : (
+                      <Sparkles size={14} />
+                    )}
+                    <span>IA</span>
+                  </button>
+                  {generatingAbstract && progress && (
+                    <div
+                      className={styles.iaProgressPanel}
+                      role="status"
+                      aria-live="polite"
+                      aria-label="Avancement de la génération"
+                    >
+                      <div className={styles.iaProgressTitle}>Génération en cours</div>
+                      {progressLines(progress, progressProvider).map((line) => (
+                        <div key={line} className={styles.iaProgressLine}>
+                          {line}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            {abstractError && <p className={styles.error}>{abstractError}</p>}
           </div>
 
           <div className={styles.field}>
@@ -262,10 +469,14 @@ export function MetadataModal({ projectId, source, onSave, onClose }: MetadataMo
         </div>
 
         <div className={styles.footer}>
-          <button className={styles.cancelBtn} onClick={onClose} disabled={saving}>
+          <button className={styles.cancelBtn} onClick={requestClose} disabled={saving}>
             Annuler
           </button>
-          <button className={styles.saveBtn} onClick={handleSave} disabled={saving}>
+          <button
+            className={styles.saveBtn}
+            onClick={handleSave}
+            disabled={saving || generatingAbstract}
+          >
             {saving ? 'Enregistrement…' : 'Enregistrer'}
           </button>
         </div>

@@ -130,6 +130,107 @@
   }
 }
 
+.textareaWrap {
+  position: relative;
+  --ia-btn-clearance: 64px;
+}
+
+.textareaWithIa {
+  padding-right: var(--ia-btn-clearance);
+}
+
+.iaBtnWrap {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
+
+.iaBtn {
+  min-width: calc(var(--ia-btn-clearance) - 12px);
+  display: inline-flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: var(--font-size-label);
+  font-weight: 600;
+  letter-spacing: var(--letter-spacing-label);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: var(--transition-short);
+
+  &:hover:not(:disabled) {
+    background: var(--color-emphasis);
+    border-color: var(--color-emphasis);
+    color: var(--color-background);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+.iaSpin {
+  animation: metadataModalSpin 0.9s linear infinite;
+}
+
+// Hover-only progress panel anchored above the IA button while a long
+// map-reduce run is in flight. Hidden by default; revealed on hover/focus
+// so it doesn't clutter the modal during quick (full-doc) generations.
+.iaProgressPanel {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  min-width: 220px;
+  max-width: 320px;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text);
+  white-space: normal;
+  z-index: 10;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(2px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.iaBtnWrap:hover .iaProgressPanel,
+.iaBtnWrap:focus-within .iaProgressPanel {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.iaProgressTitle {
+  font-size: var(--font-size-label);
+  font-weight: 700;
+  letter-spacing: var(--letter-spacing-label);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-xs);
+}
+
+.iaProgressLine {
+  font-size: var(--font-size-body-sm);
+  line-height: 1.4;
+  color: var(--color-text);
+}
+
+@keyframes metadataModalSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 // Categories
 .categories {
   display: flex;

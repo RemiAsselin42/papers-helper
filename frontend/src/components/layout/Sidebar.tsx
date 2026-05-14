@@ -30,6 +30,12 @@ interface SidebarProps {
   currentProjectId: string | null
   onProjectSelect: (id: string) => void
   loading?: boolean
+  /**
+   * Hard-gate: when false, the Chat tab is not rendered. Chat needs Ollama
+   * for the map step of /condense (and would also be inconsistent with the
+   * hidden IA button in MetadataModal).
+   */
+  ollamaAvailable?: boolean
 }
 
 export function Sidebar({
@@ -39,6 +45,7 @@ export function Sidebar({
   currentProjectId,
   onProjectSelect,
   loading = false,
+  ollamaAvailable = true,
 }: SidebarProps) {
   const [pinned, setPinned] = useState(false)
 
@@ -102,17 +109,19 @@ export function Sidebar({
           </span>
           <span className={styles.label}>Problématique</span>
         </button>
-        <button
-          className={`${styles.tab} ${activeView === 'chat' ? styles.tabActive : ''}`}
-          onClick={() => onViewChange('chat')}
-          aria-label="Chat"
-          title="Chat avec un modèle"
-        >
-          <span className={styles.icon}>
-            <MessageSquare size={20} />
-          </span>
-          <span className={styles.label}>Chat</span>
-        </button>
+        {ollamaAvailable && (
+          <button
+            className={`${styles.tab} ${activeView === 'chat' ? styles.tabActive : ''}`}
+            onClick={() => onViewChange('chat')}
+            aria-label="Chat"
+            title="Chat avec un modèle"
+          >
+            <span className={styles.icon}>
+              <MessageSquare size={20} />
+            </span>
+            <span className={styles.label}>Chat</span>
+          </button>
+        )}
         <button
           className={`${styles.tab} ${activeView === 'graph' ? styles.tabActive : ''}`}
           onClick={() => onViewChange('graph')}

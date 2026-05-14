@@ -2,7 +2,7 @@ import { AlertCircle, BookOpen } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import styles from './App.module.scss'
 import { checkHealth, getStoredOllamaUrl, type HealthData } from './api/health'
-import { getStoredProvider, isActiveProviderReady, type LLMProvider } from './api/llm'
+import { getStoredProvider, type LLMProvider } from './api/llm'
 import { useProviderReadiness } from './hooks/useProviderReadiness'
 import { listProjects, type ProjectInfo } from './api/projects'
 import { AllProjectsView } from './components/layout/AllProjectsView'
@@ -90,13 +90,13 @@ export default function App() {
           setCurrentProjectId(list[0].id)
         }
         setHealthData(health)
-        // Modal only matters when the active provider isn't ready — i.e. user
-        // picked Ollama and it's broken, OR they picked an external provider
-        // but haven't saved a key yet. We can't read the hook output here
-        // (it's derived from the healthData we just set), so inline the check.
+        // Warn whenever Ollama itself is broken, independent of the active
+        // provider: the Chat tab and the IA generators are hard-gated on
+        // Ollama (embeddings + map step), so a user on Anthropic still loses
+        // those features when Ollama is down and deserves to know why.
         const healthy =
           health.ollama === 'connected' && health.ollama_models.every((m) => m.available)
-        if (isActiveProviderReady(healthy)) {
+        if (healthy) {
           setOllamaStatus('connected')
         } else if (!dismissed) {
           setOllamaStatus('unavailable')
@@ -150,6 +150,14 @@ export default function App() {
     }
   }
 
+  // Hard-gate: Chat view and the IA generators rely on Ollama (chat for the
+  // model, /condense for the map step). When it disappears mid-session we
+  // bounce the user out of an unreachable view rather than leaving them
+  // staring at a broken page.
+  useEffect(() => {
+    if (!ollamaHealthy && activeView === 'chat') setActiveView('sources')
+  }, [ollamaHealthy, activeView])
+
   const sidebar = (
     <Sidebar
       activeView={activeView}
@@ -158,6 +166,7 @@ export default function App() {
       currentProjectId={currentProjectId}
       onProjectSelect={handleProjectSelect}
       loading={!projectsLoaded}
+      ollamaAvailable={ollamaHealthy}
     />
   )
 
@@ -165,9 +174,10 @@ export default function App() {
 
   function handleProviderChange(p: LLMProvider) {
     setActiveProvider(p)
-    // Re-evaluation runs implicitly via useProviderReadiness; only the status
-    // gate flips to 'connected' if the new provider is already usable.
-    if (providerReady) setOllamaStatus('connected')
+    // Switching provider doesn't restore Ollama; the warning is anchored to
+    // Ollama's health (Chat tab + IA gen depend on it), so we only silence
+    // the modal/banner when Ollama itself is back.
+    if (ollamaHealthy) setOllamaStatus('connected')
   }
 
   const header = (
@@ -240,6 +250,7 @@ export default function App() {
             projectId={projectId}
             refreshKey={refreshKey}
             ollamaReady={providerReady}
+            ollamaAvailable={ollamaHealthy}
             inFlightImports={importStates}
             onDelete={bump}
             onReindexed={bump}
@@ -314,9 +325,9 @@ export default function App() {
           provider={apiKeyModalProvider}
           onSave={() => {
             setApiKeyModalProvider(null)
-            // Saving a key may make the active provider ready — silence the
-            // Ollama modal/banner if so.
-            if (isActiveProviderReady(ollamaHealthy)) {
+            // The Ollama warning isn't about provider keys — only silence it
+            // when Ollama itself is healthy.
+            if (ollamaHealthy) {
               setOllamaStatus('connected')
             }
           }}

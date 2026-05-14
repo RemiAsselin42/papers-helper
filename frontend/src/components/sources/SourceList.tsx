@@ -24,6 +24,13 @@ interface SourceListProps {
   projectId: string
   refreshKey?: number
   ollamaReady?: boolean
+  /**
+   * Forwarded to MetadataModal's IA button (hard-gate). Distinct from
+   * `ollamaReady`, which reflects the *active provider's* readiness — the
+   * abstract generator specifically needs Ollama for the map step regardless
+   * of which provider runs the reduce.
+   */
+  ollamaAvailable?: boolean
   inFlightImports?: FileState[]
   onDelete?: () => void
   onReindexed?: () => void
@@ -44,6 +51,7 @@ export function SourceList({
   projectId,
   refreshKey,
   ollamaReady = true,
+  ollamaAvailable = true,
   inFlightImports,
   onDelete,
   onReindexed,
@@ -300,6 +308,7 @@ export function SourceList({
           source={editingSource}
           onSave={handleSaved}
           onClose={() => setEditingSource(null)}
+          ollamaAvailable={ollamaAvailable}
         />
       )}
     </div>
