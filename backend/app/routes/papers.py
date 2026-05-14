@@ -2,18 +2,21 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+import logging
 import mimetypes
 import socket
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from app.chroma import get_collection
 from app.config import PROJECTS_DIR
+from app.graph import graph_remove_source, graph_update_source
+from app.graph.concepts import CONCEPT_INPUT_FIELDS
 from app.ingestion import (
     EDITABLE_META_KEYS,
     SidecarMeta,
@@ -26,6 +29,8 @@ from app.ingestion import (
     sidecar_path,
     write_sidecar,
 )
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/projects/{project_id}/papers", tags=["papers"])
 
@@ -164,6 +169,25 @@ def _paper_from_meta(meta: SidecarMeta, chunk_total: int) -> PaperInfo:
         indexed=chunk_total > 0,
         index_error=meta.index_error,
     )
+
+
+async def _safe_graph_update(project_id: str, stem: str) -> None:
+    """BackgroundTasks-friendly wrapper: never raises, always logs.
+
+    Concept extraction can stall for seconds on the LLM round-trip; we defer
+    it so PATCH/DELETE responses don't block the user on graph work.
+    """
+    try:
+        await graph_update_source(project_id, stem)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("graph_update_source (bg) failed for %s/%s: %s", project_id, stem, exc)
+
+
+async def _safe_graph_remove(project_id: str, stem: str) -> None:
+    try:
+        await graph_remove_source(project_id, stem)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("graph_remove_source (bg) failed for %s/%s: %s", project_id, stem, exc)
 
 
 def _paper_from_chroma_meta(meta: dict[str, Any]) -> PaperInfo:
@@ -328,6 +352,7 @@ async def update_paper_metadata(
     project_id: str,
     stem: str,
     body: UpdateMetadataRequest,
+    background_tasks: BackgroundTasks,
     files_dir: Path = Depends(_get_files_dir),
 ) -> PaperInfo:
     def _update() -> PaperInfo:
@@ -369,8 +394,17 @@ async def update_paper_metadata(
 
         patch = body.model_dump(exclude_none=True)
         patch = {k: v for k, v in patch.items() if k in EDITABLE_META_KEYS}
+        # Invalidate cached concepts when their inputs change: extract_concepts
+        # reads `pdf_title` + `abstract`, so a real edit to either must trigger
+        # a fresh extraction on the next graph_update_source call.
+        concepts_inputs_changed = any(
+            field in patch and patch[field] != getattr(sidecar, field)
+            for field in CONCEPT_INPUT_FIELDS
+        )
         for k, v in patch.items():
             setattr(sidecar, k, v)
+        if concepts_inputs_changed:
+            sidecar.concepts_json = ""
 
         write_sidecar(files_dir, sidecar)
 
@@ -382,7 +416,13 @@ async def update_paper_metadata(
 
         return _paper_from_meta(sidecar, chunk_total)
 
-    return await asyncio.to_thread(_update)
+    paper = await asyncio.to_thread(_update)
+    # Sync the graph with the patched metadata off the request path. Concept
+    # extraction is an LLM round-trip; running it inline would make the user
+    # wait seconds for a PATCH that already finished on disk. Best-effort:
+    # `_safe_graph_update` never raises.
+    background_tasks.add_task(_safe_graph_update, project_id, stem)
+    return paper
 
 
 @router.post("/reindex")
@@ -445,6 +485,7 @@ async def add_url_source(
 async def delete_paper(
     project_id: str,
     stem: str,
+    background_tasks: BackgroundTasks,
     files_dir: Path = Depends(_get_files_dir),
 ) -> None:
     def _delete() -> tuple[str | None, bool]:
@@ -475,3 +516,6 @@ async def delete_paper(
         file_path = _resolve_file_path(project_id, filename)
         if file_path:
             file_path.unlink(missing_ok=True)
+    # Drop the paper from the knowledge graph off the request path so the
+    # 204 lands instantly. Best-effort: `_safe_graph_remove` never raises.
+    background_tasks.add_task(_safe_graph_remove, project_id, stem)

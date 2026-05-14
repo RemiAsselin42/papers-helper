@@ -142,7 +142,10 @@ class TestReindexEndpoint:
     ) -> list[dict[str, Any]]:
         with (
             patch("app.routes.papers.PROJECTS_DIR", project_dir.parent),
+            patch("app.graph.storage.PROJECTS_DIR", project_dir.parent),
+            patch("app.graph.builder.PROJECTS_DIR", project_dir.parent),
             patch("app.ingestion.get_collection", return_value=collection),
+            patch("app.graph.builder.get_collection", return_value=collection),
             patch("app.ingestion.evict_collection"),
         ):
             resp = client.post(f"/projects/{project_dir.name}/papers/reindex")
@@ -203,7 +206,10 @@ class TestReindexEndpoint:
 
         with (
             patch("app.routes.papers.PROJECTS_DIR", project_dir.parent),
+            patch("app.graph.storage.PROJECTS_DIR", project_dir.parent),
+            patch("app.graph.builder.PROJECTS_DIR", project_dir.parent),
             patch("app.ingestion.get_collection", return_value=col),
+            patch("app.graph.builder.get_collection", return_value=col),
             patch("app.ingestion.evict_collection"),
             patch("pathlib.Path.read_bytes", side_effect=OSError("permission denied")),
         ):

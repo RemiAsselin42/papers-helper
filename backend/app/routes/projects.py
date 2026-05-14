@@ -13,6 +13,7 @@ from pydantic import BaseModel, model_validator
 
 from app.chroma import evict_collection
 from app.config import PROJECTS_DIR
+from app.graph import evict_graph_lock
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -154,6 +155,7 @@ async def delete_project(project_id: str) -> None:
         raise HTTPException(status_code=404, detail="Project not found")
 
     evict_collection(project_id)
+    evict_graph_lock(project_id)
     gc.collect()
 
     await asyncio.to_thread(shutil.rmtree, str(PROJECTS_DIR / project_id))

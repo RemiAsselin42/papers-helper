@@ -102,7 +102,10 @@ def test_upload_succeeds_when_embedding_fails(client: TestClient, project_dir: P
 
     with (
         patch("app.routes.papers.PROJECTS_DIR", project_dir.parent),
+        patch("app.graph.storage.PROJECTS_DIR", project_dir.parent),
+        patch("app.graph.builder.PROJECTS_DIR", project_dir.parent),
         patch("app.ingestion.get_collection", return_value=raising),
+        patch("app.graph.builder.get_collection", return_value=raising),
     ):
         resp = client.post(
             f"/projects/{project_dir.name}/papers/upload/stream",
@@ -183,7 +186,10 @@ def test_single_reindex_recovers_unindexed_source(client: TestClient, project_di
     recording = _RecordingCollection()
     with (
         patch("app.routes.papers.PROJECTS_DIR", project_dir.parent),
+        patch("app.graph.storage.PROJECTS_DIR", project_dir.parent),
+        patch("app.graph.builder.PROJECTS_DIR", project_dir.parent),
         patch("app.ingestion.get_collection", return_value=recording),
+        patch("app.graph.builder.get_collection", return_value=recording),
     ):
         resp = client.post(f"/projects/{project_dir.name}/papers/paper/reindex")
 
@@ -213,7 +219,10 @@ def test_delete_unindexed_source_removes_file_and_sidecar(
     raising = _RaisingCollection()
     with (
         patch("app.routes.papers.PROJECTS_DIR", project_dir.parent),
+        patch("app.graph.storage.PROJECTS_DIR", project_dir.parent),
+        patch("app.graph.builder.PROJECTS_DIR", project_dir.parent),
         patch("app.routes.papers.get_collection", return_value=raising),
+        patch("app.graph.builder.get_collection", return_value=raising),
     ):
         resp = client.delete(f"/projects/{project_dir.name}/papers/paper")
 

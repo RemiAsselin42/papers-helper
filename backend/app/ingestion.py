@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import io
 import json
+import logging
 import re
 import time
 import zipfile
@@ -17,6 +18,7 @@ import httpx
 from fastapi import UploadFile
 
 from app.chroma import evict_collection, get_collection
+from app.graph import graph_add_source, graph_rebuild
 from app.parsers import (
     MANIFEST_EXTENSIONS,
     MAX_FILE_SIZE,
@@ -27,6 +29,8 @@ from app.parsers import (
     parse_bibtex,
 )
 from app.parsers._bibtex import normalize_title
+
+log = logging.getLogger(__name__)
 
 MAX_TOTAL_UPLOAD_SIZE = 200 * 1024 * 1024  # 200 MB across all files in one request
 
@@ -53,6 +57,10 @@ class SidecarMeta:
     categories: str = ""
     index_error: str = ""
     indexed_at: str = ""
+    # Concepts extracted once by the LLM (see app.graph.concepts) and cached
+    # here as a JSON-encoded list so subsequent graph operations are free.
+    # Derived from content; never user-edited (absent from EDITABLE_META_KEYS).
+    concepts_json: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -251,6 +259,11 @@ def _parse_source(
             existing = getattr(sidecar_overrides, key, "")
             if existing:
                 setattr(meta, key, existing)
+        # concepts_json is content-derived (LLM keyword extraction) but cached
+        # in the sidecar so subsequent graph operations are free. Preserve it
+        # through a reparse so the LLM cost isn't paid again unnecessarily.
+        if sidecar_overrides.concepts_json:
+            meta.concepts_json = sidecar_overrides.concepts_json
 
     return _ParsedSource(text=text, chunks=chunks, meta=meta)
 
@@ -396,6 +409,31 @@ def _result_event(
     }
 
 
+async def _graph_update_event(project_id: str, filename: str, stem: str) -> str | None:
+    """Run the graph add hook for a freshly-indexed source and return the SSE
+    event line to yield. Best-effort: any failure logs a warning and returns
+    None so the ingestion stream keeps moving."""
+    try:
+        result = await graph_add_source(project_id, stem)
+    except Exception as exc:  # noqa: BLE001 — must not interrupt ingestion
+        log.warning("graph hook failed for %s/%s: %s", project_id, stem, exc)
+        return None
+    return _sse(
+        {
+            "type": "graph_updated",
+            "filename": filename,
+            "stem": stem,
+            "added": bool(result.get("added", False)),
+            # Surfaced to the frontend so the user gets a visible reason when
+            # a paper silently fails to enter the graph (e.g. no sidecar could
+            # be synthesised). Empty string when added=True.
+            "reason": str(result.get("reason", "") or ""),
+            "concepts": int(result.get("concepts", 0)),
+            "semantic_edges": int(result.get("semantic_edges", 0)),
+        }
+    )
+
+
 async def _stream_upload(
     project_id: str,
     files: list[UploadFile],
@@ -503,7 +541,12 @@ async def _stream_upload(
             yield _sse({"type": "error", "filename": filename, "error": parse_err})
             continue
 
-        yield _sse(_result_event(filename=filename, stem=Path(filename).stem, outcome=outcome))
+        stem = Path(filename).stem
+        yield _sse(_result_event(filename=filename, stem=stem, outcome=outcome))
+        if outcome.indexed:
+            ev = await _graph_update_event(project_id, filename, stem)
+            if ev:
+                yield ev
 
     yield _sse({"type": "done"})
 
@@ -581,6 +624,10 @@ async def _stream_url_import(
     # Surface the URL as the event's filename so the frontend toast stays
     # consistent with the upload progress view.
     yield _sse(_result_event(filename=url, stem=stem, outcome=outcome))
+    if outcome.indexed:
+        ev = await _graph_update_event(project_id, url, stem)
+        if ev:
+            yield ev
     yield _sse({"type": "done"})
 
 
@@ -617,6 +664,10 @@ async def _stream_single_reindex(
         return
 
     yield _sse(_result_event(filename=filename, stem=stem, outcome=outcome))
+    if outcome.indexed:
+        ev = await _graph_update_event(project_id, filename, stem)
+        if ev:
+            yield ev
     yield _sse({"type": "done"})
 
 
@@ -740,5 +791,15 @@ async def _stream_reindex(project_id: str, files_dir: Path) -> AsyncGenerator[st
                     col.update(ids=res["ids"], metadatas=updated)  # type: ignore[arg-type]
 
         await asyncio.to_thread(_restore_all)
+
+    # 5. Rebuild the knowledge graph from the fresh index. Events are
+    # `graph_*`-prefixed so the frontend can render them separately from
+    # ingestion events. Best-effort: a rebuild failure must not mask the
+    # ingestion-level `done` event the UI is waiting on.
+    try:
+        async for ev in graph_rebuild(project_id):
+            yield ev
+    except Exception as exc:  # noqa: BLE001 — graph rebuild is enrichment
+        log.warning("graph rebuild failed for project %s: %s", project_id, exc)
 
     yield _sse({"type": "done", "total": indexed, "failed": failed})
