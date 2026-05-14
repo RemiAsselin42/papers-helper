@@ -21,6 +21,38 @@ _OPENAI_COMPATIBLE_BASE_URLS: dict[LLMProvider, str] = {
 }
 
 
+# Conservative fallback for unknown models. 32k matches most local Ollama
+# defaults and the smallest external windows (older GPT-3.5, Mistral small).
+DEFAULT_CONTEXT_LIMIT = 32_000
+
+# Provider-prefix → input context window (tokens). Matched in get_context_limit
+# by the LONGEST prefix that is a str.startswith() of the model id, so more
+# specific entries win over generic ones for the same provider. Vendors don't
+# expose this via API uniformly (Anthropic/OpenAI omit it), so the table is
+# hand-maintained — bump it when shipping support for a new model family.
+CONTEXT_LIMITS: dict[tuple[LLMProvider, str], int] = {
+    (LLMProvider.ANTHROPIC, "claude"): 200_000,
+    (LLMProvider.OPENAI, "gpt-4.1"): 1_000_000,
+    (LLMProvider.OPENAI, "gpt-4o"): 128_000,
+    (LLMProvider.OPENAI, "o"): 200_000,
+    (LLMProvider.GEMINI, "gemini-2"): 2_000_000,
+    (LLMProvider.GEMINI, "gemini-1.5"): 1_000_000,
+    (LLMProvider.PERPLEXITY, "sonar"): 128_000,
+    (LLMProvider.DEEPSEEK, "deepseek"): 128_000,
+}
+
+
+def get_context_limit(provider: LLMProvider, model: str) -> int:
+    candidates = sorted(
+        ((p, prefix) for (p, prefix) in CONTEXT_LIMITS if p == provider),
+        key=lambda kv: -len(kv[1]),
+    )
+    for p, prefix in candidates:
+        if model.startswith(prefix):
+            return CONTEXT_LIMITS[(p, prefix)]
+    return DEFAULT_CONTEXT_LIMIT
+
+
 class ExternalLLMService:
     def __init__(self, provider: LLMProvider, api_key: str, model: str) -> None:
         self.provider = provider
