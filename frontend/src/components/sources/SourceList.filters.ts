@@ -20,6 +20,7 @@ export interface SourceFilterState {
   type: string
   year: string
   category: string
+  author: string
   indexed: IndexedFilter
 }
 
@@ -30,6 +31,7 @@ export const DEFAULT_FILTERS: SourceFilterState = {
   type: '',
   year: '',
   category: '',
+  author: '',
   indexed: 'all',
 }
 
@@ -39,6 +41,7 @@ export function isFilterActive(state: SourceFilterState): boolean {
     state.type !== '' ||
     state.year !== '' ||
     state.category !== '' ||
+    state.author.trim() !== '' ||
     state.indexed !== 'all'
   )
 }
@@ -88,6 +91,12 @@ export function filterSources(
     if (state.category) {
       const cats = categoriesByStem?.get(s.stem) ?? extractBibtexCategories(s.pdf_title)
       if (!cats.includes(state.category)) return false
+    }
+    if (state.author.trim()) {
+      const needleAuthor = state.author.toLowerCase().trim()
+      const haystackAuthor =
+        `${s.author} ${s.authors_json}`.toLowerCase()
+      if (!haystackAuthor.includes(needleAuthor)) return false
     }
     if (state.indexed === 'indexed' && !s.indexed) return false
     if (state.indexed === 'unindexed' && s.indexed) return false

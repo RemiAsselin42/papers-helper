@@ -28,6 +28,16 @@ interface SourceListProps {
   onDelete?: () => void
   onReindexed?: () => void
   onRequestImport?: () => void
+  /** Optionally lift the "currently-open preview" stem to a parent so other
+   * features (e.g. clicking a node in the graph) can drive it. When omitted,
+   * SourceList manages it locally. */
+  openStem?: string | null
+  onChangeOpenStem?: (stem: string | null) => void
+  /** Optionally lift the filter state to a parent so the graph view can apply
+   * an author/category filter before switching to the Sources view. When
+   * omitted, SourceList manages it locally. */
+  filterState?: SourceFilterState
+  onChangeFilterState?: (next: SourceFilterState) => void
 }
 
 export function SourceList({
@@ -38,6 +48,10 @@ export function SourceList({
   onDelete,
   onReindexed,
   onRequestImport,
+  openStem: openStemProp,
+  onChangeOpenStem,
+  filterState: filterStateProp,
+  onChangeFilterState,
 }: SourceListProps) {
   const [sources, setSources] = useState<SourceInfo[]>([])
   const [loading, setLoading] = useState(true)
@@ -45,9 +59,19 @@ export function SourceList({
   const [deletingStem, setDeletingStem] = useState<string | null>(null)
   const [reindexingStem, setReindexingStem] = useState<string | null>(null)
   const [editingSource, setEditingSource] = useState<SourceInfo | null>(null)
-  const [openStem, setOpenStem] = useState<string | null>(null)
+  const [openStemLocal, setOpenStemLocal] = useState<string | null>(null)
+  const openStem = openStemProp !== undefined ? openStemProp : openStemLocal
+  const setOpenStem = (next: string | null) => {
+    onChangeOpenStem?.(next)
+    if (openStemProp === undefined) setOpenStemLocal(next)
+  }
   const [networkError, setNetworkError] = useState<string | null>(null)
-  const [filterState, setFilterState] = useState<SourceFilterState>(DEFAULT_FILTERS)
+  const [filterStateLocal, setFilterStateLocal] = useState<SourceFilterState>(DEFAULT_FILTERS)
+  const filterState = filterStateProp ?? filterStateLocal
+  const setFilterState = (next: SourceFilterState) => {
+    onChangeFilterState?.(next)
+    if (filterStateProp === undefined) setFilterStateLocal(next)
+  }
   // Captured at mount; refreshed when projectId changes. Used only to bias
   // the *initial* loading render (skeletons vs. empty CTA).
   const [cachedCount, setCachedCount] = useState<number | null>(() =>
@@ -56,7 +80,11 @@ export function SourceList({
 
   useEffect(() => {
     setCachedCount(readCachedSourceCount(projectId))
-    setFilterState(DEFAULT_FILTERS)
+    // Only reset the local fallback here. When the parent owns the filter
+    // state, it is responsible for resetting on project change (App.tsx does
+    // this in its own `currentProjectId` effect).
+    if (filterStateProp === undefined) setFilterStateLocal(DEFAULT_FILTERS)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
 
   const fetchSources = useCallback(async () => {
