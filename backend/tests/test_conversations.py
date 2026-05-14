@@ -265,9 +265,7 @@ def _seed_conversation(client: TestClient, project_name: str, n_messages: int) -
 
 
 class TestConversationPagination:
-    def test_get_no_pagination_returns_full(
-        self, client: TestClient, project_dir: Path
-    ) -> None:
+    def test_get_no_pagination_returns_full(self, client: TestClient, project_dir: Path) -> None:
         with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
             cid = _seed_conversation(client, project_dir.name, 8)
             resp = client.get(f"/projects/{project_dir.name}/conversations/{cid}")
@@ -279,9 +277,7 @@ class TestConversationPagination:
         assert data["message_count"] == 8
         assert data["messages_offset"] == 0
 
-    def test_get_with_limit_returns_tail(
-        self, client: TestClient, project_dir: Path
-    ) -> None:
+    def test_get_with_limit_returns_tail(self, client: TestClient, project_dir: Path) -> None:
         with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
             cid = _seed_conversation(client, project_dir.name, 50)
             resp = client.get(
@@ -296,9 +292,7 @@ class TestConversationPagination:
         assert data["messages"][0]["content"] == "msg-40"
         assert data["messages"][-1]["content"] == "msg-49"
 
-    def test_get_with_offset_and_limit_window(
-        self, client: TestClient, project_dir: Path
-    ) -> None:
+    def test_get_with_offset_and_limit_window(self, client: TestClient, project_dir: Path) -> None:
         with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
             cid = _seed_conversation(client, project_dir.name, 30)
             resp = client.get(
@@ -317,9 +311,7 @@ class TestConversationPagination:
             "msg-14",
         ]
 
-    def test_get_offset_clamped_to_total(
-        self, client: TestClient, project_dir: Path
-    ) -> None:
+    def test_get_offset_clamped_to_total(self, client: TestClient, project_dir: Path) -> None:
         with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
             cid = _seed_conversation(client, project_dir.name, 5)
             resp = client.get(
@@ -359,9 +351,7 @@ class TestAppendMessages:
     ) -> None:
         with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
             cid = _seed_conversation(client, project_dir.name, 3)
-            before = client.get(
-                f"/projects/{project_dir.name}/conversations/{cid}"
-            ).json()
+            before = client.get(f"/projects/{project_dir.name}/conversations/{cid}").json()
             resp = client.post(
                 f"/projects/{project_dir.name}/conversations/{cid}/messages",
                 json={
@@ -371,9 +361,7 @@ class TestAppendMessages:
                     ]
                 },
             )
-            after = client.get(
-                f"/projects/{project_dir.name}/conversations/{cid}"
-            ).json()
+            after = client.get(f"/projects/{project_dir.name}/conversations/{cid}").json()
         assert resp.status_code == 200
         summary = resp.json()
         assert summary["message_count"] == 5
@@ -394,9 +382,7 @@ class TestAppendMessages:
             )
         assert resp.status_code == 404
 
-    def test_append_messages_persists_to_disk(
-        self, client: TestClient, project_dir: Path
-    ) -> None:
+    def test_append_messages_persists_to_disk(self, client: TestClient, project_dir: Path) -> None:
         with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
             cid = _seed_conversation(client, project_dir.name, 2)
             client.post(
@@ -443,9 +429,7 @@ class TestAppendOnlyRoundTrip:
             ).json()
             assert tail["message_count"] == 50
             assert tail["messages_offset"] == 20
-            assert [m["content"] for m in tail["messages"]] == [
-                f"msg-{i}" for i in range(20, 50)
-            ]
+            assert [m["content"] for m in tail["messages"]] == [f"msg-{i}" for i in range(20, 50)]
 
             # Step 2 — prepend older (mirrors `loadOlder` when the user
             # scrolls to the top of the visible window). The next page is
@@ -457,9 +441,7 @@ class TestAppendOnlyRoundTrip:
             ).json()
             assert older["message_count"] == 50
             assert older["messages_offset"] == 0
-            assert [m["content"] for m in older["messages"]] == [
-                f"msg-{i}" for i in range(0, 20)
-            ]
+            assert [m["content"] for m in older["messages"]] == [f"msg-{i}" for i in range(0, 20)]
 
             # Step 3 — append a new turn via POST /messages (mirrors the
             # `persist` path when a conversation is pinned). The client only
@@ -494,9 +476,7 @@ class TestAppendOnlyRoundTrip:
             "follow-up",
             "follow-up reply",
         ]
-        assert [m["content"] for m in tail2["messages"][:-2]] == [
-            f"msg-{i}" for i in range(22, 50)
-        ]
+        assert [m["content"] for m in tail2["messages"][:-2]] == [f"msg-{i}" for i in range(22, 50)]
 
 
 class TestBumpTs:

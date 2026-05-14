@@ -49,13 +49,9 @@ def _format_problematique_context(project_id: str) -> str | None:
         return None
 
     nonempty_hyp = [
-        h
-        for h in problem.hypotheses
-        if h.text.strip() or any(s.strip() for s in h.sub_hypotheses)
+        h for h in problem.hypotheses if h.text.strip() or any(s.strip() for s in h.sub_hypotheses)
     ]
-    nonempty_app = [
-        a for a in problem.planned_approaches if a.title.strip() or a.text.strip()
-    ]
+    nonempty_app = [a for a in problem.planned_approaches if a.title.strip() or a.text.strip()]
     has_content = bool(
         problem.research_problem.strip()
         or problem.sub_research_problem.strip()
@@ -107,9 +103,7 @@ def _truncate_body(body: str) -> str:
     return body
 
 
-def _rows_to_body(
-    documents: list[Any], metadatas: list[Any]
-) -> str:
+def _rows_to_body(documents: list[Any], metadatas: list[Any]) -> str:
     rows: list[tuple[Any, dict[str, Any]]] = []
     for doc, meta in zip(documents, metadatas, strict=False):
         if not doc:
@@ -128,9 +122,7 @@ def _fetch_full_stem(collection: Any, stem: str) -> str:
     return _rows_to_body(res.get("documents") or [], res.get("metadatas") or [])
 
 
-def _fetch_topk_stem(
-    collection: Any, stem: str, query: str, include_neighbors: bool
-) -> str:
+def _fetch_topk_stem(collection: Any, stem: str, query: str, include_neighbors: bool) -> str:
     qres = collection.query(
         query_texts=[query],
         n_results=CHAT_K_PER_MENTION,

@@ -120,9 +120,7 @@ async def chat(
         raw_messages.insert(0, {"role": "system", "content": PLAIN_TEXT_SYSTEM_PROMPT})
 
     if global_rag_enabled and user_query:
-        global_block = await asyncio.to_thread(
-            _retrieve_global_context, project_id, user_query
-        )
+        global_block = await asyncio.to_thread(_retrieve_global_context, project_id, user_query)
         if global_block:
             raw_messages.insert(0, {"role": "system", "content": global_block})
 
