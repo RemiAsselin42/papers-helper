@@ -22,6 +22,8 @@ const conversation = (overrides: Partial<Conversation> = {}): Conversation => ({
   created_at: '',
   updated_at: '',
   messages: [],
+  last_variants: [],
+  last_variant_index: 0,
   message_count: 0,
   messages_offset: 0,
   ...overrides,
@@ -155,6 +157,77 @@ describe('useConversationStore', () => {
     })
 
     expect(result.current.pinned).toBeNull()
+  })
+
+  it('addVariant posts the regenerated content to the variants endpoint', async () => {
+    const variantState = {
+      last_variants: ['orig', 'regen'],
+      last_variant_index: 1,
+      message_count: 2,
+      updated_at: '',
+    }
+    const { calls } = stubFetchSequence([
+      () => jsonResponse<ConversationSummary[]>([summary({ id: 'a' })]),
+      () => jsonResponse(conversation({ id: 'a' })),
+      () => jsonResponse(variantState),
+      () => jsonResponse<ConversationSummary[]>([summary({ id: 'a' })]),
+    ])
+    const { result } = renderHook(() => useConversationStore('proj-1'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    await act(async () => {
+      await result.current.load('a')
+    })
+
+    let returned: typeof variantState | undefined
+    await act(async () => {
+      returned = await result.current.addVariant('regen')
+    })
+
+    expect(returned).toEqual(variantState)
+    expect(calls[2].init?.method).toBe('POST')
+    expect(calls[2].url).toContain('/conversations/a/messages/last/variants')
+    expect(JSON.parse(calls[2].init?.body as string)).toEqual({ content: 'regen' })
+    // The summary list is refreshed afterwards.
+    expect(calls.map((c) => c.init?.method ?? 'GET')).toEqual(['GET', 'GET', 'POST', 'GET'])
+  })
+
+  it('selectVariant PUTs the chosen index to the variant endpoint', async () => {
+    const variantState = {
+      last_variants: ['orig', 'regen'],
+      last_variant_index: 0,
+      message_count: 2,
+      updated_at: '',
+    }
+    const { calls } = stubFetchSequence([
+      () => jsonResponse<ConversationSummary[]>([summary({ id: 'a' })]),
+      () => jsonResponse(conversation({ id: 'a' })),
+      () => jsonResponse(variantState),
+      () => jsonResponse<ConversationSummary[]>([summary({ id: 'a' })]),
+    ])
+    const { result } = renderHook(() => useConversationStore('proj-1'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    await act(async () => {
+      await result.current.load('a')
+    })
+
+    let returned: typeof variantState | undefined
+    await act(async () => {
+      returned = await result.current.selectVariant(0)
+    })
+
+    expect(returned).toEqual(variantState)
+    expect(calls[2].init?.method).toBe('PUT')
+    expect(calls[2].url).toContain('/conversations/a/messages/last/variant')
+    expect(JSON.parse(calls[2].init?.body as string)).toEqual({ index: 0 })
+  })
+
+  it('addVariant / selectVariant reject when no conversation is pinned', async () => {
+    stubFetchSequence([() => jsonResponse<ConversationSummary[]>([])])
+    const { result } = renderHook(() => useConversationStore('proj-1'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    await expect(result.current.addVariant('x')).rejects.toThrow()
+    await expect(result.current.selectVariant(0)).rejects.toThrow()
   })
 
   it('clear() drops the current pin without touching the network', async () => {

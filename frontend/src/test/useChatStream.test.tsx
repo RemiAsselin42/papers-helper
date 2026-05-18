@@ -207,6 +207,126 @@ describe('useChatStream', () => {
     expect(result.current.window.syncedCount).toBe(3)
   })
 
+  it('regenerate re-streams a fresh reply over the last assistant message', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      body: sseStream([frame({ token: 'fresh ' }), frame({ token: 'answer' }), 'data: [DONE]\n']),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result } = renderHook(() => useChatStream())
+    act(() =>
+      result.current.window.resetMessages(
+        [
+          { role: 'user' as const, content: 'question' },
+          { role: 'assistant' as const, content: 'stale answer' },
+        ],
+        0
+      )
+    )
+
+    let outcome: Awaited<ReturnType<typeof result.current.regenerate>> | undefined
+    await act(async () => {
+      outcome = await result.current.regenerate('proj-1', 'llama3')
+    })
+
+    expect(outcome?.status).toBe('ok')
+    expect(result.current.messages).toEqual([
+      { role: 'user', content: 'question' },
+      { role: 'assistant', content: 'fresh answer' },
+    ])
+    expect(outcome?.newMessages).toEqual([{ role: 'assistant', content: 'fresh answer' }])
+    // The stale assistant message is excluded from the re-sent context.
+    const sent = JSON.parse(fetchMock.mock.calls[0][1].body as string)
+    expect(sent.messages).toEqual([{ role: 'user', content: 'question' }])
+    // The replaced answer is kept as variant 0, the fresh one as variant 1.
+    expect(result.current.variants.items).toEqual(['stale answer', 'fresh answer'])
+    expect(result.current.variants.index).toBe(1)
+  })
+
+  it('variants.select switches the displayed answer of the last message', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        body: sseStream([frame({ token: 'v2' }), 'data: [DONE]\n']),
+      })
+    )
+
+    const { result } = renderHook(() => useChatStream())
+    act(() =>
+      result.current.window.resetMessages(
+        [
+          { role: 'user' as const, content: 'q' },
+          { role: 'assistant' as const, content: 'v1' },
+        ],
+        0
+      )
+    )
+    await act(async () => {
+      await result.current.regenerate('proj-1', 'llama3')
+    })
+    expect(result.current.variants.items).toEqual(['v1', 'v2'])
+
+    // Navigate back to the original answer.
+    act(() => result.current.variants.select(0))
+    expect(result.current.variants.index).toBe(0)
+    expect(result.current.messages.at(-1)).toEqual({ role: 'assistant', content: 'v1' })
+
+    // Out-of-range selections are ignored.
+    act(() => result.current.variants.select(5))
+    expect(result.current.variants.index).toBe(0)
+  })
+
+  it('regenerate restores the previous answer when the stream errors', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        body: sseStream([frame({ error: 'boom' })]),
+      })
+    )
+
+    const { result } = renderHook(() => useChatStream())
+    act(() =>
+      result.current.window.resetMessages(
+        [
+          { role: 'user' as const, content: 'q' },
+          { role: 'assistant' as const, content: 'kept answer' },
+        ],
+        0
+      )
+    )
+
+    let outcome: Awaited<ReturnType<typeof result.current.regenerate>> | undefined
+    await act(async () => {
+      outcome = await result.current.regenerate('proj-1', 'llama3')
+    })
+
+    expect(outcome?.status).toBe('error')
+    // Failed regeneration leaves the original answer in place, no variants.
+    expect(result.current.messages.at(-1)).toEqual({ role: 'assistant', content: 'kept answer' })
+    expect(result.current.variants.items).toEqual([])
+  })
+
+  it('regenerate is a no-op when the last message is not an assistant reply', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result } = renderHook(() => useChatStream())
+    act(() =>
+      result.current.window.resetMessages([{ role: 'user' as const, content: 'hi' }], 0)
+    )
+
+    let outcome: Awaited<ReturnType<typeof result.current.regenerate>> | undefined
+    await act(async () => {
+      outcome = await result.current.regenerate('proj-1', 'llama3')
+    })
+
+    expect(outcome?.status).toBe('error')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('load.begin / load.end toggles the skeleton flag', () => {
     const { result } = renderHook(() => useChatStream())
     expect(result.current.load.state).toBeNull()

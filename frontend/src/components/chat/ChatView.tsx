@@ -297,7 +297,12 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
     store
       .load(latestId)
       .then((conv) => {
-        chat.window.resetMessages(conv.messages, conv.messages_offset)
+        chat.window.resetMessages(
+          conv.messages,
+          conv.messages_offset,
+          conv.last_variants,
+          conv.last_variant_index
+        )
         model.loadFromConversation(conv)
       })
       .catch(() => {
@@ -346,7 +351,12 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
     chat.load.begin('initial')
     try {
       const conv = await store.load(id)
-      chat.window.resetMessages(conv.messages, conv.messages_offset)
+      chat.window.resetMessages(
+        conv.messages,
+        conv.messages_offset,
+        conv.last_variants,
+        conv.last_variant_index
+      )
       model.loadFromConversation(conv)
     } catch {
       store.refresh()
@@ -454,6 +464,82 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
       setSaveError(
         'Échec de l’enregistrement de la conversation — votre dernier message ne sera peut-être pas restauré.'
       )
+    }
+  }
+
+  async function handleRegenerate() {
+    if (chat.streaming) return
+    if (chat.load.state !== null) return
+
+    const msgs = chat.messages
+    const lastIndex = msgs.length - 1
+    if (lastIndex < 1 || msgs[lastIndex].role !== 'assistant') return
+    // The user turn that prompted the answer — its mentions drive retrieval,
+    // so we re-resolve them for the regenerated request.
+    const lastUser = [...msgs.slice(0, lastIndex)].reverse().find((m) => m.role === 'user')
+    if (!lastUser) return
+
+    if (!model.resolvedModel) return
+    const turnProvider = model.provider
+    const turnModel = model.resolvedModel
+
+    if (turnProvider !== 'ollama' && !getStoredApiKey(turnProvider)) {
+      setSaveError(`Clé API manquante pour ${PROVIDER_LABELS[turnProvider]}.`)
+      return
+    }
+    if (turnProvider === 'ollama' && !model.ollamaModel) {
+      setSaveError('Aucun modèle Ollama sélectionné.')
+      return
+    }
+
+    setSaveError(null)
+    mentionPicker.close()
+
+    const mentions = resolveMentions(parseMentions(lastUser.content, sources), sources)
+    const result = await chat.regenerate(projectId, turnModel, mentions, turnProvider, sources)
+    // On failure the hook has already restored the previous answer; surface
+    // the error (an aborted regeneration is a deliberate user action).
+    if (result.status === 'aborted') return
+    if (result.status === 'error') {
+      setSaveError('Échec de la régénération de la réponse. Réessayez.')
+      return
+    }
+
+    // A regenerate on a chat that was never saved is a throwaway debug
+    // re-roll (the model bugged or hallucinated) — don't create a
+    // conversation on disk for it. Persist the new variant only when the
+    // conversation already exists.
+    if (!store.pinned) return
+
+    try {
+      const regenerated = result.messages[result.messages.length - 1]
+      // Record the answer as a new variant, then reconcile local state with
+      // the server-authoritative result.
+      const state = await store.addVariant(regenerated.content)
+      chat.variants.sync(state.last_variants, state.last_variant_index)
+      chat.window.markSynced()
+    } catch (err) {
+      console.error('Failed to persist regenerated message', err)
+      setSaveError(
+        'Échec de l’enregistrement de la réponse régénérée — elle ne sera peut-être pas restaurée.'
+      )
+    }
+  }
+
+  async function handleSelectVariant(index: number) {
+    if (chat.streaming) return
+    if (chat.load.state !== null) return
+    if (index === chat.variants.index) return
+    // Update the displayed answer immediately, then persist the choice and
+    // reconcile with the server-authoritative variant state.
+    chat.variants.select(index)
+    if (!store.pinned) return
+    try {
+      const state = await store.selectVariant(index)
+      chat.variants.sync(state.last_variants, state.last_variant_index)
+    } catch (err) {
+      console.error('Failed to persist variant selection', err)
+      setSaveError('Échec de l’enregistrement de la variante sélectionnée.')
     }
   }
 
@@ -583,6 +669,10 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
           messagesOffset={chat.window.offset}
           loadingState={chat.load.state}
           onLoadOlder={handleLoadOlder}
+          onRegenerate={handleRegenerate}
+          variantCount={chat.variants.items.length}
+          variantIndex={chat.variants.index}
+          onSelectVariant={handleSelectVariant}
         />
 
         {saveError && (

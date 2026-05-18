@@ -379,11 +379,15 @@
 
 .message {
   display: flex;
-  gap: var(--space-sm);
-  align-items: center;
+  flex-direction: column;
+  gap: var(--space-xs);
 
   &.user {
-    flex-direction: row-reverse;
+    align-items: flex-end;
+
+    .messageRow {
+      flex-direction: row-reverse;
+    }
 
     .bubble {
       background: var(--color-emphasis);
@@ -392,12 +396,13 @@
     }
 
     .avatar {
-      color: var(--color-emphasis);
       justify-content: left;
     }
   }
 
   &.assistant {
+    align-items: flex-start;
+
     .bubble {
       background: var(--color-surface);
       border: var(--border);
@@ -405,9 +410,50 @@
     }
 
     .avatar {
-      color: var(--color-text);
       justify-content: right;
     }
+  }
+}
+
+// Avatar + bubble row. Split out of `.message` (now a column) so the action
+// row can sit beneath the bubble without the avatar stretching to cover it.
+.messageRow {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+  width: 100%;
+}
+
+// Copy / regenerate icon buttons, stacked vertically to the right of an
+// assistant reply.
+.messageActions {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--space-xs);
+  flex-shrink: 0;
+  height: 100%;
+}
+
+.actionBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  background: transparent;
+  color: var(--color-text-muted);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition-short);
+
+  &:hover:not(:disabled) {
+    background: var(--color-emphasis);
+    color: var(--color-background);
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
   }
 }
 
@@ -418,7 +464,7 @@
   height: 100%;
   flex-shrink: 0;
   margin-top: 2px;
-  color: var(--color-text);
+  color: var(--color-text-muted);
 }
 
 .bubble {
@@ -639,8 +685,8 @@
 
 .sendBtn {
   @include btn-primary;
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   flex-shrink: 0;
   border-radius: var(--radius-sm);

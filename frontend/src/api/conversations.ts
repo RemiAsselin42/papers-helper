@@ -19,12 +19,25 @@ export interface Conversation {
   created_at: string
   updated_at: string
   messages: ChatMessage[]
+  // Regenerated answers of the last message, kept for left/right navigation.
+  // `last_variants[last_variant_index]` mirrors `messages[-1].content`.
+  // Empty when the last message was never regenerated.
+  last_variants: string[]
+  last_variant_index: number
   // Pagination metadata populated by the backend on read. With no query
   // params: message_count = messages.length, messages_offset = 0. With
   // ?limit / ?offset: messages is the requested window and these fields
   // describe it.
   message_count: number
   messages_offset: number
+}
+
+/** Variant state of a conversation's last message. */
+export interface LastVariantsState {
+  last_variants: string[]
+  last_variant_index: number
+  message_count: number
+  updated_at: string
 }
 
 export interface LoadConversationOptions {
@@ -88,6 +101,48 @@ export async function appendMessages(
     }
   )
   if (!res.ok) throw new Error(`Failed to append messages: ${res.status}`)
+  return res.json()
+}
+
+/**
+ * Record a regenerated reply (its `content`) as a new variant of the
+ * conversation's last message. The previous answer is kept (seeded as
+ * variant 0 on the first call) so the UI can offer left/right navigation;
+ * the new variant becomes active. The rest of the (windowed) history is
+ * left untouched.
+ */
+export async function addLastVariant(
+  projectId: string,
+  conversationId: string,
+  content: string
+): Promise<LastVariantsState> {
+  const res = await fetch(
+    `/api/projects/${projectId}/conversations/${conversationId}/messages/last/variants`,
+    {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ content }),
+    }
+  )
+  if (!res.ok) throw new Error(`Failed to add variant: ${res.status}`)
+  return res.json()
+}
+
+/** Switch which recorded variant of the last message is active. */
+export async function selectLastVariant(
+  projectId: string,
+  conversationId: string,
+  index: number
+): Promise<LastVariantsState> {
+  const res = await fetch(
+    `/api/projects/${projectId}/conversations/${conversationId}/messages/last/variant`,
+    {
+      method: 'PUT',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ index }),
+    }
+  )
+  if (!res.ok) throw new Error(`Failed to select variant: ${res.status}`)
   return res.json()
 }
 

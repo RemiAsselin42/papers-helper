@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
+  addLastVariant,
   appendMessages,
   type Conversation,
   type ConversationSummary,
   type ConversationWritePayload,
   createConversation,
   deleteConversation,
+  type LastVariantsState,
   listConversations,
   loadConversation,
   type LoadConversationOptions,
   renameConversation,
+  selectLastVariant,
 } from '../api/conversations'
 import type { ChatMessage } from '../api/chat'
 import type { LLMProvider } from '../api/llm'
@@ -51,6 +54,17 @@ export interface UseConversationStore {
    * the full payload as the seed history.
    */
   persist: (payload: Omit<ConversationWritePayload, 'title'>) => Promise<Conversation>
+  /**
+   * Record a regenerated reply (its content) as a new variant of the pinned
+   * conversation's last message. Used by the chat 'regenerate' flow once the
+   * new answer has streamed in. Throws if no conversation is pinned.
+   */
+  addVariant: (content: string) => Promise<LastVariantsState>
+  /**
+   * Switch which variant of the pinned conversation's last message is the
+   * active (persisted) one. Throws if no conversation is pinned.
+   */
+  selectVariant: (index: number) => Promise<LastVariantsState>
 }
 
 export function useConversationStore(projectId: string): UseConversationStore {
@@ -140,6 +154,9 @@ export function useConversationStore(projectId: string): UseConversationStore {
           created_at: summary.created_at,
           updated_at: summary.updated_at,
           messages: payload.messages as ChatMessage[],
+          // Appending a new turn clears any variants of the previous tail.
+          last_variants: [],
+          last_variant_index: 0,
           message_count: summary.message_count,
           messages_offset: summary.message_count - payload.messages.length,
         }
@@ -149,6 +166,26 @@ export function useConversationStore(projectId: string): UseConversationStore {
       setPinned({ id: conv.id, provider: conv.provider, model: conv.model })
       refresh()
       return conv
+    },
+    [pinned, projectId, refresh]
+  )
+
+  const addVariant = useCallback(
+    async (content: string): Promise<LastVariantsState> => {
+      if (!pinned) throw new Error('No pinned conversation to update')
+      const state = await addLastVariant(projectId, pinned.id, content)
+      refresh()
+      return state
+    },
+    [pinned, projectId, refresh]
+  )
+
+  const selectVariant = useCallback(
+    async (index: number): Promise<LastVariantsState> => {
+      if (!pinned) throw new Error('No pinned conversation to update')
+      const state = await selectLastVariant(projectId, pinned.id, index)
+      refresh()
+      return state
     },
     [pinned, projectId, refresh]
   )
@@ -164,5 +201,7 @@ export function useConversationStore(projectId: string): UseConversationStore {
     remove,
     rename,
     persist,
+    addVariant,
+    selectVariant,
   }
 }

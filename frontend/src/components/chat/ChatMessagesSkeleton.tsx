@@ -46,13 +46,15 @@ export function ChatMessagesSkeleton({ kind }: Props) {
           className={`${styles.message} ${p.role === 'user' ? styles.user : styles.assistant}`}
           aria-hidden
         >
-          <span className={styles.avatar}>
-            {p.role === 'user' ? <User size={20} /> : <Bot size={20} />}
-          </span>
-          <div
-            className={styles.bubbleSkeleton}
-            style={{ width: `${p.widthPct}%`, height: `${p.height}px` }}
-          />
+          <div className={styles.messageRow}>
+            <span className={styles.avatar}>
+              {p.role === 'user' ? <User size={20} /> : <Bot size={20} />}
+            </span>
+            <div
+              className={styles.bubbleSkeleton}
+              style={{ width: `${p.widthPct}%`, height: `${p.height}px` }}
+            />
+          </div>
         </div>
       ))}
     </>
