@@ -389,6 +389,32 @@
   }
 }
 
+.reindexAllBtn {
+  @include btn-icon;
+  height: 100%;
+  width: 32px;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  &:hover:not(:disabled) {
+    color: var(--color-background);
+    background-color: var(--color-emphasis);
+  }
+}
+
+.reindexSpin {
+  animation: reindex-spin 1s linear infinite;
+}
+
+@keyframes reindex-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .filterCount {
   margin-left: auto;
   font-family: inherit;

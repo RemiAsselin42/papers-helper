@@ -1,4 +1,4 @@
-import { RotateCcw, Search } from 'lucide-react'
+import { RefreshCw, RotateCcw, Search } from 'lucide-react'
 import { categoryThemeColor } from '../../utils/categoryColor'
 import {
   DEFAULT_FILTERS,
@@ -18,6 +18,12 @@ export interface SourceFiltersProps {
   availableCategories: string[]
   total: number
   shown: number
+  /** Triggers a full reindex of every source. When omitted, the button is
+   * hidden (e.g. the parent didn't wire the indexing pass). */
+  onReindexAll?: () => void
+  /** True while any indexing pass is in flight — disables the reindex
+   * button (Ollama is the shared bottleneck). */
+  indexing?: boolean
 }
 
 export function SourceFilters({
@@ -28,6 +34,8 @@ export function SourceFilters({
   availableCategories,
   total,
   shown,
+  onReindexAll,
+  indexing = false,
 }: SourceFiltersProps) {
   const active = isFilterActive(state)
   const set = <K extends keyof SourceFilterState>(key: K, value: SourceFilterState[K]) =>
@@ -111,6 +119,19 @@ export function SourceFilters({
           <option value="indexed">Indexés</option>
           <option value="unindexed">Non indexés</option>
         </select>
+
+        {onReindexAll && (
+          <button
+            type="button"
+            className={styles.reindexAllBtn}
+            onClick={onReindexAll}
+            disabled={indexing || total === 0}
+            aria-label="Réindexer toutes les sources"
+            title="Réindexer toutes les sources"
+          >
+            <RefreshCw size={20} className={indexing ? styles.reindexSpin : undefined} />
+          </button>
+        )}
 
         <span className={styles.filterCount}>{`${shown} / ${total}`}</span>
 

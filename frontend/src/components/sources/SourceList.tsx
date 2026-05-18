@@ -56,6 +56,12 @@ interface SourceListProps {
    * omitted, SourceList manages it locally. */
   filterState?: SourceFilterState
   onChangeFilterState?: (next: SourceFilterState) => void
+  /** Triggers a full reindex of every source (drop + re-embed). Surfaced as a
+   * "Tout indexer" button in the filter toolbar. When omitted, the button is
+   * hidden. */
+  onReindexAll?: () => void
+  /** True while a full-reindex pass is running — disables the button. */
+  reindexingAll?: boolean
 }
 
 export function SourceList({
@@ -73,6 +79,8 @@ export function SourceList({
   onChangeOpenStem,
   filterState: filterStateProp,
   onChangeFilterState,
+  onReindexAll,
+  reindexingAll = false,
 }: SourceListProps) {
   const [sources, setSources] = useState<SourceInfo[]>([])
   const [loading, setLoading] = useState(true)
@@ -304,6 +312,8 @@ export function SourceList({
         availableCategories={availableCategories}
         total={sources.length}
         shown={filteredSources.length}
+        onReindexAll={onReindexAll}
+        indexing={reindexingAll}
       />
 
       {filteredSources.length === 0 &&

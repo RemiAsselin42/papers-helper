@@ -392,6 +392,8 @@ export default function App() {
             onChangeOpenStem={setOpenStem}
             filterState={sourceFilter}
             onChangeFilterState={setSourceFilter}
+            onReindexAll={handleReindexProject}
+            reindexingAll={indexingRunning}
           />
         )}
         {activeView === 'problematique' && <ProblematiqueView projectId={projectId} />}
