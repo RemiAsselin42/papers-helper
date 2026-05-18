@@ -406,6 +406,172 @@ class TestAppendMessages:
         assert resp.status_code == 404
 
 
+class TestLastVariants:
+    """`POST /{id}/messages/last/variants` (add) and `PUT .../variant`
+    (switch) back the chat 'regenerate' action: regenerated answers are kept
+    as navigable variants of the last message rather than overwriting it.
+    Neither endpoint reads or rewrites the rest of a windowed history."""
+
+    def _conv_url(self, project_name: str, cid: str) -> str:
+        return f"/projects/{project_name}/conversations/{cid}"
+
+    def test_add_variant_seeds_with_existing_answer(
+        self, client: TestClient, project_dir: Path
+    ) -> None:
+        with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
+            cid = _seed_conversation(client, project_dir.name, 2)
+            resp = client.post(
+                f"{self._conv_url(project_dir.name, cid)}/messages/last/variants",
+                json={"content": "regen-A"},
+            )
+            after = client.get(self._conv_url(project_dir.name, cid)).json()
+        assert resp.status_code == 200
+        data = resp.json()
+        # The original on-disk answer is kept as variant 0, the new one as 1.
+        assert data["last_variants"] == ["msg-1", "regen-A"]
+        assert data["last_variant_index"] == 1
+        assert data["message_count"] == 2
+        # The new variant is mirrored into the last message.
+        assert after["messages"][-1] == {"role": "assistant", "content": "regen-A"}
+        assert after["last_variants"] == ["msg-1", "regen-A"]
+        assert after["last_variant_index"] == 1
+
+    def test_add_variant_appends_on_subsequent_regen(
+        self, client: TestClient, project_dir: Path
+    ) -> None:
+        with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
+            cid = _seed_conversation(client, project_dir.name, 2)
+            url = f"{self._conv_url(project_dir.name, cid)}/messages/last/variants"
+            client.post(url, json={"content": "A"})
+            resp = client.post(url, json={"content": "B"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["last_variants"] == ["msg-1", "A", "B"]
+        assert data["last_variant_index"] == 2
+
+    def test_add_variant_persists_to_disk(self, client: TestClient, project_dir: Path) -> None:
+        with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
+            cid = _seed_conversation(client, project_dir.name, 2)
+            client.post(
+                f"{self._conv_url(project_dir.name, cid)}/messages/last/variants",
+                json={"content": "persisted"},
+            )
+        raw = json.loads(
+            (project_dir / "conversations" / f"{cid}.json").read_text(encoding="utf-8")
+        )
+        assert raw["messages"][-1] == {"role": "assistant", "content": "persisted"}
+        assert raw["last_variants"] == ["msg-1", "persisted"]
+        assert raw["last_variant_index"] == 1
+
+    def test_add_variant_409_on_empty_conversation(
+        self, client: TestClient, project_dir: Path
+    ) -> None:
+        with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
+            cid = _seed_conversation(client, project_dir.name, 0)
+            resp = client.post(
+                f"{self._conv_url(project_dir.name, cid)}/messages/last/variants",
+                json={"content": "x"},
+            )
+        assert resp.status_code == 409
+
+    def test_add_variant_404_on_missing_conv(
+        self, client: TestClient, project_dir: Path
+    ) -> None:
+        with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
+            resp = client.post(
+                f"/projects/{project_dir.name}/conversations/missing/messages/last/variants",
+                json={"content": "x"},
+            )
+        assert resp.status_code == 404
+
+    def test_select_variant_switches_active_answer(
+        self, client: TestClient, project_dir: Path
+    ) -> None:
+        with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
+            cid = _seed_conversation(client, project_dir.name, 2)
+            client.post(
+                f"{self._conv_url(project_dir.name, cid)}/messages/last/variants",
+                json={"content": "regen"},
+            )
+            resp = client.put(
+                f"{self._conv_url(project_dir.name, cid)}/messages/last/variant",
+                json={"index": 0},
+            )
+            after = client.get(self._conv_url(project_dir.name, cid)).json()
+        assert resp.status_code == 200
+        assert resp.json()["last_variant_index"] == 0
+        # Switching back to variant 0 restores the original answer.
+        assert after["messages"][-1] == {"role": "assistant", "content": "msg-1"}
+        assert after["last_variant_index"] == 0
+
+    def test_select_variant_422_out_of_range(
+        self, client: TestClient, project_dir: Path
+    ) -> None:
+        with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
+            cid = _seed_conversation(client, project_dir.name, 2)
+            client.post(
+                f"{self._conv_url(project_dir.name, cid)}/messages/last/variants",
+                json={"content": "regen"},
+            )
+            resp = client.put(
+                f"{self._conv_url(project_dir.name, cid)}/messages/last/variant",
+                json={"index": 9},
+            )
+        assert resp.status_code == 422
+
+    def test_select_variant_409_when_no_variants(
+        self, client: TestClient, project_dir: Path
+    ) -> None:
+        with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
+            cid = _seed_conversation(client, project_dir.name, 2)
+            resp = client.put(
+                f"{self._conv_url(project_dir.name, cid)}/messages/last/variant",
+                json={"index": 0},
+            )
+        assert resp.status_code == 409
+
+    def test_append_clears_variants(self, client: TestClient, project_dir: Path) -> None:
+        with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
+            cid = _seed_conversation(client, project_dir.name, 2)
+            client.post(
+                f"{self._conv_url(project_dir.name, cid)}/messages/last/variants",
+                json={"content": "regen"},
+            )
+            client.post(
+                f"{self._conv_url(project_dir.name, cid)}/messages",
+                json={"messages": [{"role": "user", "content": "next"}]},
+            )
+            after = client.get(self._conv_url(project_dir.name, cid)).json()
+        # Continuing the conversation discards the (now non-tail) variants.
+        assert after["last_variants"] == []
+        assert after["last_variant_index"] == 0
+
+    def test_rename_preserves_variants(self, client: TestClient, project_dir: Path) -> None:
+        with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
+            cid = _seed_conversation(client, project_dir.name, 2)
+            client.post(
+                f"{self._conv_url(project_dir.name, cid)}/messages/last/variants",
+                json={"content": "regen"},
+            )
+            client.patch(self._conv_url(project_dir.name, cid), json={"title": "Renamed"})
+            after = client.get(self._conv_url(project_dir.name, cid)).json()
+        assert after["last_variants"] == ["msg-1", "regen"]
+        assert after["last_variant_index"] == 1
+
+    def test_select_variant_409_on_empty_conversation(
+        self, client: TestClient, project_dir: Path
+    ) -> None:
+        """An empty conversation has no last message to switch — the guard
+        must return 409, not let `messages[-1]` raise an IndexError (500)."""
+        with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
+            cid = _seed_conversation(client, project_dir.name, 0)
+            resp = client.put(
+                f"{self._conv_url(project_dir.name, cid)}/messages/last/variant",
+                json={"index": 0},
+            )
+        assert resp.status_code == 409
+
+
 class TestAppendOnlyRoundTrip:
     """End-to-end coverage for the windowed-chat flow that the frontend
     relies on: open a conversation with a tail-only fetch, page older
