@@ -1,0 +1,90 @@
+@use '../../styles/mixins' as *;
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(44, 36, 22, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--space-lg);
+}
+
+.dialog {
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 480px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-md) var(--space-md) var(--space-lg);
+  border-bottom: var(--border);
+  flex-shrink: 0;
+}
+
+.headerTitle {
+  font-size: var(--font-size-heading-md);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.closeBtn {
+  @include btn-icon;
+}
+
+.body {
+  padding: var(--space-lg);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  background-color: var(--color-background);
+}
+
+.text {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text);
+  line-height: var(--line-height-body);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cmd {
+  align-self: flex-start;
+  font-family: monospace;
+  font-size: 0.8125rem;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: 2px;
+  padding: 2px 6px;
+}
+
+.meta {
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+}

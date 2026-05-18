@@ -1,0 +1,160 @@
+@use '../../styles/mixins' as *;
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  max-width: 640px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.title {
+  font-size: var(--font-size-heading-lg);
+  font-weight: 700;
+  line-height: var(--line-height-heading-lg);
+}
+
+.subtitle {
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text-muted);
+}
+
+.card {
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.cardTitle {
+  font-size: var(--font-size-body);
+  font-weight: 700;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.checkboxField {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  cursor: pointer;
+}
+
+.label {
+  font-size: var(--font-size-label);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.select {
+  background: var(--color-background);
+  color: var(--color-text);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--padding-input);
+  font-family: var(--font);
+  font-size: var(--font-size-body);
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-emphasis-2);
+  }
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btnPrimary {
+  @include btn-primary;
+  gap: var(--space-xs);
+}
+
+.hint {
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text-muted);
+}
+
+.muted {
+  color: var(--color-text-muted);
+}
+
+.error {
+  font-size: var(--font-size-body-sm);
+  color: var(--color-error);
+}
+
+.status {
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text);
+}
+
+.effective {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin: 0;
+
+  div {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-md);
+  }
+
+  dt {
+    font-size: var(--font-size-body-sm);
+    color: var(--color-text-muted);
+  }
+
+  dd {
+    font-size: var(--font-size-body-sm);
+    margin: 0;
+    font-weight: 600;
+    text-align: right;
+  }
+}
+
+.labelRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.helpBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--color-text);
+  }
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

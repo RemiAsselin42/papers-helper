@@ -6,6 +6,7 @@ import {
   Network,
   PanelLeftClose,
   PanelLeftOpen,
+  SlidersHorizontal,
   Target,
   Upload,
 } from 'lucide-react'
@@ -19,6 +20,7 @@ export type View =
   | 'problematique'
   | 'chat'
   | 'graph'
+  | 'settings'
   | 'debug'
   | 'new-project'
   | 'all-projects'
@@ -136,6 +138,17 @@ export function Sidebar({
       </div>
 
       <div className={styles.bottom}>
+        <button
+          className={`${styles.tab} ${activeView === 'settings' ? styles.tabActive : ''}`}
+          onClick={() => onViewChange('settings')}
+          aria-label="Paramètres"
+          title="Paramètres"
+        >
+          <span className={styles.icon}>
+            <SlidersHorizontal size={20} />
+          </span>
+          <span className={styles.label}>Paramètres</span>
+        </button>
         <button
           className={`${styles.tab} ${activeView === 'debug' ? styles.tabActive : ''}`}
           onClick={() => onViewChange('debug')}
