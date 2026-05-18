@@ -19,9 +19,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Pinned to pnpm 11 to match frontend/package.json `packageManager`.
+      # An explicit version is required: action-setup only reads
+      # `packageManager` from a repo-root package.json, which this two-tier
+      # repo doesn't have (it lives in frontend/).
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 11
 
       - uses: actions/setup-node@v4
         with:
@@ -41,9 +45,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Pinned to pnpm 11 to match frontend/package.json `packageManager`.
+      # An explicit version is required: action-setup only reads
+      # `packageManager` from a repo-root package.json, which this two-tier
+      # repo doesn't have (it lives in frontend/).
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 11
 
       - uses: actions/setup-node@v4
         with:
