@@ -14,9 +14,10 @@ venv/
 
 # ChromaDB / vectors
 chroma_db/
-data/projects/
-data/vectors/
-data/*.db
+
+# Local per-project data — projects, vectors, global settings.json. All of it
+# is user data rebuilt at runtime; none of it belongs in the repo.
+data/
 
 # Node
 node_modules/
