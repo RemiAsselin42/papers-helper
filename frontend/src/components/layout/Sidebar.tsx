@@ -6,6 +6,7 @@ import {
   Network,
   PanelLeftClose,
   PanelLeftOpen,
+  Search,
   SlidersHorizontal,
   Target,
   Upload,
@@ -20,6 +21,7 @@ export type View =
   | 'problematique'
   | 'chat'
   | 'graph'
+  | 'citations'
   | 'settings'
   | 'debug'
   | 'new-project'
@@ -134,6 +136,17 @@ export function Sidebar({
             <Network size={20} />
           </span>
           <span className={styles.label}>Graph</span>
+        </button>
+        <button
+          className={`${styles.tab} ${activeView === 'citations' ? styles.tabActive : ''}`}
+          onClick={() => onViewChange('citations')}
+          aria-label="Citations"
+          title="Recherche par citations"
+        >
+          <span className={styles.icon}>
+            <Search size={20} />
+          </span>
+          <span className={styles.label}>Citations</span>
         </button>
       </div>
 

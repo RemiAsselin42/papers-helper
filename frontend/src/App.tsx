@@ -14,6 +14,7 @@ import { AllProjectsView } from './components/layout/AllProjectsView'
 import { ApiKeyModal } from './components/modals/ApiKeyModal'
 import { AppHeader } from './components/layout/AppHeader'
 import { ChatView } from './components/chat/ChatView'
+import { CitationsView } from './components/citations/CitationsView'
 import { DebugPanel } from './components/layout/DebugPanel'
 import { DropZone, type FileState } from './components/sources/DropZone'
 import { GraphView } from './components/graph/GraphView'
@@ -255,6 +256,15 @@ export default function App() {
     }
   }
 
+  // Jump to the Sources view focused on one paper. Seeds the SourceList text
+  // search with the title so the target surfaces even past a stale filter.
+  // Shared by the Graph and Citations views.
+  const handleOpenSource = useCallback((stem: string, label: string) => {
+    setOpenStem(stem)
+    setSourceFilter({ ...DEFAULT_FILTERS, search: label })
+    setActiveView('sources')
+  }, [])
+
   // Hard-gate: Chat view and the IA generators rely on Ollama (chat for the
   // model, /condense for the map step). When it disappears mid-session we
   // bounce the user out of an unreachable view rather than leaving them
@@ -399,14 +409,7 @@ export default function App() {
           <GraphView
             projectId={projectId}
             refreshKey={graphRefreshKey}
-            onOpenSource={(stem, label) => {
-              setOpenStem(stem)
-              // Seed the SourceList text search with the paper title so the
-              // clicked source surfaces there even if a stale filter would
-              // otherwise hide it; clear the other filters for the same reason.
-              setSourceFilter({ ...DEFAULT_FILTERS, search: label })
-              setActiveView('sources')
-            }}
+            onOpenSource={handleOpenSource}
             onFilterSources={(filter) => {
               setSourceFilter({
                 ...DEFAULT_FILTERS,
@@ -416,6 +419,9 @@ export default function App() {
               setActiveView('sources')
             }}
           />
+        )}
+        {activeView === 'citations' && (
+          <CitationsView projectId={projectId} onOpenSource={handleOpenSource} />
         )}
         {activeView === 'settings' && (
           <SettingsView

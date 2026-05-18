@@ -1,0 +1,181 @@
+@use '../../styles/mixins' as *;
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-evenly;
+  gap: var(--space-sm);
+  flex-wrap: nowrap;
+}
+
+.sourceLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  width: 100%;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-emphasis-2);
+  font-family: inherit;
+  font-size: var(--font-size-body-sm);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.sourceTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.externalLink {
+  min-width: 20px;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 250px;
+  justify-content: space-between;
+
+  .metaItem:nth-child(1) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 50%;
+  }
+}
+
+.metaItem {
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.score {
+  font-size: var(--font-size-label);
+  font-weight: 600;
+  color: var(--color-success);
+  white-space: nowrap;
+}
+
+// Copies the source's bibliographic reference to the clipboard.
+.copyBtn {
+  @include btn-secondary;
+  padding: var(--space-sm);
+  color: var(--color-text);
+  border: none;
+}
+
+.copyBtnDone {
+  color: var(--color-success);
+
+  &:hover:not(:disabled) {
+    color: var(--color-success);
+  }
+}
+
+.snippet {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  line-height: 1.55;
+  color: var(--color-text);
+  // Collapse the noisy newlines the chunker / PDF extraction leave mid-text
+  // so sentences read whole instead of breaking on stray line returns.
+  white-space: normal;
+}
+
+// A searched word inside the collapsed snippet.
+.match {
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+// Continuous reading block — surrounding chunks muted, matched chunk
+// highlighted inline (see .contextHit).
+.context {
+  margin: 0;
+  padding: var(--space-sm);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--color-background);
+  font-size: var(--font-size-body-sm);
+  line-height: 1.55;
+  color: var(--color-text-muted);
+  // Collapse stray newlines (see .snippet) — sentences flow continuously.
+  white-space: normal;
+}
+
+// The chunk that actually matched the query — accented with an inline
+// background so it stays part of the flowing text (no detached box).
+.contextHit {
+  padding: 0 2px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-emphasis-2) 18%, transparent);
+  color: var(--color-text);
+  // Wrap the highlight cleanly when the matched chunk spans several lines.
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.position {
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+}
+
+.contextBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--font-size-label);
+  transition: var(--transition-short);
+  margin-right: var(--space-sm);
+
+  &:hover {
+    color: var(--color-text);
+  }
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text-muted);
+}
+
+.errorText {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--color-error);
+}

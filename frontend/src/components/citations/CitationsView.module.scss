@@ -1,0 +1,160 @@
+@use '../../styles/mixins' as *;
+
+// Viewport-height flex column: the search form stays pinned while only
+// `.results` scrolls. Mirrors SourceList's `.scrollHost` offset maths.
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  height: calc(100dvh - var(--space-md) - 48px - var(--space-xl) - var(--space-xl));
+  min-height: 0;
+}
+
+.searchForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  border-bottom: var(--border);
+  flex: 0 0 auto;
+}
+
+.searchRow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.searchIcon {
+  position: absolute;
+  left: var(--space-sm);
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 14px 10px calc(var(--space-sm) * 2 + 18px);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--font-size-body-sm);
+  line-height: 1.5;
+
+  &::placeholder {
+    color: var(--color-text-muted);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-emphasis-2);
+  }
+}
+
+.searchBtn {
+  @include btn-primary;
+}
+
+.filterRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.filterSelect {
+  padding: 6px var(--space-sm);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font);
+  font-size: var(--font-size-label);
+  line-height: 1.4;
+  cursor: pointer;
+  max-width: 220px;
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-emphasis-2);
+  }
+
+  option {
+    font-family: var(--font);
+    font-size: var(--font-size-label);
+    background: var(--color-surface);
+    color: var(--color-text);
+  }
+}
+
+.resetBtn {
+  @include btn-icon;
+}
+
+// Exact-phrase mode toggle — a pressable chip; `.strictToggleActive` marks the
+// pressed state.
+.strictToggle {
+  @include btn-secondary;
+  padding: 10px 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.strictToggleActive {
+  background: var(--color-emphasis);
+  color: var(--color-background);
+  border-color: var(--color-emphasis);
+
+  &:hover {
+    color: var(--color-background);
+  }
+}
+
+.results {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: var(--space-xs);
+}
+
+.list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin: 0;
+  padding: 0;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  padding: var(--space-xl) var(--space-lg);
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.hint {
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text-muted);
+}
+
+.error {
+  font-size: var(--font-size-body-sm);
+  color: var(--color-error);
+}
+
+// "Load more" — centred below the result list.
+.loadMoreBtn {
+  @include btn-secondary;
+  display: block;
+  margin: var(--space-sm) auto 0;
+}
