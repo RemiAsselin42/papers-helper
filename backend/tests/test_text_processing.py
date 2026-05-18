@@ -1,6 +1,8 @@
 """Tests for normalize_text and chunk_text pure functions."""
 
-from app.ingestion import chunk_text, normalize_text
+import re
+
+from app.ingestion import MAX_CHUNK_CHARS, chunk_text, normalize_text
 
 
 class TestNormalizeText:
@@ -85,3 +87,52 @@ class TestChunkText:
         rejoined = " ".join(chunks)
         for word in ["foo", "bar", "baz", "qux", "zap"]:
             assert word in rejoined
+
+    def test_chunk_capped_by_chars_not_just_words(self) -> None:
+        """A paragraph well under the word cap but with long (glued) words must
+        still be split — the char cap is what keeps a chunk embeddable."""
+        # 200 words of 60 chars ≈ 12k chars, far under the 1000-word cap.
+        para = " ".join(["x" * 60] * 200)
+        chunks = chunk_text(para, target_words=500)
+        assert len(chunks) > 1
+        for chunk in chunks:
+            assert len(chunk) <= MAX_CHUNK_CHARS
+
+    def test_unbroken_string_is_hard_sliced(self) -> None:
+        """One giant token with no whitespace (a PDF-extraction artefact) is
+        hard-sliced so no chunk can blow the embedding context."""
+        blob = "a" * (MAX_CHUNK_CHARS * 3 + 100)
+        chunks = chunk_text(blob, target_words=500)
+        assert len(chunks) >= 3
+        for chunk in chunks:
+            assert len(chunk) <= MAX_CHUNK_CHARS
+
+    def test_no_chunk_exceeds_char_cap_on_dense_text(self) -> None:
+        text = "\n\n".join(" ".join(["motdense"] * 400) for _ in range(20))
+        for chunk in chunk_text(text, target_words=500):
+            assert len(chunk) <= MAX_CHUNK_CHARS
+
+    def test_content_less_text_yields_no_chunks(self) -> None:
+        # Only symbols / punctuation — no word characters → nothing to embed.
+        assert chunk_text("••• ●●● —— ··") == []
+
+    def test_symbol_only_chunk_is_dropped(self) -> None:
+        # A standalone symbol-only paragraph (after a full bucket) is dropped;
+        # the real chunks survive. Guards against NaN embeddings on degenerate
+        # input (see _add_chunks_resilient).
+        real = " ".join(["mot"] * 600)
+        chunks = chunk_text(f"{real}\n\n{'•' * 50}", target_words=500)
+        assert len(chunks) >= 1
+        assert all(re.search(r"\w", c) for c in chunks)
+
+    def test_explicit_max_chunk_chars_overrides_the_default(self) -> None:
+        """The granularity setting feeds `chunk_text` an explicit char cap."""
+        para = " ".join(["x" * 50] * 100)  # ~5000 chars, low word count
+        small = chunk_text(para, max_chunk_chars=800)
+        large = chunk_text(para, max_chunk_chars=3000)
+        for chunk in small:
+            assert len(chunk) <= 800
+        for chunk in large:
+            assert len(chunk) <= 3000
+        # A tighter cap yields strictly more chunks.
+        assert len(small) > len(large)

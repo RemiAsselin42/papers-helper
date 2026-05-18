@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 import chromadb
+from chromadb.api.shared_system_client import SharedSystemClient
 from chromadb.errors import NotFoundError
 
 from app.config import (
@@ -12,6 +14,7 @@ from app.config import (
     get_request_embed_config,
 )
 from app.embeddings import EmbedConfig, EmbedProvider, build_embed_fn
+from app.settings import resolve_settings
 
 COLLECTION_NAME = "papers"
 _EMBED_MODEL_META_KEY = "embed_model"
@@ -43,6 +46,12 @@ def _invalidate_project_collections(project_id: str) -> None:
 
 def get_collection(project_id: str) -> chromadb.Collection:
     config = get_request_embed_config() or _default_config()
+    # The embedding model is a per-project setting (project override ?? global
+    # default). Only Ollama embeddings are user-selectable; external providers
+    # keep the model resolved from their LLM provider. A model change flips the
+    # cache key below → the existing drop+recreate path re-embeds on next ingest.
+    if config.provider == EmbedProvider.OLLAMA:
+        config = replace(config, model=resolve_settings(project_id).embed_model)
     cache_key = (project_id, config.provider.value, config.model)
 
     cached = _collection_cache.get(cache_key)
@@ -92,5 +101,17 @@ def evict_collection(project_id: str) -> None:
         # Explicitly stop the internal system to close the SQLite connection
         # before the caller attempts shutil.rmtree on Windows.
         client._system.stop()
+    except Exception:
+        pass
+    # Chroma keeps one System per persist-path in a process-wide registry and
+    # does NOT drop it on stop(). Without clearing that registry, the next
+    # PersistentClient for the same path reuses the *stopped* system and every
+    # call fails with "Could not connect to tenant default_tenant" — which is
+    # exactly what happens after a reindex (_stream_reindex evicts, then
+    # rebuilds the client for the same project). Clearing forces a fresh,
+    # running system on the next get_collection. Other projects' clients are
+    # still served from `_client_cache`, so they keep working.
+    try:
+        SharedSystemClient.clear_system_cache()
     except Exception:
         pass

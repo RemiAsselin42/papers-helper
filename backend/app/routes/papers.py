@@ -20,13 +20,16 @@ from app.graph.concepts import CONCEPT_INPUT_FIELDS
 from app.ingestion import (
     EDITABLE_META_KEYS,
     SidecarMeta,
+    _stream_index_pending,
     _stream_reindex,
     _stream_single_reindex,
     _stream_upload,
     _stream_url_import,
     iter_source_files,
+    prune_orphan_sidecars,
     read_sidecar,
     sidecar_path,
+    strip_title_braces,
     write_sidecar,
 )
 
@@ -101,6 +104,7 @@ class PaperInfo(BaseModel):
     doi: str = ""
     abstract: str = ""
     notes: str = ""
+    categories: str = ""
     indexed: bool = False
     index_error: str = ""
 
@@ -114,6 +118,7 @@ class UpdateMetadataRequest(BaseModel):
     doi: str | None = None
     abstract: str | None = None
     notes: str | None = None
+    categories: str | None = None
 
 
 class AddUrlRequest(BaseModel):
@@ -166,6 +171,7 @@ def _paper_from_meta(meta: SidecarMeta, chunk_total: int) -> PaperInfo:
         doi=meta.doi,
         abstract=meta.abstract,
         notes=meta.notes,
+        categories=meta.categories,
         indexed=chunk_total > 0,
         index_error=meta.index_error,
     )
@@ -190,6 +196,39 @@ async def _safe_graph_remove(project_id: str, stem: str) -> None:
         log.warning("graph_remove_source (bg) failed for %s/%s: %s", project_id, stem, exc)
 
 
+def _strip_title_braces_in_place(
+    project_id: str,
+    files_dir: Path,
+    sidecar: SidecarMeta,
+    chroma_meta: dict[str, Any] | None,
+) -> None:
+    """Drop `{` and `}` characters from legacy Zotero-imported titles while
+    keeping the inner words. Persists the sidecar and best-effort mirrors the
+    cleaned title into Chroma so chunk-level metadata stays consistent. No-op
+    when the title has no braces.
+    """
+    if not strip_title_braces(sidecar):
+        return
+    write_sidecar(files_dir, sidecar)
+    if chroma_meta is None:
+        return
+    try:
+        col = get_collection(project_id)
+        res = col.get(where={"source_stem": sidecar.stem}, include=["metadatas"])
+        if res["ids"] and res["metadatas"]:
+            patch = {"pdf_title": sidecar.pdf_title}
+            updated = [{**m, **patch} for m in (res["metadatas"] or [])]
+            col.update(ids=res["ids"], metadatas=updated)  # type: ignore[arg-type]
+    except Exception:
+        # Chroma may be unreachable (no embed provider); the sidecar write
+        # already cleaned the user-visible state.
+        log.debug(
+            "title-brace migration: Chroma mirror failed for stem %s",
+            sidecar.stem,
+            exc_info=True,
+        )
+
+
 def _paper_from_chroma_meta(meta: dict[str, Any]) -> PaperInfo:
     """Fallback when a Chroma entry exists with no sidecar — keeps legacy
     projects working without re-indexing them.
@@ -208,6 +247,7 @@ def _paper_from_chroma_meta(meta: dict[str, Any]) -> PaperInfo:
         doi=str(meta.get("doi", "")),
         abstract=str(meta.get("abstract", "")),
         notes=str(meta.get("notes", "")),
+        categories=str(meta.get("categories", "")),
         indexed=chunk_total > 0,
         index_error="",
     )
@@ -254,6 +294,10 @@ async def list_papers(project_id: str) -> list[PaperInfo]:
             sidecar = read_sidecar(files_dir, stem)
             chunk_total = chunk_totals.get(stem, 0)
             if sidecar is not None:
+                # Legacy cleanup: strip stray `{` `}` characters from titles
+                # imported with Zotero brace decorations. Idempotent — fires at
+                # most once per source.
+                _strip_title_braces_in_place(project_id, files_dir, sidecar, chroma_metas.get(stem))
                 papers[stem] = _paper_from_meta(sidecar, chunk_total)
             elif stem in chroma_metas:
                 # Legacy project: no sidecar but chunks exist in Chroma.
@@ -271,6 +315,13 @@ async def list_papers(project_id: str) -> list[PaperInfo]:
                     indexed=False,
                     index_error="",
                 )
+
+        # Self-heal: drop sidecars whose document is gone. Catches orphans
+        # left by a delete that raced a concurrent metadata write (e.g.
+        # background auto-enrichment patching a just-deleted source).
+        pruned = prune_orphan_sidecars(project_dir, set(papers.keys()))
+        if pruned:
+            log.info("pruned %d orphan sidecar(s) in %s: %s", len(pruned), project_id, pruned)
 
         return list(papers.values())
 
@@ -390,6 +441,7 @@ async def update_paper_metadata(
                 doi=str(chroma_meta.get("doi", "")),
                 abstract=str(chroma_meta.get("abstract", "")),
                 notes=str(chroma_meta.get("notes", "")),
+                categories=str(chroma_meta.get("categories", "")),
             )
 
         patch = body.model_dump(exclude_none=True)
@@ -405,6 +457,20 @@ async def update_paper_metadata(
             setattr(sidecar, k, v)
         if concepts_inputs_changed:
             sidecar.concepts_json = ""
+
+        # Legacy Zotero compat: strip stray `{` `}` characters from the title
+        # on save. Keeps the inner words intact — only the brace decorations go.
+        if strip_title_braces(sidecar):
+            patch["pdf_title"] = sidecar.pdf_title
+
+        # Guard against a delete/enrich race: if the backing document was
+        # removed while this update was being prepared (e.g. background
+        # auto-enrichment generating an abstract for a source the user just
+        # deleted), refuse the write instead of resurrecting an orphan
+        # sidecar. Re-checked here, as late as possible, to keep the window
+        # between the check and `write_sidecar` negligible.
+        if _resolve_file_path(project_id, sidecar.filename) is None:
+            raise HTTPException(status_code=404, detail="Paper not found")
 
         write_sidecar(files_dir, sidecar)
 
@@ -423,6 +489,23 @@ async def update_paper_metadata(
     # `_safe_graph_update` never raises.
     background_tasks.add_task(_safe_graph_update, project_id, stem)
     return paper
+
+
+@router.post("/index/stream")
+async def index_pending_papers(
+    project_id: str,
+    files_dir: Path = Depends(_get_files_dir),
+) -> StreamingResponse:
+    """Stage 2 of ingestion: embed every source file not yet in Chroma.
+
+    Auto-chained by the frontend right after an upload (which only saves +
+    parses files). Idempotent — already-indexed sources are skipped.
+    """
+    return StreamingResponse(
+        _stream_index_pending(project_id, files_dir),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/reindex")

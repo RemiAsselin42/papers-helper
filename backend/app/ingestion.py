@@ -18,6 +18,7 @@ import httpx
 from fastapi import UploadFile
 
 from app.chroma import evict_collection, get_collection
+from app.config import MAX_CHUNK_CHARS
 from app.graph import graph_add_source, graph_rebuild
 from app.parsers import (
     MANIFEST_EXTENSIONS,
@@ -29,6 +30,7 @@ from app.parsers import (
     parse_bibtex,
 )
 from app.parsers._bibtex import normalize_title
+from app.settings import resolve_settings
 
 log = logging.getLogger(__name__)
 
@@ -122,21 +124,67 @@ def normalize_text(text: str) -> str:
     return text.strip()
 
 
-def _split_oversized_paragraph(para: str, max_words: int) -> list[str]:
-    """Split a paragraph that exceeds *max_words* into chunks of at most that
-    many words. Preserves word order; doesn't try to be sentence-aware.
-    Used as a safety net so no single chunk can blow Ollama's embedding
-    context window (default 2048 tokens ≈ a few hundred dense words).
+def strip_title_braces(meta: SidecarMeta) -> bool:
+    """Remove every `{` and `}` character from the title while keeping the
+    inner text intact (Zotero used to wrap segments like
+    `"Title {with sub-info}"` — we just want plain `"Title with sub-info"`
+    now that the brace-extraction feature is gone). Whitespace runs are
+    collapsed. Mutates `meta` in place; returns True iff the title changed.
+    Idempotent on already-clean titles.
     """
-    words = para.split()
-    if len(words) <= max_words:
+    if "{" not in meta.pdf_title and "}" not in meta.pdf_title:
+        return False
+    cleaned = re.sub(r"\s{2,}", " ", meta.pdf_title.replace("{", "").replace("}", "")).strip()
+    if cleaned == meta.pdf_title:
+        return False
+    meta.pdf_title = cleaned
+    return True
+
+
+def _split_oversized_paragraph(para: str, max_words: int, max_chars: int) -> list[str]:
+    """Split *para* so every piece holds at most *max_words* words AND at most
+    *max_chars* characters. Preserves word order; not sentence-aware.
+
+    The char bound is the real safety net: PDF extraction can glue words
+    together, so a word-bounded piece can still exceed the embedding model's
+    token budget. A piece still too long after word grouping (e.g. one
+    unbroken string with no spaces) is hard-sliced by character.
+    """
+    if len(para) <= max_chars and len(para.split()) <= max_words:
         return [para]
-    return [" ".join(words[i : i + max_words]) for i in range(0, len(words), max_words)]
+
+    pieces: list[str] = []
+    current: list[str] = []
+    current_chars = 0
+    for word in para.split():
+        added = len(word) + (1 if current else 0)
+        if current and (len(current) >= max_words or current_chars + added > max_chars):
+            pieces.append(" ".join(current))
+            current = []
+            current_chars = 0
+            added = len(word)
+        current.append(word)
+        current_chars += added
+    if current:
+        pieces.append(" ".join(current))
+
+    # A single word longer than the char cap survives the loop above intact —
+    # hard-slice anything still over the limit so no piece can blow the context.
+    out: list[str] = []
+    for piece in pieces:
+        if len(piece) <= max_chars:
+            out.append(piece)
+        else:
+            out.extend(piece[i : i + max_chars] for i in range(0, len(piece), max_chars))
+    return out
 
 
-def chunk_text(text: str, target_words: int = 500) -> list[str]:
+def chunk_text(
+    text: str, target_words: int = 500, max_chunk_chars: int = MAX_CHUNK_CHARS
+) -> list[str]:
     # Hard cap per chunk — slightly above target_words to keep paragraph-aware
-    # packing flexible, but well under any reasonable embedding context window.
+    # packing flexible. `max_chunk_chars` is the embedding-context safety net;
+    # it comes from the project's "granularité" setting (see app.settings).
     max_words_per_chunk = target_words * 2
 
     paragraphs: list[str] = []
@@ -144,25 +192,136 @@ def chunk_text(text: str, target_words: int = 500) -> list[str]:
         para = raw.strip()
         if not para:
             continue
-        paragraphs.extend(_split_oversized_paragraph(para, max_words_per_chunk))
+        paragraphs.extend(_split_oversized_paragraph(para, max_words_per_chunk, max_chunk_chars))
 
     chunks: list[str] = []
     bucket: list[str] = []
     bucket_words = 0
+    bucket_chars = 0
 
     for para in paragraphs:
         para_words = len(para.split())
-        if bucket_words + para_words > target_words and bucket:
+        para_chars = len(para)
+        # Flush on either bound: the word target shapes normal chunks, the char
+        # cap guarantees no chunk can exceed the embedding context.
+        over_words = bucket_words + para_words > target_words
+        over_chars = bucket_chars + para_chars > max_chunk_chars
+        if bucket and (over_words or over_chars):
             chunks.append("\n\n".join(bucket))
             bucket = []
             bucket_words = 0
+            bucket_chars = 0
         bucket.append(para)
         bucket_words += para_words
+        bucket_chars += para_chars + 2  # the "\n\n" join
 
     if bucket:
         chunks.append("\n\n".join(bucket))
 
-    return chunks
+    # Drop chunks with no real textual content — only punctuation, symbols or
+    # zero-width / format characters left by bad PDF extraction. An embedding
+    # model can return a NaN-bearing vector for such degenerate input, which
+    # Ollama then fails to JSON-encode (HTTP 500). `\w` is Unicode-aware, so
+    # accented words and CJK are kept.
+    return [chunk for chunk in chunks if re.search(r"\w", chunk)]
+
+
+def _is_degenerate_embed_error(exc: Exception) -> bool:
+    """Whether the embedder rejected a chunk as degenerate (no real content).
+
+    A NaN-bearing vector (Ollama: "json: unsupported value: NaN", HTTP 500) is
+    produced reproducibly for punctuation/symbol-only input. Such a chunk has
+    nothing to embed, so :func:`_add_chunks_resilient` drops it.
+    """
+    msg = str(exc).lower()
+    return "nan" in msg or "unsupported value" in msg
+
+
+def _is_context_overflow_error(exc: Exception) -> bool:
+    """Whether the embedder rejected a chunk for exceeding its context window.
+
+    Ollama returns HTTP 400 with a message like "input length exceeds context
+    length" when a chunk packs more tokens than the model loads. This is what a
+    too-coarse "granularité" setting triggers (a large ``max_chunk_chars``
+    paired with a small-context embed model — e.g. RAPIDE with the default
+    ``nomic-embed-text``). Unlike a degenerate chunk the text is real, so
+    :func:`_add_chunks_resilient` re-splits it smaller and retries rather than
+    dropping it.
+    """
+    msg = str(exc).lower()
+    return "context length" in msg or "context window" in msg or "exceeds context" in msg
+
+
+def _is_skippable_embed_error(exc: Exception) -> bool:
+    """Whether an embedding failure is chunk-specific and deterministic — it
+    recurs for that exact chunk, so isolating it is correct.
+
+    Two kinds, handled differently by :func:`_add_chunks_resilient`: a
+    degenerate chunk (:func:`_is_degenerate_embed_error`) is dropped; a
+    context-overflow chunk (:func:`_is_context_overflow_error`) is re-split and
+    retried. Transient failures (timeout, connection reset) are NOT skippable:
+    they must propagate so the whole document is failed and retried.
+    """
+    return _is_degenerate_embed_error(exc) or _is_context_overflow_error(exc)
+
+
+def _add_chunks_resilient(
+    collection: chromadb.Collection,
+    ids: list[str],
+    documents: list[str],
+    metadatas: list[dict[str, Any]],
+) -> int:
+    """Add chunks to Chroma, isolating any that the embedder deterministically
+    rejects. On a skippable failure (see :func:`_is_skippable_embed_error`) the
+    batch is bisected down to the offending chunk(s): a degenerate chunk is
+    dropped, a chunk that overflows the embedding context window is re-split
+    smaller and retried — so neither a single bad chunk nor a too-coarse
+    granularity setting can sink the whole document. Returns the count actually
+    added. Re-raises transient failures unchanged.
+    """
+    if not ids:
+        return 0
+    try:
+        collection.add(ids=ids, documents=documents, metadatas=metadatas)  # type: ignore[arg-type]
+        return len(ids)
+    except Exception as exc:
+        if not _is_skippable_embed_error(exc):
+            raise
+        if len(ids) == 1:
+            if _is_context_overflow_error(exc):
+                return _resplit_oversized_chunk(collection, ids[0], documents[0], metadatas[0], exc)
+            log.warning("skipping unembeddable chunk %s: %s", ids[0], exc)
+            return 0
+        mid = len(ids) // 2
+        added = _add_chunks_resilient(collection, ids[:mid], documents[:mid], metadatas[:mid])
+        added += _add_chunks_resilient(collection, ids[mid:], documents[mid:], metadatas[mid:])
+        return added
+
+
+def _resplit_oversized_chunk(
+    collection: chromadb.Collection,
+    chunk_id: str,
+    document: str,
+    metadata: dict[str, Any],
+    exc: Exception,
+) -> int:
+    """Recover a single chunk too long for the embedding model's context
+    window by halving it and re-adding both pieces.
+
+    The halves go back through :func:`_add_chunks_resilient`, so an oversized
+    piece is halved again until each one fits. Re-splitting preserves the text
+    — dropping it would silently lose content — letting a coarse "granularité"
+    setting degrade gracefully instead of failing the document. A chunk too
+    short to halve is dropped as a last resort.
+    """
+    half = len(document) // 2
+    if half == 0:
+        log.warning("skipping unsplittable oversized chunk %s: %s", chunk_id, exc)
+        return 0
+    sub_ids = [f"{chunk_id}__s0", f"{chunk_id}__s1"]
+    sub_docs = [document[:half], document[half:]]
+    sub_metas = [dict(metadata), dict(metadata)]
+    return _add_chunks_resilient(collection, sub_ids, sub_docs, sub_metas)
 
 
 def _index_chunks(
@@ -185,31 +344,30 @@ def _index_chunks(
     if existing["ids"]:
         collection.delete(ids=existing["ids"])
     chunk_total = len(chunks)
-    collection.add(
-        documents=chunks,
-        ids=[f"{stem}__chunk_{i:04d}" for i in range(chunk_total)],
-        metadatas=[
-            {
-                "source_filename": filename,
-                "source_stem": stem,
-                "chunk_index": i,
-                "chunk_total": chunk_total,
-                "word_count": len(chunk.split()),
-                "pdf_title": pdf_title,
-                "author": author,
-                "year": year,
-                "source_type": source_type,
-                "authors_json": authors_json,
-                "publication": publication,
-                "doi": doi,
-                "abstract": abstract,
-                "notes": notes,
-                "categories": categories,
-            }
-            for i, chunk in enumerate(chunks)
-        ],
-    )
-    return chunk_total
+    ids = [f"{stem}__chunk_{i:04d}" for i in range(chunk_total)]
+    metadatas: list[dict[str, Any]] = [
+        {
+            "source_filename": filename,
+            "source_stem": stem,
+            "chunk_index": i,
+            "chunk_total": chunk_total,
+            "word_count": len(chunk.split()),
+            "pdf_title": pdf_title,
+            "author": author,
+            "year": year,
+            "source_type": source_type,
+            "authors_json": authors_json,
+            "publication": publication,
+            "doi": doi,
+            "abstract": abstract,
+            "notes": notes,
+            "categories": categories,
+        }
+        for i, chunk in enumerate(chunks)
+    ]
+    # Returns the count actually stored — a chunk the embedder rejects with a
+    # NaN vector is skipped rather than failing the whole document.
+    return _add_chunks_resilient(collection, ids, list(chunks), metadatas)
 
 
 @dataclass
@@ -228,14 +386,19 @@ def _parse_source(
     bib: BibtexEntry | None = None,
     pdf_title_fallback: str = "",
     sidecar_overrides: SidecarMeta | None = None,
+    max_chunk_chars: int = MAX_CHUNK_CHARS,
 ) -> _ParsedSource:
-    """Pure parse step. Raises on parse failure. Never touches Chroma."""
+    """Pure parse step. Raises on parse failure. Never touches Chroma.
+
+    `max_chunk_chars` comes from the project's granularity setting; the default
+    is used by callers (like Stage-1 import) whose chunks are discarded anyway.
+    """
     result: ParseResult = parse(filename, content)
     text = normalize_text(result.text)
     if not text:
         raise ValueError("Aucun texte extrait du fichier")
 
-    chunks = chunk_text(text)
+    chunks = chunk_text(text, max_chunk_chars=max_chunk_chars)
     stem = Path(filename).stem
 
     pdf_title = (bib.title if bib else result.title) or pdf_title_fallback
@@ -264,6 +427,10 @@ def _parse_source(
         # through a reparse so the LLM cost isn't paid again unnecessarily.
         if sidecar_overrides.concepts_json:
             meta.concepts_json = sidecar_overrides.concepts_json
+
+    # Strip Zotero brace characters from the title; the inner words are part
+    # of the title, only the `{` `}` themselves were ever decorative.
+    strip_title_braces(meta)
 
     return _ParsedSource(text=text, chunks=chunks, meta=meta)
 
@@ -295,6 +462,11 @@ class _ImportOutcome:
     indexed: bool
     index_error: str = ""
     already_existed: bool = False
+    # Surfaced to the frontend so the auto-enrichment queue can skip
+    # dimensions that already have content (BibTeX abstract, user-edited
+    # categories) without an extra GET round-trip.
+    has_abstract: bool = False
+    has_categories: bool = False
 
 
 async def _import_one(
@@ -325,6 +497,8 @@ async def _import_one(
             bib=bib,
             pdf_title_fallback=pdf_title_fallback,
             sidecar_overrides=existing_sidecar,
+            # Chunk size follows the project's granularity setting.
+            max_chunk_chars=resolve_settings(project_id).max_chunk_chars,
         )
     except Exception as exc:
         if not already_existed:
@@ -334,6 +508,9 @@ async def _import_one(
     # Write sidecar before attempting indexing so the source is visible even
     # if indexing fails afterwards.
     write_sidecar(files_dir, parsed.meta)
+
+    has_abstract = bool(parsed.meta.abstract.strip())
+    has_categories = bool(parsed.meta.categories.strip())
 
     try:
         chunk_total = await asyncio.to_thread(_attempt_index, project_id, parsed)
@@ -347,6 +524,8 @@ async def _import_one(
             indexed=False,
             index_error=parsed.meta.index_error,
             already_existed=already_existed,
+            has_abstract=has_abstract,
+            has_categories=has_categories,
         ), None
 
     parsed.meta.index_error = ""
@@ -356,6 +535,53 @@ async def _import_one(
         chunk_total=chunk_total,
         indexed=True,
         already_existed=already_existed,
+        has_abstract=has_abstract,
+        has_categories=has_categories,
+    ), None
+
+
+async def _import_parse_only(
+    filename: str,
+    content: bytes,
+    files_dir: Path,
+    *,
+    already_existed: bool,
+    bib: BibtexEntry | None = None,
+    pdf_title_fallback: str = "",
+) -> tuple[_ImportOutcome, None] | tuple[None, str]:
+    """Stage 1 import: parse the file and write its sidecar — nothing else.
+
+    No Chroma, no Ollama: the file lands on disk and shows up in the source
+    list immediately. Embedding is deferred to the indexing pass
+    (:func:`_stream_index_pending`). Returns the outcome (always
+    ``indexed=False``) or a hard error string when parsing fails.
+    """
+    file_path = files_dir / filename
+    stem = Path(filename).stem
+    existing_sidecar = read_sidecar(files_dir, stem)
+
+    try:
+        parsed = _parse_source(
+            filename,
+            content,
+            bib=bib,
+            pdf_title_fallback=pdf_title_fallback,
+            sidecar_overrides=existing_sidecar,
+        )
+    except Exception as exc:
+        if not already_existed:
+            file_path.unlink(missing_ok=True)
+        return None, f"Erreur d'extraction : {exc}"
+
+    parsed.meta.index_error = ""
+    parsed.meta.indexed_at = ""
+    write_sidecar(files_dir, parsed.meta)
+    return _ImportOutcome(
+        chunk_total=0,
+        indexed=False,
+        already_existed=already_existed,
+        has_abstract=bool(parsed.meta.abstract.strip()),
+        has_categories=bool(parsed.meta.categories.strip()),
     ), None
 
 
@@ -406,6 +632,8 @@ def _result_event(
         "indexed": outcome.indexed,
         "index_error": outcome.index_error,
         "already_existed": outcome.already_existed,
+        "has_abstract": outcome.has_abstract,
+        "has_categories": outcome.has_categories,
     }
 
 
@@ -483,6 +711,12 @@ async def _stream_upload(
         except Exception as exc:
             bib_results[filename] = str(exc)
 
+    # Announce the full resolved file list upfront — after ZIP expansion and
+    # manifest discovery — so the UI can render every queued document before
+    # we start processing them one by one. Without this, a Zotero ZIP appears
+    # as a single row until its contents are individually unpacked.
+    yield _sse({"type": "queued", "filenames": [name for name, _ in buffered]})
+
     for filename, content in buffered:
         ext = Path(filename).suffix.lower()
         yield _sse({"type": "start", "filename": filename})
@@ -528,8 +762,7 @@ async def _stream_upload(
             except Exception:
                 pass
 
-        outcome, parse_err = await _import_one(
-            project_id,
+        outcome, parse_err = await _import_parse_only(
             filename,
             content,
             files_dir,
@@ -543,10 +776,6 @@ async def _stream_upload(
 
         stem = Path(filename).stem
         yield _sse(_result_event(filename=filename, stem=stem, outcome=outcome))
-        if outcome.indexed:
-            ev = await _graph_update_event(project_id, filename, stem)
-            if ev:
-                yield ev
 
     yield _sse({"type": "done"})
 
@@ -607,8 +836,7 @@ async def _stream_url_import(
     file_path = files_dir / inferred_filename
     file_path.write_bytes(raw_content)
 
-    outcome, parse_err = await _import_one(
-        project_id,
+    outcome, parse_err = await _import_parse_only(
         inferred_filename,
         raw_content,
         files_dir,
@@ -624,10 +852,6 @@ async def _stream_url_import(
     # Surface the URL as the event's filename so the frontend toast stays
     # consistent with the upload progress view.
     yield _sse(_result_event(filename=url, stem=stem, outcome=outcome))
-    if outcome.indexed:
-        ev = await _graph_update_event(project_id, url, stem)
-        if ev:
-            yield ev
     yield _sse({"type": "done"})
 
 
@@ -671,6 +895,82 @@ async def _stream_single_reindex(
     yield _sse({"type": "done"})
 
 
+def _indexed_stems(project_id: str) -> set[str]:
+    """Stems with at least one chunk in the project's Chroma collection.
+
+    Returns an empty set when Chroma is unreachable (no embed provider) —
+    callers then treat every file as pending and let the per-file index
+    attempt surface its own error.
+    """
+    try:
+        col = get_collection(project_id)
+        result = col.get(include=["metadatas"])
+    except Exception:
+        return set()
+    stems: set[str] = set()
+    for meta in result["metadatas"] or []:
+        s = meta.get("source_stem")
+        if s:
+            stems.add(str(s))
+    return stems
+
+
+async def _stream_index_pending(project_id: str, files_dir: Path) -> AsyncGenerator[str, None]:
+    """Stage 2: embed every not-yet-indexed source file into Chroma.
+
+    Iterates the project's source files, skips the ones that already have
+    chunks in Chroma, and runs the full parse+embed step on the rest. Paired
+    with :func:`_stream_upload`, which only saves+parses files. Re-running it
+    is safe: already-indexed sources are skipped.
+    """
+    project_dir = files_dir.parent
+    indexed = await asyncio.to_thread(_indexed_stems, project_id)
+    source_files = iter_source_files(project_dir)
+    pending = [f for f in source_files if Path(f.name).stem not in indexed]
+
+    yield _sse({"type": "start_index", "total": len(pending)})
+    yield _sse({"type": "queued", "filenames": [p.name for p in pending]})
+
+    indexed_count = 0
+    failed = 0
+
+    for file_path in pending:
+        filename = file_path.name
+        yield _sse({"type": "start", "filename": filename})
+
+        try:
+            content = file_path.read_bytes()
+        except Exception as exc:
+            yield _sse({"type": "error", "filename": filename, "error": str(exc)})
+            failed += 1
+            continue
+
+        outcome, parse_err = await _import_one(
+            project_id,
+            filename,
+            content,
+            files_dir,
+            already_existed=True,
+        )
+        if outcome is None:
+            assert parse_err is not None
+            yield _sse({"type": "error", "filename": filename, "error": parse_err})
+            failed += 1
+            continue
+
+        stem = Path(filename).stem
+        yield _sse(_result_event(filename=filename, stem=stem, outcome=outcome))
+        if outcome.indexed:
+            indexed_count += 1
+            ev = await _graph_update_event(project_id, filename, stem)
+            if ev:
+                yield ev
+        else:
+            failed += 1
+
+    yield _sse({"type": "done", "total": indexed_count, "failed": failed})
+
+
 _RESTORABLE_META = frozenset(
     {
         "pdf_title",
@@ -712,6 +1012,35 @@ def iter_source_files(project_dir: Path) -> list[Path]:
     return out
 
 
+def prune_orphan_sidecars(project_dir: Path, valid_stems: set[str]) -> list[str]:
+    """Delete ``<stem>.meta.json`` sidecars whose backing document no longer
+    exists on disk.
+
+    An orphan is left behind when a delete races a concurrent metadata write
+    — e.g. background auto-enrichment PATCHes a source the user removed mid
+    generation, re-creating the sidecar after :func:`delete_paper` unlinked
+    it. ``iter_source_files`` skips sidecars, so such files would otherwise
+    never be revisited. Returns the stems pruned (for logging).
+    """
+    removed: list[str] = []
+    for subdir in ("files", "pdfs"):
+        d = project_dir / subdir
+        if not d.exists():
+            continue
+        for f in d.iterdir():
+            if not f.is_file() or not f.name.endswith(SIDECAR_SUFFIX):
+                continue
+            stem = f.name[: -len(SIDECAR_SUFFIX)]
+            if stem in valid_stems:
+                continue
+            try:
+                f.unlink(missing_ok=True)
+                removed.append(stem)
+            except OSError:
+                pass
+    return removed
+
+
 async def _stream_reindex(project_id: str, files_dir: Path) -> AsyncGenerator[str, None]:
     # 1. Export per-stem metadata before dropping the collection.
     def _export() -> dict[str, dict[str, Any]]:
@@ -737,6 +1066,7 @@ async def _stream_reindex(project_id: str, files_dir: Path) -> AsyncGenerator[st
     source_files = iter_source_files(project_dir)
 
     yield _sse({"type": "start_reindex", "total": len(source_files)})
+    yield _sse({"type": "queued", "filenames": [p.name for p in source_files]})
 
     indexed = 0
     failed = 0

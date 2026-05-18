@@ -8,10 +8,11 @@ from chromadb import Documents, EmbeddingFunction, Embeddings
 
 from app.config import OLLAMA_BASE_URL, OLLAMA_EMBED_MODEL, OLLAMA_GENERATION_MODEL, get_ollama_url
 
-# Most Ollama embedding models (nomic-embed-text, mxbai-embed-large, bge-large)
-# support 8192-token context, but Ollama's per-request default is 2048. Bumping
-# this avoids 400 "input length exceeds context length" errors on dense chunks.
-# Ollama silently clamps to the model's actual maximum.
+# Requested embedding context. NOTE: Ollama loads an embedding model at the
+# context registered in its modelfile (~2048 for nomic-embed-text) and does
+# NOT reliably honour a per-request num_ctx on /api/embed — so this is a
+# best-effort hint, not a guarantee. The real safeguard against 400 "input
+# length exceeds the context length" is the MAX_CHUNK_CHARS cap in ingestion.
 _EMBED_NUM_CTX = 8192
 
 

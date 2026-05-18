@@ -1,7 +1,7 @@
 """Integration tests for the graph hooks attached to ingestion routes.
 
 Validates that:
-- A successful upload yields a `graph_updated` SSE event and writes graph.json.
+- The indexing pass yields a `graph_updated` SSE event and writes graph.json.
 - DELETE /papers/{stem} removes the paper node from the graph.
 - PATCH /papers/{stem} re-derives the paper's author/theme/concept nodes.
 - POST /papers/reindex multiplexes graph_* events into the stream.
@@ -163,13 +163,17 @@ def _patch_all(
         yield
 
 
-def test_upload_emits_graph_updated_event(client: TestClient, project_dir: Path) -> None:
+def test_index_pass_emits_graph_updated_event(client: TestClient, project_dir: Path) -> None:
+    """The graph is built by the indexing pass (Stage 2), not the upload —
+    Stage 1 only saves + parses the file."""
     col = _FakeCollection()
     with _patch_all(project_dir, col):
-        resp = client.post(
+        up = client.post(
             f"/projects/{project_dir.name}/papers/upload/stream",
             files={"files": ("paper.txt", b"Hello world.\n\nSecond paragraph.", "text/plain")},
         )
+        assert up.status_code == 200
+        resp = client.post(f"/projects/{project_dir.name}/papers/index/stream")
     assert resp.status_code == 200
     events = _parse_sse(resp.text)
     types = [e["type"] for e in events]
@@ -189,12 +193,13 @@ def test_upload_emits_graph_updated_event(client: TestClient, project_dir: Path)
 
 def test_delete_removes_paper_from_graph(client: TestClient, project_dir: Path) -> None:
     col = _FakeCollection()
-    # Seed: upload first so graph.json contains the paper.
+    # Seed: upload then index so graph.json contains the paper.
     with _patch_all(project_dir, col):
         client.post(
             f"/projects/{project_dir.name}/papers/upload/stream",
             files={"files": ("paper.txt", b"Hello world.\n\nMore content.", "text/plain")},
         )
+        client.post(f"/projects/{project_dir.name}/papers/index/stream")
         assert (project_dir / "graph.json").exists()
 
         resp = client.delete(f"/projects/{project_dir.name}/papers/paper")
