@@ -15,7 +15,12 @@ from app.llm_service import (
     get_context_limit,
 )
 from app.main import app
-from app.routes.chat.condense import _decide_strategy
+from app.routes.chat.condense import (
+    GLOBAL_REDUCE_PROMPT_TEMPLATE,
+    REDUCE_PROMPT_TEMPLATE,
+    _decide_strategy,
+    _window_chunks,
+)
 
 
 @pytest.fixture
@@ -303,6 +308,10 @@ def test_condense_ollama_map_reduce_single_stem(client: TestClient) -> None:
 
     with (
         patch("app.routes.chat.condense.get_collection", return_value=fake),
+        # Window size of 1 word → each tiny test chunk maps on its own, so the
+        # map-step count stays per-chunk (the windowing default would otherwise
+        # fold all three into a single window).
+        patch("app.routes.chat.condense.CONDENSE_MAP_WINDOW_WORDS", 1),
         patch(
             "app.ollama_service.OllamaGenerationService.stream_generate_messages",
             new=_fake_gen,
@@ -335,6 +344,7 @@ def test_condense_emits_progress_events_during_map_reduce(client: TestClient) ->
 
     with (
         patch("app.routes.chat.condense.get_collection", return_value=fake),
+        patch("app.routes.chat.condense.CONDENSE_MAP_WINDOW_WORDS", 1),
         patch(
             "app.ollama_service.OllamaGenerationService.stream_generate_messages",
             new=_fake_gen,
@@ -379,6 +389,7 @@ def test_condense_map_reduce_multi_stem(client: TestClient) -> None:
 
     with (
         patch("app.routes.chat.condense.get_collection", return_value=fake),
+        patch("app.routes.chat.condense.CONDENSE_MAP_WINDOW_WORDS", 1),
         patch(
             "app.ollama_service.OllamaGenerationService.stream_generate_messages",
             new=_fake_gen,
@@ -398,3 +409,63 @@ def test_condense_map_reduce_multi_stem(client: TestClient) -> None:
     final_reduce_body = seen_messages[-1][0]["content"]
     assert "paper-a" in final_reduce_body
     assert "paper-b" in final_reduce_body
+
+
+# ---------------------------------------------------------------------------
+# _window_chunks — map-step batching
+# ---------------------------------------------------------------------------
+
+
+def test_window_chunks_groups_consecutive_chunks() -> None:
+    # 10 chunks of 100 words, 250-word windows → 2 chunks per window.
+    chunks = [(i, "word " * 100) for i in range(10)]
+    windows = _window_chunks(chunks, 250)
+    assert len(windows) == 5
+    # Windows are re-indexed 0..N regardless of the source chunk indices.
+    assert [w[0] for w in windows] == [0, 1, 2, 3, 4]
+
+
+def test_window_chunks_oversized_chunk_is_its_own_window() -> None:
+    # A chunk already above the window cap is never split — it stands alone.
+    chunks = [(0, "word " * 500), (1, "tiny")]
+    windows = _window_chunks(chunks, 100)
+    assert len(windows) == 2
+
+
+def test_window_chunks_empty_input() -> None:
+    assert _window_chunks([], 4000) == []
+
+
+def test_reduce_prompts_forbid_preamble_and_enforce_french() -> None:
+    # Bug fix: small local models drift to English + chatty headers; every
+    # reduce template must carry the explicit no-preamble / French directive.
+    for tpl in (REDUCE_PROMPT_TEMPLATE, GLOBAL_REDUCE_PROMPT_TEMPLATE):
+        assert "français" in tpl
+        assert "After analyzing" in tpl
+
+
+def test_condense_windows_small_chunks_into_one_map_call(client: TestClient) -> None:
+    """With the default window, many small chunks fold into a single map call —
+    the optimisation that cuts a 200-page doc from ~200 calls to a handful."""
+    call_count = {"n": 0}
+
+    async def _fake_gen(_self: Any, messages: list[dict[str, Any]]) -> AsyncGenerator[str, None]:
+        call_count["n"] += 1
+        yield f"M{call_count['n']}"
+
+    fake = _fake_collection({"paper-a": [f"c{i}." for i in range(20)]})
+
+    with (
+        patch("app.routes.chat.condense.get_collection", return_value=fake),
+        patch(
+            "app.ollama_service.OllamaGenerationService.stream_generate_messages",
+            new=_fake_gen,
+        ),
+    ):
+        response = client.post(
+            "/projects/p/condense",
+            json={"prompt": "Résume.", "stems": ["paper-a"], "model": "llama3"},
+        )
+    assert response.status_code == 200
+    # 20 tiny chunks fit in one 4000-word window → 1 map + 1 reduce.
+    assert call_count["n"] == 2

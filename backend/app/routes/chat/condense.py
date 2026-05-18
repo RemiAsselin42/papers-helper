@@ -31,6 +31,7 @@ from app.chroma import get_collection
 from app.config import (
     CONDENSE_FULL_DOC_CONTEXT_RATIO,
     CONDENSE_MAP_MAX_CONCURRENCY,
+    CONDENSE_MAP_WINDOW_WORDS,
     CONDENSE_TOKENS_PER_CHUNK_ESTIMATE,
 )
 from app.llm_service import ExternalLLMService, LLMProvider, get_context_limit
@@ -39,25 +40,49 @@ from app.ollama_service import OllamaGenerationService
 Strategy = Literal["full", "map_reduce_single", "map_reduce_multi"]
 Event = dict[str, Any]
 
+# Small local models (llama3) answer in English and prepend chatty
+# meta-commentary ("What a treasure trove of text summaries!…") plus Markdown
+# when handed a "combine these summaries" framing. This directive forbids all
+# of it; the reduce templates also place it LAST (after the content) because
+# small models weight the tail of the prompt most.
+_NO_PREAMBLE_DIRECTIVE = (
+    "Contraintes de rédaction strictes. Écris en français. Commence "
+    "directement par la première phrase du résumé : n'écris aucune phrase "
+    "d'introduction ni aucun commentaire méta (jamais « Voici… », "
+    "« Here's a… », « After analyzing… », « What a treasure trove… » ou "
+    "équivalent). Termine sur la dernière phrase utile, sans conclusion du "
+    "type « En résumé… » ou « Overall… ». Rédige en texte brut : aucun "
+    "formatage Markdown, pas de gras ni d'astérisques, pas de listes à puces "
+    "ou numérotées, pas de titres."
+)
+
 MAP_PROMPT_TEMPLATE = (
     "Voici un extrait d'un document plus long. Tâche demandée : {prompt}\n"
     "Concentre-toi uniquement sur les éléments présents dans cet extrait "
-    "qui sont pertinents pour cette tâche. Réponds en quelques phrases.\n\n"
+    "qui sont pertinents pour cette tâche. Réponds en français, en quelques "
+    "phrases de texte brut, sans préambule ni formatage Markdown.\n\n"
     "--- EXTRAIT ---\n{chunk}"
 )
 
+# Instruction-last layout: the notes come first, the task + constraints come
+# after, so the model's most recent context is "do this task", not "here is a
+# list of summaries" (which it tends to answer with meta-commentary).
 REDUCE_PROMPT_TEMPLATE = (
-    "Voici plusieurs résumés partiels d'un même document, dans l'ordre. "
-    "Combine-les pour répondre à la tâche initiale.\n\n"
+    "Tu disposes de notes de lecture prises sur les parties successives "
+    "d'un même document, dans l'ordre.\n\n"
+    "--- NOTES DE LECTURE ---\n{partials}\n--- FIN DES NOTES ---\n\n"
+    "En t'appuyant uniquement sur ces notes, effectue la tâche suivante.\n"
     "Tâche : {prompt}\n\n"
-    "--- RÉSUMÉS PARTIELS ---\n{partials}"
+    f"{_NO_PREAMBLE_DIRECTIVE}"
 )
 
 GLOBAL_REDUCE_PROMPT_TEMPLATE = (
-    "Voici un résumé par document. Combine-les pour répondre à la tâche "
-    "initiale (référence chaque document si pertinent).\n\n"
+    "Tu disposes d'un résumé par document.\n\n"
+    "--- RÉSUMÉS PAR DOCUMENT ---\n{per_doc}\n--- FIN ---\n\n"
+    "En t'appuyant uniquement sur ces résumés, effectue la tâche suivante "
+    "(référence chaque document si pertinent).\n"
     "Tâche : {prompt}\n\n"
-    "--- RÉSUMÉS PAR DOCUMENT ---\n{per_doc}"
+    f"{_NO_PREAMBLE_DIRECTIVE}"
 )
 
 
@@ -95,6 +120,30 @@ def _fetch_full_stem_untruncated(collection: Any, stem: str) -> str:
     """
     rows = _fetch_chunks_for_stem(collection, stem)
     return "\n\n".join(doc for _idx, doc in rows).strip()
+
+
+def _window_chunks(chunks: list[tuple[int, str]], max_words: int) -> list[tuple[int, str]]:
+    """Group consecutive chunks into windows of at most `max_words` words.
+
+    Cuts the number of map-step LLM calls roughly N-fold (a 200-page doc goes
+    from ~200 chunks to ~25 windows). Windows are re-indexed 0..M so progress
+    counters and chunk ordering stay consistent. A single chunk that already
+    exceeds `max_words` becomes its own window — never split further.
+    """
+    windows: list[tuple[int, str]] = []
+    bucket: list[str] = []
+    bucket_words = 0
+    for _idx, doc in chunks:
+        words = len(doc.split())
+        if bucket and bucket_words + words > max_words:
+            windows.append((len(windows), "\n\n".join(bucket)))
+            bucket = []
+            bucket_words = 0
+        bucket.append(doc)
+        bucket_words += words
+    if bucket:
+        windows.append((len(windows), "\n\n".join(bucket)))
+    return windows
 
 
 def _count_chunks(collection: Any, stems: list[str]) -> dict[str, int]:
@@ -153,6 +202,24 @@ async def _collect_tokens(gen: AsyncGenerator[str, None]) -> str:
     return "".join(parts)
 
 
+async def run_single_generation(
+    provider: LLMProvider,
+    model: str,
+    api_key: str | None,
+    ollama_base_url: str | None,
+    content: str,
+) -> str:
+    """One-shot LLM generation: send `content` as a single user message and
+    return the full collected response.
+
+    Used by /categorize, whose prompt is short and single-pass — no map-reduce
+    fan-out, no Chroma read.
+    """
+    svc = _reducer_service(provider, model, api_key, ollama_base_url)
+    messages = [{"role": "user", "content": content}]
+    return await _collect_tokens(svc.stream_generate_messages(messages))
+
+
 async def _map_one(
     semaphore: asyncio.Semaphore,
     svc: OllamaGenerationService,
@@ -208,9 +275,7 @@ def _map_with_progress(
 
     async def _events() -> AsyncGenerator[Event, None]:
         semaphore = asyncio.Semaphore(CONDENSE_MAP_MAX_CONCURRENCY)
-        tasks = [
-            asyncio.create_task(_map_one(semaphore, svc, prompt, doc, i)) for i, doc in chunks
-        ]
+        tasks = [asyncio.create_task(_map_one(semaphore, svc, prompt, doc, i)) for i, doc in chunks]
         total = len(tasks)
         yield _map_progress_payload(0, total, stem, stem_index, stems_total)
 
@@ -271,9 +336,7 @@ async def _run_full(
     if not joined.strip():
         raise ValueError("Aucun contenu indexé trouvé pour les sources demandées.")
     svc = _reducer_service(provider, model, api_key, ollama_base_url)
-    messages = [
-        {"role": "user", "content": f"Tâche : {prompt}\n\n--- DOCUMENT ---\n{joined}"}
-    ]
+    messages = [{"role": "user", "content": f"Tâche : {prompt}\n\n--- DOCUMENT ---\n{joined}"}]
     async for token in svc.stream_generate_messages(messages):
         yield {"token": token}
 
@@ -293,7 +356,8 @@ async def _run_map_reduce_single(
     if not chunks:
         return
 
-    events, partials = _map_with_progress(chunks, ollama_model, ollama_base_url, prompt)
+    windows = _window_chunks(chunks, CONDENSE_MAP_WINDOW_WORDS)
+    events, partials = _map_with_progress(windows, ollama_model, ollama_base_url, prompt)
     async for evt in events:
         yield evt
 
@@ -331,8 +395,9 @@ async def _run_map_reduce_multi(
         if not chunks:
             continue
 
+        windows = _window_chunks(chunks, CONDENSE_MAP_WINDOW_WORDS)
         events, partials = _map_with_progress(
-            chunks,
+            windows,
             ollama_model,
             ollama_base_url,
             prompt,
@@ -460,5 +525,7 @@ __all__ = [
     "_decide_strategy",
     "_estimate_tokens",
     "_fetch_chunks_for_stem",
+    "_window_chunks",
     "run_condense",
+    "run_single_generation",
 ]

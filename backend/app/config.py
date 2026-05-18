@@ -14,6 +14,15 @@ OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_EMBED_MODEL: str = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
 OLLAMA_GENERATION_MODEL: str = os.getenv("OLLAMA_GENERATION_MODEL", "llama3")
 
+# Hard per-chunk character cap for ingestion. Embedding models cap input by
+# TOKENS, and Ollama loads an embedding model at the context registered in its
+# modelfile (~2048 for nomic-embed-text) — a per-request num_ctx is not
+# reliably honoured. Dense / poorly-spaced PDF text packs many tokens into few
+# chars, so the cap is deliberately low (~2000 chars stays under a 2048-token
+# window even at a worst-case 1 char/token) to guarantee every chunk embeds.
+# Raise it only with an embedding model that genuinely loads a larger context.
+MAX_CHUNK_CHARS: int = int(os.getenv("MAX_CHUNK_CHARS", "2000"))
+
 # Chat context-injection sizing. Defaults are tuned for ~8k-token small-context
 # models (~32k chars). Larger Ollama setups can raise these via env vars to use
 # more of the available window before per-turn truncation kicks in.
@@ -30,6 +39,10 @@ CHAT_GLOBAL_RAG_K: int = int(os.getenv("CHAT_GLOBAL_RAG_K", "6"))
 # Keep CONDENSE_TOKENS_PER_CHUNK_ESTIMATE in sync with `target_words` in
 # `app.ingestion.chunk_text` (currently 500); if the chunker is retuned, the
 # full-doc strategy threshold drifts silently.
+# Before the map step fans out, consecutive ~500-word chunks are grouped into
+# windows of at most this many words, so a 200-page doc costs ~25 Ollama calls
+# instead of ~200. Keep it well under the generation model's context window.
+CONDENSE_MAP_WINDOW_WORDS: int = int(os.getenv("CONDENSE_MAP_WINDOW_WORDS", "4000"))
 CONDENSE_MAP_MAX_CONCURRENCY: int = int(os.getenv("CONDENSE_MAP_MAX_CONCURRENCY", "2"))
 CONDENSE_FULL_DOC_CONTEXT_RATIO: float = float(os.getenv("CONDENSE_FULL_DOC_CONTEXT_RATIO", "0.7"))
 CONDENSE_TOKENS_PER_CHUNK_ESTIMATE: int = int(
