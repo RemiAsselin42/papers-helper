@@ -59,5 +59,11 @@ TODO.md
 graphify-out/
 context/
 
-# RTK 
+# RTK
 .rtk
+
+# Tooling output dumps
+fmt.txt
+lint.txt
+mypy.txt
+ruff.txt
