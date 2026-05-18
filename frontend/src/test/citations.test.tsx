@@ -31,7 +31,7 @@ describe('searchCitations', () => {
     const hits = await searchCitations('proj-1', 'neural', { author: 'Smith, J.' }, 20)
     expect(hits).toEqual([HIT])
 
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
     expect(url).toBe('/api/projects/proj-1/citations/search')
     expect(init.method).toBe('POST')
     expect(JSON.parse(init.body as string)).toEqual({
@@ -62,7 +62,7 @@ describe('getCitationContext', () => {
     const out = await getCitationContext('proj-1', 'paper-a', 0, 2)
     expect(out).toEqual(chunks)
 
-    const [url] = fetchMock.mock.calls[0] as [string]
+    const [url] = fetchMock.mock.calls[0] as unknown as [string]
     expect(url).toContain('/api/projects/proj-1/citations/context?')
     expect(url).toContain('stem=paper-a')
     expect(url).toContain('chunk_index=0')
@@ -230,7 +230,11 @@ describe('CitationsView', () => {
       const searchCalls = fetchMock.mock.calls.filter(([u]) =>
         String(u).includes('/citations/search')
       )
-      expect(searchCalls.map(([, init]) => JSON.parse((init as RequestInit).body as string).limit)).toEqual([20, 40])
+      const limits = searchCalls.map((call) => {
+        const init = (call as unknown as [string, RequestInit])[1]
+        return JSON.parse(init.body as string).limit
+      })
+      expect(limits).toEqual([20, 40])
     })
   })
 
