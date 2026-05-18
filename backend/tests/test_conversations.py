@@ -474,9 +474,7 @@ class TestLastVariants:
             )
         assert resp.status_code == 409
 
-    def test_add_variant_404_on_missing_conv(
-        self, client: TestClient, project_dir: Path
-    ) -> None:
+    def test_add_variant_404_on_missing_conv(self, client: TestClient, project_dir: Path) -> None:
         with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
             resp = client.post(
                 f"/projects/{project_dir.name}/conversations/missing/messages/last/variants",
@@ -504,9 +502,7 @@ class TestLastVariants:
         assert after["messages"][-1] == {"role": "assistant", "content": "msg-1"}
         assert after["last_variant_index"] == 0
 
-    def test_select_variant_422_out_of_range(
-        self, client: TestClient, project_dir: Path
-    ) -> None:
+    def test_select_variant_422_out_of_range(self, client: TestClient, project_dir: Path) -> None:
         with patch("app.routes.conversations.PROJECTS_DIR", project_dir.parent):
             cid = _seed_conversation(client, project_dir.name, 2)
             client.post(
