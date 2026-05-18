@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import numpy as np
+
 from app.graph.semantic import compute_mean_embedding, find_nearest_papers
 
 
@@ -66,6 +68,22 @@ class _FakeCollection:
         }
 
 
+class _NumpyCollection(_FakeCollection):
+    """`_FakeCollection` whose `get` returns embeddings as a numpy ndarray —
+    mirrors chromadb >= 1.5, which switched `get(include=["embeddings"])` to
+    ndarray output."""
+
+    def get(
+        self,
+        where: dict[str, Any] | None = None,
+        include: list[str] | None = None,
+    ) -> dict[str, Any]:
+        out = super().get(where=where, include=include)
+        if "embeddings" in out:
+            out["embeddings"] = np.asarray(out["embeddings"], dtype=float)
+        return out
+
+
 class TestComputeMeanEmbedding:
     def test_returns_mean_of_chunks(self) -> None:
         col = _FakeCollection()
@@ -75,6 +93,21 @@ class TestComputeMeanEmbedding:
 
     def test_missing_stem_returns_none(self) -> None:
         col = _FakeCollection()
+        assert compute_mean_embedding(col, "absent") is None  # type: ignore[arg-type]
+
+    def test_numpy_array_embeddings(self) -> None:
+        """chromadb >= 1.5 returns `get(include=["embeddings"])` as a numpy
+        ndarray. The old `result.get("embeddings") or []` raised
+        "truth value of an array is ambiguous" — silently wiping every
+        semantic edge during a graph rebuild. Guard against the regression.
+        """
+        col = _NumpyCollection()
+        col.add("p1", [[1.0, 0.0], [0.0, 1.0]])
+        mean = compute_mean_embedding(col, "p1")  # type: ignore[arg-type]
+        assert mean == [0.5, 0.5]
+
+    def test_numpy_empty_embeddings_returns_none(self) -> None:
+        col = _NumpyCollection()
         assert compute_mean_embedding(col, "absent") is None  # type: ignore[arg-type]
 
 

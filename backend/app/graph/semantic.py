@@ -26,7 +26,11 @@ def compute_mean_embedding(collection: chromadb.Collection, stem: str) -> list[f
     except Exception as exc:
         log.warning("compute_mean_embedding: collection.get failed for %s: %s", stem, exc)
         return None
-    embeddings = result.get("embeddings") or []
+    # `result.get("embeddings")` must be tested with `is None`, never for
+    # truthiness: chromadb >= 1.5 returns a numpy ndarray here, and
+    # `ndarray or []` raises "truth value of an array is ambiguous".
+    raw_embeddings = result.get("embeddings")
+    embeddings = [] if raw_embeddings is None else raw_embeddings
     rows: list[list[float]] = []
     for row in embeddings:
         if row is None:
