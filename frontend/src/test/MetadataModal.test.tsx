@@ -17,6 +17,7 @@ function makeSource(overrides: Partial<SourceInfo> = {}): SourceInfo {
     doi: '',
     abstract: '',
     notes: '',
+    categories: '',
     indexed: true,
     index_error: '',
     ...overrides,
@@ -287,6 +288,138 @@ describe('MetadataModal — handleGenerateAbstract', () => {
     // Release the stream so the modal teardown is clean.
     await act(async () => {
       releaseStream()
+    })
+  })
+
+  it('seeds the categories pill list from source.categories', () => {
+    render(
+      <MetadataModal
+        projectId="p1"
+        source={makeSource({ categories: 'Sociologie, Méthodes' })}
+        onSave={() => {}}
+        onClose={() => {}}
+        ollamaAvailable
+      />
+    )
+    expect(screen.getByText('Sociologie')).toBeInTheDocument()
+    expect(screen.getByText('Méthodes')).toBeInTheDocument()
+  })
+
+  it('opens a popover on "+ Ajouter" and commits a category on Enter', () => {
+    render(
+      <MetadataModal
+        projectId="p1"
+        source={makeSource()}
+        onSave={() => {}}
+        onClose={() => {}}
+        ollamaAvailable
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: /ajouter une catégorie/i }))
+    const input = screen.getByPlaceholderText('Nom de la catégorie') as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'Nouveau' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(screen.getByText('Nouveau')).toBeInTheDocument()
+    // Popover should close after commit.
+    expect(screen.queryByPlaceholderText('Nom de la catégorie')).toBeNull()
+  })
+
+  it('removes a category when its × button is clicked', () => {
+    render(
+      <MetadataModal
+        projectId="p1"
+        source={makeSource({ categories: 'Sociologie' })}
+        onSave={() => {}}
+        onClose={() => {}}
+        ollamaAvailable
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: /supprimer la catégorie sociologie/i }))
+    expect(screen.queryByText('Sociologie')).toBeNull()
+  })
+
+  it('IA categories: derives categories from the abstract via /categorize and dedups', async () => {
+    localStorage.setItem('llmProvider', 'ollama')
+    localStorage.setItem('ollamaModel', 'llama3')
+    // /categorize is a plain JSON endpoint — the LLM output is returned as
+    // { text } and parsed client-side.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ text: '["Sociologie", "Méthodes", "sociologie"]' }),
+      })
+    )
+    render(
+      <MetadataModal
+        projectId="p1"
+        source={makeSource({ categories: 'Sociologie', abstract: 'un résumé du document' })}
+        onSave={() => {}}
+        onClose={() => {}}
+        ollamaAvailable
+      />
+    )
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: /générer des catégories avec l’IA/i })
+      )
+    })
+    // "Sociologie" already there, "sociologie" merges into it, "Méthodes" is added.
+    await waitFor(() => {
+      expect(screen.getByText('Méthodes')).toBeInTheDocument()
+    })
+    expect(screen.getAllByText(/sociologie/i).length).toBe(1)
+  })
+
+  it('IA categories: refuses to run when no abstract is available yet', async () => {
+    localStorage.setItem('llmProvider', 'ollama')
+    localStorage.setItem('ollamaModel', 'llama3')
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    render(
+      <MetadataModal
+        projectId="p1"
+        source={makeSource()}
+        onSave={() => {}}
+        onClose={() => {}}
+        ollamaAvailable
+      />
+    )
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: /générer des catégories avec l’IA/i })
+      )
+    })
+    expect(screen.getByText(/d'abord un résumé/i)).toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('IA categories: surfaces an error message when the response has no parseable array', async () => {
+    localStorage.setItem('llmProvider', 'ollama')
+    localStorage.setItem('ollamaModel', 'llama3')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ text: 'pas un tableau' }),
+      })
+    )
+    render(
+      <MetadataModal
+        projectId="p1"
+        source={makeSource({ abstract: 'un résumé du document' })}
+        onSave={() => {}}
+        onClose={() => {}}
+        ollamaAvailable
+      />
+    )
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: /générer des catégories avec l’IA/i })
+      )
+    })
+    await waitFor(() => {
+      expect(screen.getByText(/réponse ia inexploitable/i)).toBeInTheDocument()
     })
   })
 

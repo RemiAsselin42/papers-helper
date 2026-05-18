@@ -20,17 +20,38 @@ export interface FileState {
   error?: string
   indexed?: boolean
   index_error?: string
+  /** Only set on successful document indexing; lets the toast match
+   * auto-enrichment progress (keyed by stem) to the right row. */
+  stem?: string
+  /** True for rows seeded by a settings-driven full reindex: the file was
+   * already imported, so the toast shows a running spinner (not the green
+   * "imported" check) until its index pass resolves. */
+  reindexing?: boolean
+}
+
+export interface FileCompletedInfo {
+  filename: string
+  stem: string
+  hasAbstract: boolean
+  hasCategories: boolean
 }
 
 interface DropZoneProps {
   projectId: string
   onSuccess?: () => void
   onProgress?: (states: FileState[]) => void
-  onFileCompleted?: (filename: string) => void
+  /** Fires for each successfully-imported document (skips ZIP/bib manifest
+   * results). Stage 1 only saves + parses the file; the parent uses this to
+   * refresh the source list as documents land. */
+  onFileCompleted?: (info: FileCompletedInfo) => void
   /** Fires when the backend emits a `graph_updated` SSE event after a
    * successful index step. Parent uses this to refetch the graph view
    * without a polling interval. */
   onGraphUpdated?: () => void
+  /** When true, all upload interactions (drop zone, file picker, URL input)
+   * are disabled and `disabledReason` is shown instead of the usual hint. */
+  disabled?: boolean
+  disabledReason?: string
 }
 
 // Bulk upload includes parsing time for the whole batch — give it twice the
@@ -40,6 +61,10 @@ const UPLOAD_TIMEOUT_MS = 120_000
 const URL_IMPORT_TIMEOUT_MS = 60_000
 
 // ── SSE event schema (matches backend/app/ingestion.py emissions) ─────────────
+interface UploadQueued {
+  type: 'queued'
+  filenames: string[]
+}
 interface UploadStart {
   type: 'start'
   filename: string
@@ -47,9 +72,12 @@ interface UploadStart {
 interface UploadDocResult {
   type: 'result'
   filename: string
+  stem: string
   chunks_indexed: number
   indexed?: boolean
   index_error?: string
+  has_abstract?: boolean
+  has_categories?: boolean
 }
 interface UploadZipResult {
   type: 'result'
@@ -70,6 +98,7 @@ interface UploadDone {
   type: 'done'
 }
 type UploadEvent =
+  | UploadQueued
   | UploadStart
   | UploadDocResult
   | UploadZipResult
@@ -84,6 +113,8 @@ export function DropZone({
   onProgress,
   onFileCompleted,
   onGraphUpdated,
+  disabled = false,
+  disabledReason,
 }: DropZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -113,6 +144,13 @@ export function DropZone({
   const handleEvent = useCallback(
     (event: UploadEvent) => {
       switch (event.type) {
+        case 'queued':
+          // Hydrate the full resolved file list (post-ZIP-expansion, post-bib
+          // discovery) upfront so users see every queued doc, not just the
+          // few they explicitly selected. upsertFile is idempotent — existing
+          // entries (selected files already in `queued`) keep their state.
+          for (const name of event.filenames) upsertFile(name, { status: 'queued' })
+          return
         case 'start':
           upsertFile(event.filename, { status: 'processing' })
           return
@@ -128,14 +166,22 @@ export function DropZone({
               items_parsed: event.items_parsed,
             })
           } else {
-            const indexed = event.indexed ?? true
+            // Stage 1 import only saves + parses — `indexed` is always false
+            // here; Chroma embedding happens in the indexing pass afterwards.
+            const indexed = event.indexed ?? false
             upsertFile(event.filename, {
               status: 'done',
               chunks: event.chunks_indexed,
               indexed,
               index_error: event.index_error || undefined,
+              stem: event.stem,
             })
-            onFileCompleted?.(event.filename)
+            onFileCompleted?.({
+              filename: event.filename,
+              stem: event.stem,
+              hasAbstract: event.has_abstract ?? false,
+              hasCategories: event.has_categories ?? false,
+            })
           }
           return
         case 'error':
@@ -256,25 +302,29 @@ export function DropZone({
 
   const isDragging = status === 'dragging'
   const isLoading = status === 'loading'
+  const interactive = !isLoading && !disabled
 
-  const hintText = isLoading
-    ? 'Indexation en cours…'
-    : isDragging
-      ? 'Déposer ici'
-      : `Glisser des fichiers ou cliquer pour sélectionner`
+  const hintText = disabled
+    ? (disabledReason ?? 'Importation indisponible.')
+    : isLoading
+      ? 'Importation en cours…'
+      : isDragging
+        ? 'Déposer ici'
+        : `Glisser des fichiers ou cliquer pour sélectionner`
 
   return (
     <div className={styles.wrapper}>
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
       <div
-        className={`${styles.zone} ${isDragging ? styles.zoneActive : ''}`}
-        onDragOver={onDragOver}
-        onDragLeave={onDragLeave}
-        onDrop={onDrop}
-        onClick={() => !isLoading && inputRef.current?.click()}
+        className={`${styles.zone} ${isDragging ? styles.zoneActive : ''} ${disabled ? styles.zoneDisabled : ''}`}
+        onDragOver={interactive ? onDragOver : undefined}
+        onDragLeave={interactive ? onDragLeave : undefined}
+        onDrop={interactive ? onDrop : undefined}
+        onClick={() => interactive && inputRef.current?.click()}
         role="button"
-        tabIndex={0}
-        onKeyDown={(e) => e.key === 'Enter' && !isLoading && inputRef.current?.click()}
+        tabIndex={interactive ? 0 : -1}
+        aria-disabled={disabled || undefined}
+        onKeyDown={(e) => e.key === 'Enter' && interactive && inputRef.current?.click()}
         aria-label="Zone de dépôt de fichiers"
       >
         <input
@@ -284,6 +334,7 @@ export function DropZone({
           multiple
           className={styles.input}
           onChange={onFileChange}
+          disabled={disabled}
         />
         <button
           className={styles.helpBtn}
@@ -310,14 +361,14 @@ export function DropZone({
             placeholder="https://…"
             value={urlValue}
             onChange={(e) => setUrlValue(e.target.value)}
-            disabled={isLoading}
+            disabled={isLoading || disabled}
             onKeyDown={(e) => e.key === 'Enter' && handleUrlSubmit()}
             aria-label="URL à importer"
           />
           <button
             className={styles.urlBtn}
             onClick={handleUrlSubmit}
-            disabled={isLoading || !urlValue.trim()}
+            disabled={isLoading || disabled || !urlValue.trim()}
           >
             Importer
           </button>

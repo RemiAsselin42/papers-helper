@@ -160,6 +160,10 @@ export function SourceCard({
         </div>
       </div>
 
+      {!s.indexed && s.index_error && (
+        <p className={styles.indexError}>Échec d’indexation : {s.index_error}</p>
+      )}
+
       {isOpen && hasViewer && <FileViewer projectId={projectId} source={s} type={type} />}
     </li>
   )

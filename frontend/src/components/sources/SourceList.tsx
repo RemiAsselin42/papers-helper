@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Upload } from 'lucide-react'
 import { deleteSource, listSources, reindexSource, type SourceInfo } from '../../api/papers'
-import { extractBibtexCategories } from '../../utils/bibtex'
-import { drainStream } from '../../utils/sse'
+import { splitCategoriesCsv } from '../../utils/categories'
+import { readSseEvents } from '../../utils/sse'
 import { MetadataModal } from './MetadataModal'
 import { Skeleton } from '../layout/Skeleton'
 import type { FileState } from './DropZone'
@@ -35,6 +35,17 @@ interface SourceListProps {
   onDelete?: () => void
   onReindexed?: () => void
   onRequestImport?: () => void
+  /** Optional auto-enrichment hook from App. When provided, every reindexed
+   * source whose abstract/categories are still empty is enqueued for IA
+   * generation — same contract as the initial-import flow. */
+  onEnqueueEnrich?: (
+    stem: string,
+    flags: { hasAbstract: boolean; hasCategories: boolean }
+  ) => void
+  /** Counterpart to `onEnqueueEnrich`: drops a source from the auto-enrich
+   * queue (and aborts it if running) when the source is deleted, so a
+   * deleted paper is never re-patched into an orphan metadata sidecar. */
+  onCancelEnrich?: (stem: string) => void
   /** Optionally lift the "currently-open preview" stem to a parent so other
    * features (e.g. clicking a node in the graph) can drive it. When omitted,
    * SourceList manages it locally. */
@@ -56,6 +67,8 @@ export function SourceList({
   onDelete,
   onReindexed,
   onRequestImport,
+  onEnqueueEnrich,
+  onCancelEnrich,
   openStem: openStemProp,
   onChangeOpenStem,
   filterState: filterStateProp,
@@ -100,6 +113,11 @@ export function SourceList({
     try {
       const data = await listSources(projectId)
       setSources(data)
+      // Keep an open metadata modal pointed at the fresh row, so background
+      // enrichment (abstract / categories) shows up live instead of after a
+      // manual page reload. Falls back to the current object if the source
+      // vanished (e.g. deleted) so the modal doesn't break.
+      setEditingSource((cur) => (cur ? (data.find((s) => s.stem === cur.stem) ?? cur) : cur))
       setNetworkError(null)
       setCachedSourceCount(projectId, data.length)
     } catch (err) {
@@ -116,6 +134,9 @@ export function SourceList({
   async function handleConfirmDelete(stem: string) {
     setDeletingStem(stem)
     try {
+      // Stop any pending/in-flight enrichment first: a PATCH landing after
+      // the delete would resurrect the source's metadata sidecar as an orphan.
+      onCancelEnrich?.(stem)
       await deleteSource(projectId, stem)
       setSources((s) => {
         const next = s.filter((x) => x.stem !== stem)
@@ -137,14 +158,32 @@ export function SourceList({
 
   async function handleReindex(stem: string) {
     setReindexingStem(stem)
+    let enrichFlags: { hasAbstract: boolean; hasCategories: boolean } | null = null
     try {
       const res = await reindexSource(projectId, stem)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      // Drain the SSE stream — the backend emits result + done; we don't need
-      // intermediate events here, just wait for completion before refetching.
-      if (res.body) await drainStream(res.body)
+      // Capture the result event (carries has_abstract / has_categories) so
+      // we can enqueue auto-enrichment after the refetch. Reindex emits
+      // start → result → done for a single stem.
+      if (res.body) {
+        await readSseEvents<{
+          type: string
+          stem?: string
+          has_abstract?: boolean
+          has_categories?: boolean
+          indexed?: boolean
+        }>(res.body, (event) => {
+          if (event.type === 'result' && event.indexed !== false) {
+            enrichFlags = {
+              hasAbstract: event.has_abstract ?? false,
+              hasCategories: event.has_categories ?? false,
+            }
+          }
+        })
+      }
       await fetchSources()
       onReindexed?.()
+      if (enrichFlags) onEnqueueEnrich?.(stem, enrichFlags)
     } catch (err) {
       setNetworkError(err instanceof Error ? err.message : 'Erreur lors de la réindexation')
     } finally {
@@ -178,12 +217,12 @@ export function SourceList({
     })
   }, [inFlightImports, sources])
 
-  // Compute BibTeX categories ONCE per source list; reused for the dropdown
-  // and the per-row filter check so we don't re-parse on every keystroke.
+  // Compute categories ONCE per source list; reused for the dropdown and the
+  // per-row filter check so we don't re-parse on every keystroke.
   const categoriesByStem = useMemo(() => {
     const map = new Map<string, readonly string[]>()
     for (const s of sources) {
-      map.set(s.stem, extractBibtexCategories(s.pdf_title))
+      map.set(s.stem, splitCategoriesCsv(s.categories))
     }
     return map
   }, [sources])
@@ -210,12 +249,16 @@ export function SourceList({
     [sources, filterState, categoriesByStem]
   )
 
-  // Empty state is shown both when the fetch resolved with zero sources AND
-  // (optimistically) on initial load if the cached count says the project
-  // is empty — avoids a skeleton flash before the empty CTA.
+  // Empty state requires an actually-empty list. The `cachedCount === 0` term
+  // only biases the *cold* load (no data on screen yet) toward the CTA instead
+  // of skeletons — it must never fire during a warm refetch. A state change on
+  // one card (importé → indexation) bumps `refreshKey`, which flips `loading`
+  // true again; without the `sources.length === 0` guard the whole section
+  // would flash the empty CTA while the cards are still rendered.
   const showEmptyCta =
     pendingImports.length === 0 &&
-    ((!loading && sources.length === 0) || (loading && cachedCount === 0))
+    sources.length === 0 &&
+    (!loading || cachedCount === 0)
 
   // Skeletons only on a *cold* load — once we have data on screen, keep it
   // visible during refetches so rapid imports don't flicker the whole list.

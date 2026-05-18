@@ -47,7 +47,7 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
+  gap: var(--space-sm);
 }
 
 .field {
@@ -201,11 +201,15 @@
   opacity: 0;
   pointer-events: none;
   transform: translateY(2px);
-  transition: opacity 0.12s ease, transform 0.12s ease;
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease;
 }
 
 .iaBtnWrap:hover .iaProgressPanel,
-.iaBtnWrap:focus-within .iaProgressPanel {
+.iaBtnWrap:focus-within .iaProgressPanel,
+.categoryIaWrap:hover .iaProgressPanel,
+.categoryIaWrap:focus-within .iaProgressPanel {
   opacity: 1;
   transform: translateY(0);
 }
@@ -232,20 +236,109 @@
 }
 
 // Categories
-.categories {
+.categoriesRow {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-xs);
+  align-items: center;
+  background-color: var(--color-background);
+  padding: var(--space-xs);
+  border: var(--border);
+  border-radius: var(--radius-sm);
 }
 
 .categoryTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: var(--font-size-label);
-  color: var(--color-emphasis-2);
-  background: color-mix(in srgb, var(--color-emphasis-2) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-emphasis-2) 30%, transparent);
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  padding: 2px var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
   white-space: nowrap;
+}
+
+.categoryRemoveBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  margin-left: 2px;
+  cursor: pointer;
+  opacity: 0.65;
+  transition: var(--transition-short);
+
+  &:hover:not(:disabled) {
+    opacity: 1;
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.3;
+  }
+}
+
+.addCategoryWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.addCategoryBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm) var(--space-xs) 2px;
+  background: none;
+  border: 2px dashed var(--color-text-muted);
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: var(--transition-short);
+
+  &:hover:not(:disabled) {
+    color: var(--color-emphasis-2);
+    border-color: var(--color-emphasis-2);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+// Portaled to document.body and positioned via inline left/top so the
+// modal's `overflow` containers can't crop it. z-index sits above the
+// overlay (1000).
+.categoryPopover {
+  position: fixed;
+  z-index: 1100;
+  display: flex;
+  gap: var(--space-xs);
+  width: 265px;
+  padding: var(--space-sm);
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+
+  .input {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.categoryValidateBtn {
+  @include btn-primary;
+  padding: var(--space-sm);
+}
+
+.categoryIaWrap {
+  position: relative;
+  display: inline-flex;
+  margin-left: auto;
 }
 
 // Authors section

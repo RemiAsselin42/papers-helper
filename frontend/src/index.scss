@@ -58,7 +58,7 @@
   --transition-short: all 200ms ease;
 
   // Padding shorthand
-  --padding-input: 10px 12px;
+  --padding-input: var(--space-sm) var(--space-sm);
   --padding-sm: var(--space-sm);
   --padding-md: var(--space-md);
   --padding-lg: var(--space-lg);

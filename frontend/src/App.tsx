@@ -3,8 +3,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import styles from './App.module.scss'
 import { checkHealth, getStoredOllamaUrl, type HealthData } from './api/health'
 import { getStoredProvider, type LLMProvider } from './api/llm'
+import { useAutoEnrich } from './hooks/useAutoEnrich'
+import { useIndexingPass } from './hooks/useIndexingPass'
 import { useProviderReadiness } from './hooks/useProviderReadiness'
 import { listProjects, type ProjectInfo } from './api/projects'
+import { listSources } from './api/papers'
+import { getProjectSettings } from './api/settings'
+import { canRunIA, type ProviderReadiness } from './utils/providerConfig'
 import { AllProjectsView } from './components/layout/AllProjectsView'
 import { ApiKeyModal } from './components/modals/ApiKeyModal'
 import { AppHeader } from './components/layout/AppHeader'
@@ -24,6 +29,7 @@ import {
 } from './components/sources/SourceList.filters'
 import { setCachedSourceCount, clearCachedSourceCount } from './components/sources/SourceList.cache'
 import { ProblematiqueView } from './components/problematique/ProblematiqueView'
+import { SettingsView } from './components/settings/SettingsView'
 import { Sidebar, type View } from './components/layout/Sidebar'
 
 const STORAGE_KEY = 'currentProjectId'
@@ -49,6 +55,24 @@ export default function App() {
   > | null>(null)
   const [activeProvider, setActiveProvider] = useState<LLMProvider>(() => getStoredProvider())
   const { ollamaHealthy, providerReady } = useProviderReadiness(healthData, activeProvider)
+
+  // canRunIA() derives readiness from localStorage (provider, API key,
+  // model) — React doesn't re-render on a localStorage write. So we keep it in
+  // state and recompute it explicitly: on Ollama-health changes, on the
+  // `storage` event (config changed in another tab/window), and via
+  // refreshIaReadiness() right after a same-tab modal save.
+  const [iaReadiness, setIaReadiness] = useState<ProviderReadiness>(() => canRunIA(false))
+  const refreshIaReadiness = useCallback(() => {
+    setIaReadiness(canRunIA(ollamaHealthy))
+  }, [ollamaHealthy])
+  useEffect(() => {
+    refreshIaReadiness()
+    window.addEventListener('storage', refreshIaReadiness)
+    return () => window.removeEventListener('storage', refreshIaReadiness)
+  }, [refreshIaReadiness])
+  const importInFlight = importStates.some(
+    (f) => f.status === 'queued' || f.status === 'processing'
+  )
 
   const bump = () => {
     setRefreshKey((k) => k + 1)
@@ -77,6 +101,87 @@ export default function App() {
       }
     }
   }, [])
+
+  // Ingestion is a 3-stage pipeline: import (DropZone, save+parse only) →
+  // indexing pass (useIndexingPass, embeds into Chroma) → auto-enrichment
+  // (useAutoEnrich, abstract + categories). The indexing pass enqueues each
+  // freshly-indexed stem into the enrichment queue. enqueueStem is produced
+  // by useAutoEnrich below; a stable ref-backed wrapper breaks the cycle.
+  const enqueueRef = useRef<
+    ((stem: string, flags: { hasAbstract: boolean; hasCategories: boolean }) => void) | null
+  >(null)
+  // Effective `auto_enrich` for the current project (project ?? global
+  // setting). When false, the indexing pass still runs but does NOT auto-queue
+  // the abstract/categories generation — the per-source IA buttons stay.
+  const autoEnrichRef = useRef(true)
+  const enqueueViaRef = useCallback(
+    (stem: string, flags: { hasAbstract: boolean; hasCategories: boolean }) => {
+      if (!autoEnrichRef.current) return
+      enqueueRef.current?.(stem, flags)
+    },
+    []
+  )
+  const {
+    start: startIndexing,
+    states: indexStates,
+    running: indexingRunning,
+  } = useIndexingPass(currentProjectId ?? '', enqueueViaRef, bumpDebounced, bumpGraph)
+  // Pause auto-enrichment while an import or the indexing pass is in flight:
+  // Ollama serves both the embedding pipeline (indexing) and the condense map
+  // step (enrichment); running them concurrently saturates the daemon and
+  // causes embedding timeouts. The queue drains once both stages settle.
+  const { enqueueStem, cancelStem, states: enrichStates } = useAutoEnrich(
+    currentProjectId ?? '',
+    ollamaHealthy,
+    importInFlight || indexingRunning,
+    // Refresh the source list (and any open metadata modal) as each
+    // enrichment PATCH lands, so generated abstracts/categories show up
+    // without a manual page reload.
+    bumpDebounced
+  )
+  enqueueRef.current = enqueueStem
+
+  // Keep the effective auto-enrich flag in sync with the current project's
+  // settings — refetched on project switch and after a settings save.
+  const refreshProjectSettings = useCallback(() => {
+    const pid = currentProjectId
+    if (!pid) return
+    getProjectSettings(pid)
+      .then((b) => {
+        autoEnrichRef.current = b.resolved.auto_enrich
+      })
+      .catch(() => {
+        autoEnrichRef.current = true
+      })
+  }, [currentProjectId])
+
+  useEffect(() => {
+    refreshProjectSettings()
+  }, [refreshProjectSettings])
+
+  // Full project reindex (after an embedding-model / granularity change in
+  // Paramètres). Seeds the progress toast with one row per source, then runs
+  // the indexing pass in full-reindex mode — its SSE drives the index badges.
+  const handleReindexProject = useCallback(() => {
+    const pid = currentProjectId
+    if (!pid) return
+    listSources(pid)
+      .then((sources) => {
+        setImportStates(
+          sources.map((s) => ({
+            filename: s.filename,
+            status: 'done' as const,
+            stem: s.stem,
+            indexed: false,
+            // Marks the row as a reindex: the toast shows a spinner instead of
+            // a green check until the indexing pass re-indexes this source.
+            reindexing: true,
+          }))
+        )
+      })
+      .catch(() => {})
+      .finally(() => startIndexing({ reindexAll: true }))
+  }, [currentProjectId, startIndexing])
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY)
@@ -174,6 +279,7 @@ export default function App() {
 
   function handleProviderChange(p: LLMProvider) {
     setActiveProvider(p)
+    refreshIaReadiness()
     // Switching provider doesn't restore Ollama; the warning is anchored to
     // Ollama's health (Chat tab + IA gen depend on it), so we only silence
     // the modal/banner when Ollama itself is back.
@@ -237,11 +343,22 @@ export default function App() {
             </div>
             <DropZone
               projectId={projectId}
-              onSuccess={bump}
+              onSuccess={() => {
+                bump()
+                // Import only saved + parsed the files; kick off the indexing
+                // pass, which then chains into auto-enrichment per stem.
+                startIndexing()
+              }}
               onProgress={setImportStates}
-              onFileCompleted={bumpDebounced}
+              onFileCompleted={() => bumpDebounced()}
               onGraphUpdated={bumpGraph}
             />
+            {!iaReadiness.ok && (
+              <p className={styles.iaNote}>
+                {iaReadiness.reason} L'import fonctionne, mais l'indexation et
+                l'enrichissement IA seront ignorés tant que ce n'est pas résolu.
+              </p>
+            )}
           </div>
         )}
         {activeView === 'sources' && (
@@ -253,8 +370,14 @@ export default function App() {
             ollamaAvailable={ollamaHealthy}
             inFlightImports={importStates}
             onDelete={bump}
-            onReindexed={bump}
+            // SourceList already refetches its own list inside handleReindex;
+            // a reindex only needs the *graph* refreshed here. Using `bump`
+            // would also bump `refreshKey`, firing a second, identical
+            // GET /papers/ via SourceList's refreshKey effect.
+            onReindexed={bumpGraph}
             onRequestImport={() => setActiveView('import')}
+            onEnqueueEnrich={enqueueStem}
+            onCancelEnrich={cancelStem}
             openStem={openStem}
             onChangeOpenStem={setOpenStem}
             filterState={sourceFilter}
@@ -290,6 +413,13 @@ export default function App() {
             }}
           />
         )}
+        {activeView === 'settings' && (
+          <SettingsView
+            projectId={projectId}
+            onSaved={refreshProjectSettings}
+            onReindex={handleReindexProject}
+          />
+        )}
         {activeView === 'debug' && <DebugPanel projectId={projectId} refreshKey={refreshKey} />}
       </>
     )
@@ -309,13 +439,19 @@ export default function App() {
         )}
         {renderMain()}
       </main>
-      <ImportProgressToast fileStates={importStates} onDismiss={() => setImportStates([])} />
+      <ImportProgressToast
+        fileStates={importStates}
+        indexStates={indexStates}
+        enrichStates={enrichStates}
+        onDismiss={() => setImportStates([])}
+      />
       {ollamaStatus === 'unavailable' && (
         <OllamaSetupModal
           healthData={healthData}
           onConnected={(health) => {
             setHealthData(health)
             setOllamaStatus('connected')
+            refreshIaReadiness()
           }}
           onDismiss={() => setOllamaStatus('dismissed')}
         />
@@ -325,6 +461,7 @@ export default function App() {
           provider={apiKeyModalProvider}
           onSave={() => {
             setApiKeyModalProvider(null)
+            refreshIaReadiness()
             // The Ollama warning isn't about provider keys — only silence it
             // when Ollama itself is healthy.
             if (ollamaHealthy) {

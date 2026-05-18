@@ -1,22 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Loader2, Plus, Sparkles, Trash2, X } from 'lucide-react'
-import {
-  consumeCondenseStream,
-  streamCondense,
-  type CondenseProgress,
-} from '../../api/condense'
-import {
-  getStoredApiKey,
-  getStoredExternalModel,
-  getStoredOllamaModel,
-  getStoredProvider,
-  PROVIDER_LABELS,
-  type LLMProvider,
-} from '../../api/llm'
-import { OLLAMA_FALLBACK_MODEL } from '../../hooks/usePerChatModel'
+import { type CondenseProgress } from '../../api/condense'
+import { PROVIDER_LABELS, type LLMProvider } from '../../api/llm'
 import { updateSourceMetadata, type SourceInfo, type UpdateMetadataPayload } from '../../api/papers'
-import { extractBibtexCategories } from '../../utils/bibtex'
-import { ABSTRACT_PROMPT } from '../../prompts/abstract'
+import { mergeCategories, splitCategoriesCsv } from '../../utils/categories'
+import { categoryColor } from '../../utils/categoryColor'
+import { generateAbstractForStem, generateCategoriesFromAbstract } from '../../utils/enrich'
+import { canRunIA } from '../../utils/providerConfig'
+import { stripBibtexBraces } from '../../utils/bibtex'
 import styles from './MetadataModal.module.scss'
 
 interface AuthorEntry {
@@ -32,6 +24,7 @@ interface MetadataDraft {
   doi: string
   abstract: string
   notes: string
+  categories: string[]
 }
 
 interface MetadataModalProps {
@@ -127,6 +120,10 @@ function authorsToFlat(authors: AuthorEntry[]): string {
     .join(' ; ')
 }
 
+function initialCategories(source: SourceInfo): string[] {
+  return splitCategoriesCsv(source.categories)
+}
+
 export function MetadataModal({
   projectId,
   source,
@@ -135,13 +132,15 @@ export function MetadataModal({
   ollamaAvailable,
 }: MetadataModalProps) {
   const [draft, setDraft] = useState<MetadataDraft>(() => ({
-    pdf_title: source.pdf_title,
+    // No title in metadata → fall back to the filename, matching SourceCard.
+    pdf_title: stripBibtexBraces(source.pdf_title || source.filename),
     authors: parseAuthors(source),
     year: source.year,
     publication: source.publication,
     doi: source.doi,
     abstract: source.abstract,
     notes: source.notes,
+    categories: initialCategories(source),
   }))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -149,11 +148,27 @@ export function MetadataModal({
   const [abstractError, setAbstractError] = useState<string | null>(null)
   const [progress, setProgress] = useState<CondenseProgress | null>(null)
   const [progressProvider, setProgressProvider] = useState<LLMProvider | null>(null)
+  const [addingCategory, setAddingCategory] = useState(false)
+  const [newCategoryDraft, setNewCategoryDraft] = useState('')
+  const [generatingCategories, setGeneratingCategories] = useState(false)
+  const [categoriesError, setCategoriesError] = useState<string | null>(null)
   const firstInputRef = useRef<HTMLInputElement>(null)
   const generateAbortRef = useRef<AbortController | null>(null)
+  const generateCategoriesAbortRef = useRef<AbortController | null>(null)
+  const newCategoryInputRef = useRef<HTMLInputElement>(null)
+  const addCategoryBtnRef = useRef<HTMLButtonElement>(null)
+  const categoryPopoverRef = useRef<HTMLDivElement>(null)
+  // Fixed-viewport coords for the "new category" popover. It is portaled to
+  // document.body so the modal's `overflow` containers can't crop it.
+  const [popoverPos, setPopoverPos] = useState<{ left: number; top: number } | null>(null)
+  // Fields the user has edited in this modal session. Background enrichment
+  // refreshes the `source` prop; the sync effect below pulls abstract /
+  // categories updates into the draft but never clobbers a touched field.
+  const touchedRef = useRef<Set<keyof MetadataDraft>>(new Set())
 
   const requestClose = useCallback(() => {
     generateAbortRef.current?.abort()
+    generateCategoriesAbortRef.current?.abort()
     onClose()
   }, [onClose])
 
@@ -166,9 +181,94 @@ export function MetadataModal({
     return () => document.removeEventListener('keydown', onKey)
   }, [requestClose])
 
-  useEffect(() => () => generateAbortRef.current?.abort(), [])
+  useEffect(() => {
+    if (addingCategory) {
+      newCategoryInputRef.current?.focus()
+    }
+  }, [addingCategory])
+
+  // Close the (portaled) "new category" popover on any click outside it. The
+  // toggle button is excluded so its own onClick keeps handling open/close.
+  useEffect(() => {
+    if (!addingCategory) return
+    function onPointerDown(e: MouseEvent) {
+      const target = e.target as Node
+      if (
+        categoryPopoverRef.current?.contains(target) ||
+        addCategoryBtnRef.current?.contains(target)
+      ) {
+        return
+      }
+      setNewCategoryDraft('')
+      setAddingCategory(false)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    return () => document.removeEventListener('mousedown', onPointerDown)
+  }, [addingCategory])
+
+  // Anchor the portaled popover above the "Ajouter" button, flipping below
+  // when there isn't enough room, and clamp it inside the viewport so it can
+  // never be clipped or pushed off-screen.
+  useLayoutEffect(() => {
+    if (!addingCategory) {
+      setPopoverPos(null)
+      return
+    }
+    const POPOVER_W = 265
+    const POPOVER_H = 56
+    const GAP = 8
+    function place() {
+      const rect = addCategoryBtnRef.current?.getBoundingClientRect()
+      if (!rect) return
+      const left = Math.max(
+        GAP,
+        Math.min(rect.left, window.innerWidth - POPOVER_W - GAP)
+      )
+      const above = rect.top - GAP - POPOVER_H
+      const top = above >= GAP ? above : rect.bottom + GAP
+      setPopoverPos({ left, top })
+    }
+    place()
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => {
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
+  }, [addingCategory])
+
+  useEffect(
+    () => () => {
+      generateAbortRef.current?.abort()
+      generateCategoriesAbortRef.current?.abort()
+    },
+    []
+  )
+
+  // Pull background-enrichment updates (auto-generated abstract / categories)
+  // into the draft when the parent refreshes the `source` prop — leaving any
+  // field the user has already edited in this session untouched.
+  useEffect(() => {
+    setDraft((d) => {
+      const next = { ...d }
+      let changed = false
+      if (!touchedRef.current.has('abstract') && source.abstract !== d.abstract) {
+        next.abstract = source.abstract
+        changed = true
+      }
+      if (!touchedRef.current.has('categories')) {
+        const fresh = initialCategories(source)
+        if (fresh.join(' ') !== d.categories.join(' ')) {
+          next.categories = fresh
+          changed = true
+        }
+      }
+      return changed ? next : d
+    })
+  }, [source])
 
   function setField<K extends keyof MetadataDraft>(key: K, value: MetadataDraft[K]) {
+    touchedRef.current.add(key)
     setDraft((d) => ({ ...d, [key]: value }))
   }
 
@@ -190,63 +290,69 @@ export function MetadataModal({
     })
   }
 
+  function commitNewCategory() {
+    const trimmed = newCategoryDraft.trim()
+    if (!trimmed) {
+      setAddingCategory(false)
+      return
+    }
+    touchedRef.current.add('categories')
+    setDraft((d) => ({
+      ...d,
+      categories: mergeCategories(d.categories, [trimmed]),
+    }))
+    setNewCategoryDraft('')
+    setAddingCategory(false)
+  }
+
+  function removeCategory(cat: string) {
+    touchedRef.current.add('categories')
+    setDraft((d) => ({
+      ...d,
+      categories: d.categories.filter((c) => c.toLowerCase() !== cat.toLowerCase()),
+    }))
+  }
+
   async function handleGenerateAbstract() {
     if (generatingAbstract) {
       generateAbortRef.current?.abort()
       return
     }
     if (!source.indexed) {
-      setAbstractError(
-        "La source n'est pas indexée — le contenu n'est pas disponible pour l'IA."
-      )
+      setAbstractError("La source n'est pas indexée — le contenu n'est pas disponible pour l'IA.")
       return
     }
-    const provider = getStoredProvider()
-    const model =
-      provider === 'ollama'
-        ? (getStoredOllamaModel() ?? OLLAMA_FALLBACK_MODEL)
-        : getStoredExternalModel(provider)
-    if (provider !== 'ollama' && !getStoredApiKey(provider)) {
-      setAbstractError(`Clé API manquante pour ${PROVIDER_LABELS[provider]}.`)
-      return
-    }
-    if (provider === 'ollama' && !getStoredOllamaModel()) {
-      setAbstractError('Aucun modèle Ollama sélectionné.')
-      return
-    }
-    if (provider !== 'ollama' && !model) {
-      setAbstractError(`Aucun modèle sélectionné pour ${PROVIDER_LABELS[provider]}.`)
+    const readiness = canRunIA(ollamaAvailable)
+    if (!readiness.ok) {
+      setAbstractError(readiness.reason ?? 'Provider IA non configuré.')
       return
     }
 
     setAbstractError(null)
     setGeneratingAbstract(true)
     setProgress(null)
-    setProgressProvider(provider)
+    setProgressProvider(readiness.provider)
     setField('abstract', '')
 
     const controller = new AbortController()
     generateAbortRef.current = controller
     let acc = ''
     try {
-      const res = await streamCondense(
+      // Tokens stream in raw for a live preview; the resolved value is the
+      // cleaned abstract (preamble + Markdown stripped) — adopt it as final.
+      const finalAbstract = await generateAbstractForStem({
         projectId,
-        ABSTRACT_PROMPT,
-        [source.stem],
-        model,
-        controller.signal,
-        provider
-      )
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      if (!res.body) throw new Error('Pas de corps de réponse')
-      await consumeCondenseStream(
-        res.body,
-        (token) => {
+        stem: source.stem,
+        model: readiness.model,
+        provider: readiness.provider,
+        signal: controller.signal,
+        onToken: (token) => {
           acc += token
           setField('abstract', acc)
         },
-        setProgress
-      )
+        onProgress: setProgress,
+      })
+      setField('abstract', finalAbstract)
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         const msg = (err as Error).message?.trim()
@@ -260,8 +366,55 @@ export function MetadataModal({
     }
   }
 
+  async function handleGenerateCategories() {
+    if (generatingCategories) {
+      generateCategoriesAbortRef.current?.abort()
+      return
+    }
+    // Categories are derived from the abstract — no Chroma index needed, but
+    // an abstract must exist (generated or hand-written).
+    if (!draft.abstract.trim()) {
+      setCategoriesError("Génère ou saisis d'abord un résumé — les catégories en sont dérivées.")
+      return
+    }
+    const readiness = canRunIA(ollamaAvailable)
+    if (!readiness.ok) {
+      setCategoriesError(readiness.reason ?? 'Provider IA non configuré.')
+      return
+    }
+
+    setCategoriesError(null)
+    setGeneratingCategories(true)
+
+    const controller = new AbortController()
+    generateCategoriesAbortRef.current = controller
+    try {
+      const parsed = await generateCategoriesFromAbstract({
+        projectId,
+        abstract: draft.abstract,
+        model: readiness.model,
+        provider: readiness.provider,
+        signal: controller.signal,
+      })
+      touchedRef.current.add('categories')
+      setDraft((d) => ({
+        ...d,
+        categories: mergeCategories(d.categories, parsed),
+      }))
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        const msg = (err as Error).message?.trim()
+        setCategoriesError(msg ? `Erreur de génération : ${msg}` : 'Erreur de génération.')
+      }
+    } finally {
+      setGeneratingCategories(false)
+      generateCategoriesAbortRef.current = null
+    }
+  }
+
   async function handleSave() {
     if (generatingAbstract) generateAbortRef.current?.abort()
+    if (generatingCategories) generateCategoriesAbortRef.current?.abort()
     setSaving(true)
     setError(null)
     const authors = draft.authors.filter((a) => a.first_name || a.last_name)
@@ -274,6 +427,7 @@ export function MetadataModal({
       doi: draft.doi,
       abstract: draft.abstract,
       notes: draft.notes,
+      categories: draft.categories.join(', '),
     }
     try {
       const updated = await updateSourceMetadata(projectId, source.stem, payload)
@@ -283,6 +437,8 @@ export function MetadataModal({
       setSaving(false)
     }
   }
+
+  const iaCategoriesActive = ollamaAvailable
 
   return (
     <div
@@ -310,18 +466,114 @@ export function MetadataModal({
             />
           </div>
 
-          {extractBibtexCategories(source.pdf_title).length > 0 && (
-            <div className={styles.field}>
-              <label className={styles.label}>Catégories</label>
-              <div className={styles.categories}>
-                {extractBibtexCategories(source.pdf_title).map((cat) => (
-                  <span key={cat} className={styles.categoryTag}>
+          <div className={styles.field}>
+            <label className={styles.label}>Catégories</label>
+            <div className={styles.categoriesRow}>
+              {draft.categories.map((cat) => {
+                const c = categoryColor(cat)
+                return (
+                  <span
+                    key={cat}
+                    className={styles.categoryTag}
+                    style={{ background: c.bg, color: c.fg, borderColor: c.border }}
+                  >
                     {cat}
+                    <button
+                      type="button"
+                      className={styles.categoryRemoveBtn}
+                      onClick={() => removeCategory(cat)}
+                      aria-label={`Supprimer la catégorie ${cat}`}
+                      title="Supprimer"
+                      disabled={saving}
+                      style={{ color: c.fg }}
+                    >
+                      <X size={16} />
+                    </button>
                   </span>
-                ))}
+                )
+              })}
+              <div className={styles.addCategoryWrap}>
+                <button
+                  ref={addCategoryBtnRef}
+                  type="button"
+                  className={styles.addCategoryBtn}
+                  onClick={() => setAddingCategory((v) => !v)}
+                  disabled={saving}
+                  aria-expanded={addingCategory}
+                  aria-label="Ajouter une catégorie"
+                >
+                  <Plus size={16} /> Ajouter
+                </button>
+                {addingCategory &&
+                  popoverPos &&
+                  createPortal(
+                    <div
+                      ref={categoryPopoverRef}
+                      className={styles.categoryPopover}
+                      role="dialog"
+                      aria-label="Nouvelle catégorie"
+                      style={{ left: popoverPos.left, top: popoverPos.top }}
+                    >
+                      <input
+                        ref={newCategoryInputRef}
+                        className={styles.input}
+                        value={newCategoryDraft}
+                        onChange={(e) => setNewCategoryDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            commitNewCategory()
+                          } else if (e.key === 'Escape') {
+                            e.preventDefault()
+                            setNewCategoryDraft('')
+                            setAddingCategory(false)
+                          }
+                        }}
+                        placeholder="Nom de la catégorie"
+                        disabled={saving}
+                      />
+                      <button
+                        type="button"
+                        className={styles.categoryValidateBtn}
+                        onClick={commitNewCategory}
+                        disabled={saving || !newCategoryDraft.trim()}
+                      >
+                        Valider
+                      </button>
+                    </div>,
+                    document.body
+                  )}
               </div>
+              {iaCategoriesActive && (
+                <div className={styles.categoryIaWrap}>
+                  <button
+                    type="button"
+                    className={styles.iaBtn}
+                    onClick={handleGenerateCategories}
+                    disabled={saving}
+                    title={
+                      generatingCategories
+                        ? 'Annuler la génération'
+                        : 'Générer des catégories avec l’IA'
+                    }
+                    aria-label={
+                      generatingCategories
+                        ? 'Annuler la génération des catégories'
+                        : 'Générer des catégories avec l’IA'
+                    }
+                  >
+                    {generatingCategories ? (
+                      <Loader2 size={16} className={styles.iaSpin} />
+                    ) : (
+                      <Sparkles size={16} />
+                    )}
+                    <span>IA</span>
+                  </button>
+                </div>
+              )}
             </div>
-          )}
+            {categoriesError && <p className={styles.error}>{categoriesError}</p>}
+          </div>
 
           <div className={styles.field}>
             <label className={styles.label}>Auteurs</label>
@@ -399,9 +651,7 @@ export function MetadataModal({
             <div className={styles.textareaWrap}>
               <textarea
                 className={
-                  ollamaAvailable
-                    ? `${styles.textarea} ${styles.textareaWithIa}`
-                    : styles.textarea
+                  ollamaAvailable ? `${styles.textarea} ${styles.textareaWithIa}` : styles.textarea
                 }
                 value={draft.abstract}
                 onChange={(e) => setField('abstract', e.target.value)}
@@ -426,9 +676,9 @@ export function MetadataModal({
                     }
                   >
                     {generatingAbstract ? (
-                      <Loader2 size={14} className={styles.iaSpin} />
+                      <Loader2 size={16} className={styles.iaSpin} />
                     ) : (
-                      <Sparkles size={14} />
+                      <Sparkles size={16} />
                     )}
                     <span>IA</span>
                   </button>
@@ -475,7 +725,7 @@ export function MetadataModal({
           <button
             className={styles.saveBtn}
             onClick={handleSave}
-            disabled={saving || generatingAbstract}
+            disabled={saving || generatingAbstract || generatingCategories}
           >
             {saving ? 'Enregistrement…' : 'Enregistrer'}
           </button>

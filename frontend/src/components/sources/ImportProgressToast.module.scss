@@ -107,16 +107,50 @@
 
 .status_done {
   .icon {
-    color: #4a9e6e;
+    color: var(--color-success);
   }
 }
 
 .status_error {
   .icon {
-    color: #b85c38;
+    color: var(--color-error);
   }
   .meta {
-    color: #b85c38;
+    color: var(--color-error);
+  }
+}
+
+// A reindex toast row is seeded with status 'done' (the file was already
+// imported). While its index pass runs, override the green "done" icon colour
+// with the active emphasis colour so the spinner reads as in-progress.
+.reindexing .icon {
+  color: var(--color-emphasis);
+}
+
+.enrich {
+  flex-shrink: 0;
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+
+  &.enrich_pending {
+    color: var(--color-text-muted);
+    opacity: 0.7;
+  }
+
+  &.enrich_running {
+    color: var(--color-emphasis);
+  }
+
+  &.enrich_done {
+    color: var(--color-success);
+  }
+
+  &.enrich_error {
+    color: var(--color-error);
   }
 }
 

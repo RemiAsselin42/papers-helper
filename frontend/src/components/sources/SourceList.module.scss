@@ -193,6 +193,16 @@
   cursor: help;
 }
 
+// Inline, always-visible index-failure reason on the source card — so the
+// error doesn't depend on a native `title` tooltip.
+.indexError {
+  margin: 0 var(--space-sm) var(--space-sm) var(--space-sm);
+  font-size: var(--font-size-body-sm);
+  color: var(--color-error);
+  word-break: break-word;
+  line-height: 1.3;
+}
+
 @keyframes sourceSpin {
   from {
     transform: rotate(0deg);

@@ -13,6 +13,7 @@ export interface SourceInfo {
   doi: string
   abstract: string
   notes: string
+  categories: string
   indexed: boolean
   index_error: string
 }
@@ -26,6 +27,7 @@ export interface UpdateMetadataPayload {
   doi?: string
   abstract?: string
   notes?: string
+  categories?: string
 }
 
 export async function listSources(projectId: string): Promise<SourceInfo[]> {

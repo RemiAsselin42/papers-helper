@@ -51,6 +51,14 @@
   color: var(--color-text-muted);
 }
 
+.iaNote {
+  max-width: 520px;
+  text-align: center;
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-body-sm);
+  color: var(--color-text-muted);
+}
+
 .skeletonMain {
   display: flex;
   flex-direction: column;
