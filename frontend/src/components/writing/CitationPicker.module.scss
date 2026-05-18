@@ -1,0 +1,132 @@
+@use '../../styles/mixins' as *;
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(44, 36, 22, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--space-lg);
+}
+
+.modal {
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  width: min(640px, 100%);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md);
+  border-bottom: var(--border);
+
+  h3 {
+    margin: 0;
+    font-size: var(--font-size-heading-md);
+  }
+}
+
+.close {
+  @include btn-icon;
+}
+
+.searchRow {
+  display: flex;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+}
+
+.input {
+  flex: 1;
+  background: var(--color-background);
+  color: var(--color-text);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--padding-input);
+  font-family: var(--font);
+  font-size: var(--font-size-body-sm);
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-emphasis-2);
+  }
+
+  &::placeholder {
+    color: var(--color-text-muted);
+  }
+}
+
+.searchBtn {
+  @include btn-primary;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--font-size-body-sm);
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.error {
+  margin: 0 var(--space-md);
+  color: var(--color-error);
+  font-size: var(--font-size-body-sm);
+}
+
+.empty {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-body-sm);
+  padding: var(--space-sm) 0;
+}
+
+.results {
+  overflow-y: auto;
+  padding: 0 var(--space-md) var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.hit {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-sm);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--color-background);
+  cursor: pointer;
+  transition: var(--transition-short);
+
+  &:hover {
+    border-color: var(--color-emphasis-2);
+    background: var(--color-surface);
+  }
+}
+
+.ref {
+  font-weight: 700;
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text);
+}
+
+.snippet {
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text-muted);
+  line-height: var(--line-height-body-sm);
+}

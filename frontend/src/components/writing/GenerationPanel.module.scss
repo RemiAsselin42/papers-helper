@@ -1,0 +1,116 @@
+@use '../../styles/mixins' as *;
+
+.root {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text);
+}
+
+.close {
+  @include btn-icon;
+}
+
+.instructions {
+  background: var(--color-background);
+  color: var(--color-text);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--padding-input);
+  font-family: var(--font);
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-body-sm);
+  // Height is driven by AutoTextarea (grows with the line count).
+  resize: none;
+  overflow-y: hidden;
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-emphasis-2);
+  }
+
+  &::placeholder {
+    color: var(--color-text-muted);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+  }
+}
+
+.error {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--color-error);
+}
+
+.preview {
+  max-height: 16rem;
+  overflow-y: auto;
+  padding: var(--space-sm);
+  background: var(--color-background);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-body);
+
+  p {
+    margin: 0 0 var(--space-xs);
+  }
+
+  > :last-child {
+    margin-bottom: 0;
+  }
+}
+
+.placeholder {
+  color: var(--color-text-muted);
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-sm);
+  justify-content: flex-end;
+}
+
+.primary {
+  @include btn-primary;
+  gap: var(--space-xs);
+  font-size: var(--font-size-body-sm);
+  padding: var(--space-sm) var(--space-md);
+}
+
+.ghost {
+  @include btn-secondary;
+  gap: var(--space-xs);
+  font-size: var(--font-size-body-sm);
+  padding: var(--space-sm) var(--space-md);
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

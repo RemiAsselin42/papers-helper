@@ -1,0 +1,74 @@
+.root {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.editor {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+
+  // The document text follows academic presentation norms (Times New Roman,
+  // black on white, 1.5 line spacing) — distinct from the app's parchment UI.
+  :global(.ProseMirror) {
+    min-height: 100%;
+    padding: var(--space-lg);
+    background: #fff;
+    border: var(--border);
+    border-radius: var(--radius-sm);
+    outline: none;
+    color: #000;
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 12pt;
+    line-height: 1.5;
+
+    p {
+      margin: 0 0 var(--space-sm);
+    }
+
+    p:last-child {
+      margin-bottom: 0;
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: var(--space-md) 0 var(--space-sm);
+      line-height: var(--line-height-heading-md);
+      font-weight: 700;
+    }
+
+    ul,
+    ol {
+      margin: 0 0 var(--space-sm);
+      padding-left: var(--space-lg);
+    }
+
+    blockquote {
+      margin: 0 0 var(--space-sm);
+      padding-left: var(--space-sm);
+      border-left: 2px solid var(--color-border);
+      color: var(--color-text-muted);
+    }
+
+    strong {
+      font-weight: 700;
+    }
+
+    em {
+      font-style: italic;
+    }
+
+    // Placeholder shown when the document is empty.
+    p.is-editor-empty:first-child::before {
+      content: attr(data-placeholder);
+      float: left;
+      height: 0;
+      pointer-events: none;
+      color: var(--color-text-muted);
+    }
+  }
+}

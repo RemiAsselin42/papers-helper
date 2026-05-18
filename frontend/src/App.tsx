@@ -31,6 +31,7 @@ import {
 import { setCachedSourceCount, clearCachedSourceCount } from './components/sources/SourceList.cache'
 import { ProblematiqueView } from './components/problematique/ProblematiqueView'
 import { SettingsView } from './components/settings/SettingsView'
+import { WritingView } from './components/writing/WritingView'
 import { Sidebar, type View } from './components/layout/Sidebar'
 
 const STORAGE_KEY = 'currentProjectId'
@@ -397,6 +398,9 @@ export default function App() {
           />
         )}
         {activeView === 'problematique' && <ProblematiqueView projectId={projectId} />}
+        {activeView === 'writing' && (
+          <WritingView key={projectId} projectId={projectId} ollamaAvailable={ollamaHealthy} />
+        )}
         {activeView === 'chat' && (
           <ChatView
             projectId={projectId}

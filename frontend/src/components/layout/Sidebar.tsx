@@ -6,6 +6,7 @@ import {
   Network,
   PanelLeftClose,
   PanelLeftOpen,
+  PenLine,
   Search,
   SlidersHorizontal,
   Target,
@@ -19,6 +20,7 @@ export type View =
   | 'import'
   | 'sources'
   | 'problematique'
+  | 'writing'
   | 'chat'
   | 'graph'
   | 'citations'
@@ -112,6 +114,17 @@ export function Sidebar({
             <Target size={20} />
           </span>
           <span className={styles.label}>Problématique</span>
+        </button>
+        <button
+          className={`${styles.tab} ${activeView === 'writing' ? styles.tabActive : ''}`}
+          onClick={() => onViewChange('writing')}
+          aria-label="Rédaction"
+          title="Aide à la rédaction"
+        >
+          <span className={styles.icon}>
+            <PenLine size={20} />
+          </span>
+          <span className={styles.label}>Rédaction</span>
         </button>
         {ollamaAvailable && (
           <button

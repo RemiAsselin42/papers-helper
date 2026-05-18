@@ -1,0 +1,316 @@
+@use '../../styles/mixins' as *;
+
+.wrapper {
+  position: relative;
+  display: flex;
+  height: calc(100dvh - var(--space-2xl) * 2 - var(--space-md));
+  overflow: hidden;
+}
+
+// ── Slide-in document panel ───────────────────────────────────────────────────
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: default;
+}
+
+.panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 20;
+  width: 260px;
+  height: 100%;
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: var(--space-sm);
+  transform: translateX(-100%);
+  transition: transform 150ms ease;
+}
+
+.panelOpen {
+  transform: translateX(0);
+}
+
+.panelClose {
+  flex-shrink: 0;
+  align-self: flex-end;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-bottom: var(--space-sm);
+  padding: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition-short);
+
+  &:hover {
+    background: var(--color-emphasis);
+    color: var(--color-background);
+  }
+}
+
+// ── Main column ───────────────────────────────────────────────────────────────
+
+.root {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: var(--space-sm);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+  background: var(--color-surface);
+  padding: var(--space-sm);
+  border-radius: var(--radius-sm);
+  border: var(--border);
+}
+
+.toolbarTitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: var(--color-background);
+  color: var(--color-text);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+  font: inherit;
+  font-size: var(--font-size-body);
+  line-height: 1;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: var(--transition-short);
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-emphasis-2);
+  }
+
+  &::placeholder {
+    color: var(--color-text-muted);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+}
+
+.toolbarBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+  cursor: pointer;
+  transition: var(--transition-short);
+
+  &:hover:not(:disabled) {
+    background: var(--color-emphasis);
+    color: var(--color-background);
+  }
+}
+
+.toolbarBtnActive {
+  background: var(--color-emphasis);
+  color: var(--color-background);
+  border-color: var(--color-emphasis);
+}
+
+.ghostBtn {
+  @include btn-secondary;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--font-size-body-sm);
+}
+
+.primaryBtn {
+  @include btn-primary;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--font-size-body-sm);
+}
+
+.primaryBtnActive {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+// ── Editor area ───────────────────────────────────────────────────────────────
+
+.notice {
+  flex-shrink: 0;
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-sm);
+}
+
+.references {
+  flex-shrink: 0;
+  font-size: var(--font-size-body-sm);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+  background: var(--color-surface);
+
+  ul {
+    margin: var(--space-xs) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+}
+
+.referencesToggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  width: 100%;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text);
+  text-align: left;
+  // Native <button> resets font — inherit the app font/size from .references.
+  font: inherit;
+}
+
+.refItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: 2px 0;
+  color: var(--color-text-muted);
+
+  span {
+    min-width: 0;
+  }
+}
+
+.refDelete {
+  @include btn-icon;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+
+  &:hover:not(:disabled) {
+    color: var(--color-error);
+  }
+}
+
+.errorBanner {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-body-sm);
+  color: var(--color-error);
+  background: var(--color-surface);
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-sm);
+
+  > span {
+    flex: 1;
+    min-width: 0;
+  }
+
+  button {
+    background: transparent;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 1.1rem;
+    line-height: 1;
+    padding: 0 4px;
+  }
+}
+
+.statusRow {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  min-height: 18px;
+}
+
+.save {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text-muted);
+}
+
+.saveErr {
+  color: var(--color-error);
+}
+
+.empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  color: var(--color-text-muted);
+
+  p {
+    margin: 0;
+    font-size: var(--font-size-body-sm);
+  }
+}
+
+.toolbarTitleSkeleton {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.editorSkeleton {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-lg);
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

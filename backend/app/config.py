@@ -50,6 +50,13 @@ CONDENSE_TOKENS_PER_CHUNK_ESTIMATE: int = int(
 )
 CONDENSE_MAX_STEMS: int = int(os.getenv("CONDENSE_MAX_STEMS", "20"))
 
+# Writing-assistance (Aide à la rédaction) sizing. WRITING_RAG_K bounds how many
+# corpus chunks are retrieved as grounding context for a section generation;
+# WRITING_CONTEXT_CHAR_CAP caps the "rest of the paper" summary block so a long
+# in-progress paper can't crowd out the prompt + the model's response window.
+WRITING_RAG_K: int = int(os.getenv("WRITING_RAG_K", "8"))
+WRITING_CONTEXT_CHAR_CAP: int = int(os.getenv("WRITING_CONTEXT_CHAR_CAP", "8000"))
+
 _request_ollama_url: ContextVar[str] = ContextVar("_request_ollama_url", default=OLLAMA_BASE_URL)
 _request_embed_config: ContextVar["EmbedConfig | None"] = ContextVar(
     "_request_embed_config", default=None

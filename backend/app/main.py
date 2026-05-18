@@ -27,6 +27,7 @@ from app.routes import graph as graph_router
 from app.routes import papers as papers_router
 from app.routes import projects as projects_router
 from app.routes import settings as settings_router
+from app.routes import writing as writing_router
 from app.routes.chat import condense_routes as condense_router
 
 log = logging.getLogger("papers-helper.health")
@@ -86,6 +87,7 @@ app.include_router(conversations_router.router)
 app.include_router(citations_router.router)
 app.include_router(graph_router.router)
 app.include_router(settings_router.router)
+app.include_router(writing_router.router)
 
 
 _OLLAMA_TIMEOUT = 5.0

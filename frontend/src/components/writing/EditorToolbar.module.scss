@@ -1,0 +1,91 @@
+@use '../../styles/mixins' as *;
+
+.toolbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-sm);
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.btn {
+  @include btn-icon;
+  width: 28px;
+  height: 28px;
+  color: var(--color-text);
+
+  &:hover:not(:disabled) {
+    background: var(--color-emphasis);
+    color: var(--color-background);
+  }
+}
+
+.btnActive {
+  background: var(--color-emphasis);
+  color: var(--color-background);
+}
+
+.sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px;
+  background: var(--color-border);
+}
+
+// Font-size control: a text input (so the datalist suggestions open on click)
+// paired with a custom ▲/▼ stepper column (native number spinners only exist
+// on type="number", which doesn't show the datalist).
+.sizeField {
+  display: flex;
+  align-items: stretch;
+}
+
+.sizeInput {
+  width: 40px;
+  background: var(--color-background);
+  color: var(--color-text);
+  border: var(--border);
+  border-right: none;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  padding: 4px var(--space-xs);
+  font-family: var(--font);
+  font-size: var(--font-size-body-sm);
+
+  &:focus {
+    outline: none;
+  }
+}
+
+.sizeSteppers {
+  display: flex;
+  flex-direction: column;
+  border: var(--border);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  overflow: hidden;
+}
+
+.sizeStep {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  flex: 1;
+  padding: 0;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: none;
+  cursor: pointer;
+  transition: var(--transition-short);
+
+  &:hover {
+    background: var(--color-emphasis);
+    color: var(--color-background);
+  }
+
+  & + & {
+    border-top: var(--border);
+  }
+}
