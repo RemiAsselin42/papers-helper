@@ -1,4 +1,5 @@
 import { RotateCcw, Search } from 'lucide-react'
+import { categoryThemeColor } from '../../utils/categoryColor'
 import {
   DEFAULT_FILTERS,
   FORMAT_LABEL,
@@ -90,8 +91,11 @@ export function SourceFilters({
           >
             <option value="">Toutes les catégories</option>
             {availableCategories.map((c) => (
-              <option key={c} value={c}>
-                {c}
+              // Per-option `color` is honoured on Chromium; Firefox/Safari
+              // ignore it and fall back to default text. The leading ■
+              // remains visible either way, so the dropdown stays usable.
+              <option key={c} value={c} style={{ color: categoryThemeColor(c) }}>
+                ■ {c}
               </option>
             ))}
           </select>

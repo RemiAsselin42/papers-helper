@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import cytoscape, { type Core, type ElementDefinition, type Layouts } from 'cytoscape'
 import d3Force from 'cytoscape-d3-force'
 import type { GraphData } from '../../api/graph'
+import { categoryThemeColor } from '../../utils/categoryColor'
 import type { FilterState } from './GraphFilters'
 import styles from './GraphCanvas.module.scss'
 import {
@@ -73,7 +74,10 @@ export function GraphCanvas({
           // Truncated label for the canvas — the popover shows the full one.
           label: truncateLabel(n.label, n.type),
           nodeType: n.type,
-          color: nodeColor(n.type, theme),
+          // Theme nodes derive their colour from the category name so the
+          // graph stays visually consistent with the modal pills and filter
+          // swatch. Other types use the static per-type colour.
+          color: n.type === 'theme' ? categoryThemeColor(n.label) : nodeColor(n.type, theme),
         },
       }))
 

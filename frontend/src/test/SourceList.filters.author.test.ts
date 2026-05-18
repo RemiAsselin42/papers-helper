@@ -21,6 +21,7 @@ function mk(partial: Partial<SourceInfo>): SourceInfo {
     doi: partial.doi ?? '',
     abstract: partial.abstract ?? '',
     notes: partial.notes ?? '',
+    categories: partial.categories ?? '',
     indexed: partial.indexed ?? true,
     index_error: partial.index_error ?? '',
   }

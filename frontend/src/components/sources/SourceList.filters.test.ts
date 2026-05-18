@@ -24,6 +24,7 @@ function mk(partial: Partial<SourceInfo>): SourceInfo {
     doi: partial.doi ?? '',
     abstract: partial.abstract ?? '',
     notes: partial.notes ?? '',
+    categories: partial.categories ?? '',
     indexed: partial.indexed ?? true,
     index_error: partial.index_error ?? '',
   }
@@ -74,12 +75,20 @@ describe('resolveType / typeFromFilename', () => {
 
 describe('filterSources', () => {
   const sources: SourceInfo[] = [
-    mk({ stem: 'a', filename: 'a.pdf', pdf_title: 'Alpha {ML}', author: 'Smith', year: '2024' }),
+    mk({
+      stem: 'a',
+      filename: 'a.pdf',
+      pdf_title: 'Alpha {ML}',
+      categories: 'ML',
+      author: 'Smith',
+      year: '2024',
+    }),
     mk({
       stem: 'b',
       filename: 'b.epub',
       source_type: 'pdf',
       pdf_title: 'Beta {NLP}',
+      categories: 'NLP',
       author: 'Doe',
       year: '2023',
       indexed: false,
@@ -144,9 +153,27 @@ describe('filterSources', () => {
     expect(parseCount).toBe(0)
   })
 
-  it('falls back to live parsing when no categories map is provided', () => {
+  it('falls back to reading source.categories when no map is provided', () => {
     const result = filterSources(sources, withState({ category: 'ML' }))
     expect(result.map((s) => s.stem)).toEqual(['a'])
+  })
+
+  it('reads the persisted `categories` field, not just legacy braces', () => {
+    const persisted: SourceInfo[] = [
+      mk({ stem: 'x', categories: 'Sociologie, Méthodes' }),
+      mk({ stem: 'y', categories: 'Méthodes ; Stats' }),
+      mk({ stem: 'z', categories: '' }),
+    ]
+    expect(
+      filterSources(persisted, withState({ category: 'Méthodes' })).map((s) => s.stem)
+    ).toEqual(['x', 'y'])
+  })
+
+  it('matches the category filter case-insensitively', () => {
+    const persisted: SourceInfo[] = [mk({ stem: 'x', categories: 'Sociologie' })]
+    expect(
+      filterSources(persisted, withState({ category: 'sociologie' })).map((s) => s.stem)
+    ).toEqual(['x'])
   })
 
   it('combines axes with AND semantics', () => {

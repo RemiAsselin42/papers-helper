@@ -1,4 +1,5 @@
-import { extractBibtexCategories, stripBibtexBraces } from '../../utils/bibtex'
+import { stripBibtexBraces } from '../../utils/bibtex'
+import { splitCategoriesCsv } from '../../utils/categories'
 import { EXT_TO_TYPE } from '../../constants/acceptedFormats'
 import type { SourceInfo } from '../../api/papers'
 
@@ -89,8 +90,9 @@ export function filterSources(
       if (y !== state.year) return false
     }
     if (state.category) {
-      const cats = categoriesByStem?.get(s.stem) ?? extractBibtexCategories(s.pdf_title)
-      if (!cats.includes(state.category)) return false
+      const cats = categoriesByStem?.get(s.stem) ?? splitCategoriesCsv(s.categories)
+      const target = state.category.toLowerCase()
+      if (!cats.some((c) => c.toLowerCase() === target)) return false
     }
     if (state.author.trim()) {
       const needleAuthor = state.author.toLowerCase().trim()
