@@ -746,7 +746,7 @@ async def _stream_upload(
 
         if len(content) > MAX_FILE_SIZE:
             max_mb = MAX_FILE_SIZE // 1024 // 1024
-            err_msg = f"Fichier trop volumineux (max {max_mb} Mo)"
+            err_msg = f"Trop volumineux (> {max_mb} Mo)"
             yield _sse({"type": "error", "filename": filename, "error": err_msg})
             continue
 
@@ -828,7 +828,7 @@ async def _stream_url_import(
 
     if len(raw_content) > MAX_FILE_SIZE:
         max_mb = MAX_FILE_SIZE // 1024 // 1024
-        err = f"Fichier trop volumineux (max {max_mb} Mo)"
+        err = f"Trop volumineux (> {max_mb} Mo)"
         yield _sse({"type": "error", "filename": url, "error": err})
         yield _sse({"type": "done"})
         return
