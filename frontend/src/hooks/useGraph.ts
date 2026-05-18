@@ -31,18 +31,25 @@ export function useGraph(
       setState({ graph: null, loading: false, error: null })
       return
     }
-    const ctrl = new AbortController()
+    // StrictMode double-invokes this effect in dev. Rather than abort the
+    // first request on cleanup — which surfaces a visibly "(canceled)" GET in
+    // the network panel — we let it complete and discard its result via this
+    // flag. The second invocation's request is the one that lands.
+    let ignore = false
     setState((s) => ({ ...s, loading: true, error: null }))
-    getGraph(projectId, ctrl.signal)
+    getGraph(projectId)
       .then((graph) => {
+        if (ignore) return
         setState({ graph, loading: false, error: null })
       })
       .catch((err: unknown) => {
-        if (ctrl.signal.aborted) return
+        if (ignore) return
         const msg = err instanceof Error ? err.message : String(err)
         setState({ graph: null, loading: false, error: msg })
       })
-    return () => ctrl.abort()
+    return () => {
+      ignore = true
+    }
   }, [projectId, refreshKey, localRefresh])
 
   return { ...state, refresh }
