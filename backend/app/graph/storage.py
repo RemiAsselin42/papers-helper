@@ -19,7 +19,7 @@ from app.graph.schema import Graph, GraphEdge, GraphNode
 
 log = logging.getLogger(__name__)
 
-GRAPH_SCHEMA_VERSION = 1
+GRAPH_SCHEMA_VERSION = 2
 GRAPH_FILENAME = "graph.json"
 
 

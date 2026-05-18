@@ -12,7 +12,7 @@ function jsonResponse(body: unknown): Response {
   })
 }
 
-function makeSseResponse(payloads: object[]): Response {
+function makeSseResponse(payloads: unknown[]): Response {
   const chunks = payloads.map((p) => `data: ${JSON.stringify(p)}\n\n`).join('')
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {

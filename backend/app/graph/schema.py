@@ -13,8 +13,14 @@ import unicodedata
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-NodeType = Literal["paper", "author", "theme", "concept"]
-EdgeType = Literal["authored_by", "co_authored", "theme_of", "concept_of", "semantic"]
+NodeType = Literal["paper", "author", "category", "concept"]
+EdgeType = Literal["authored_by", "co_authored", "category_of", "concept_of", "semantic"]
+
+# Node/edge type names used by graph.json files written before the
+# theme→category rename (schema v1). Mapped on read so old projects load
+# transparently under the current names; the next write re-stamps them.
+_LEGACY_NODE_TYPES: dict[str, str] = {"theme": "category"}
+_LEGACY_EDGE_TYPES: dict[str, str] = {"theme_of": "category_of"}
 
 
 @dataclass
@@ -30,9 +36,10 @@ class GraphNode:
     @classmethod
     def from_dict(cls, raw: dict[str, Any]) -> GraphNode:
         data = raw.get("data") or {}
+        raw_type = raw["type"]
         return cls(
             id=str(raw["id"]),
-            type=raw["type"],
+            type=_LEGACY_NODE_TYPES.get(raw_type, raw_type),
             label=str(raw.get("label", "")),
             data=dict(data) if isinstance(data, dict) else {},
         )
@@ -55,17 +62,18 @@ class GraphEdge:
 
     @classmethod
     def from_dict(cls, raw: dict[str, Any]) -> GraphEdge:
+        raw_type = raw["type"]
         return cls(
             source=str(raw["source"]),
             target=str(raw["target"]),
-            type=raw["type"],
+            type=_LEGACY_EDGE_TYPES.get(raw_type, raw_type),
             weight=float(raw.get("weight", 1.0)),
         )
 
 
 @dataclass
 class Graph:
-    version: int = 1
+    version: int = 2
     embed_model: str = ""
     updated_at: str = ""
     nodes: list[GraphNode] = field(default_factory=list)
@@ -121,7 +129,7 @@ def slug_author(family: str, given: str) -> str:
     return f"{fam}_{initial}" if initial else fam
 
 
-def slug_theme(category: str) -> str:
+def slug_category(category: str) -> str:
     return _safe_slug(category)
 
 
@@ -143,9 +151,9 @@ def author_node_id(family: str, given: str) -> str:
     return f"author:{slug}" if slug else ""
 
 
-def theme_node_id(category: str) -> str:
-    slug = slug_theme(category)
-    return f"theme:{slug}" if slug else ""
+def category_node_id(category: str) -> str:
+    slug = slug_category(category)
+    return f"category:{slug}" if slug else ""
 
 
 def concept_node_id(concept: str) -> str:

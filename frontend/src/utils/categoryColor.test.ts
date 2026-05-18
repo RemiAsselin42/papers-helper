@@ -11,10 +11,12 @@ describe('categoryColor', () => {
     expect(categoryColor('SOCIOLOGIE').solid).toBe(categoryColor('Sociologie').solid)
   })
 
-  it('returns the four colour slots as well-formed HSL strings', () => {
+  it('returns the four colour slots as comma-separated HSL strings', () => {
+    // Comma-separated form is required: `solid` feeds cytoscape, whose colour
+    // parser rejects the modern space-separated `hsl()` syntax.
     const c = categoryColor('Méthodes')
     for (const v of [c.bg, c.fg, c.border, c.solid]) {
-      expect(v).toMatch(/^hsl\(\d+\s+\d+%\s+\d+%\)$/)
+      expect(v).toMatch(/^hsl\(\d+,\s\d+%,\s\d+%\)$/)
     }
   })
 

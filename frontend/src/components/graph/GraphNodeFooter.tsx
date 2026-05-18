@@ -17,7 +17,7 @@ function _formatDataValue(value: unknown): string {
 const TYPE_LABEL: Record<GraphNodeType, string> = {
   paper: 'Paper',
   author: 'Auteur',
-  theme: 'Thème',
+  category: 'Catégorie',
   concept: 'Concept',
 }
 
@@ -47,8 +47,10 @@ export function GraphNodeFooter({
   semanticEdges,
   onPickNode,
 }: Props) {
+  // `community` is a derived view field (Louvain index used for colouring),
+  // not source metadata — keep it out of the footer's data list.
   const dataEntries = Object.entries(node.data).filter(
-    ([, v]) => v != null && v !== '' && !(Array.isArray(v) && v.length === 0)
+    ([k, v]) => k !== 'community' && v != null && v !== '' && !(Array.isArray(v) && v.length === 0)
   )
 
   const semanticNeighbors =

@@ -8,9 +8,10 @@ modules so individual pieces stay testable in isolation:
 - `storage`: atomic JSON read/write + per-project asyncio locks
 - `build`: pure derivations from sidecar metadata
 - `semantic`: Chroma-backed mean embedding + nearest-neighbour search
+- `communities`: Louvain clustering, computed on read (not persisted)
 - `concepts`: best-effort LLM keyword extraction (cached in sidecar)
 - `builder`: async orchestrators (add/remove/update/rebuild)
-- `queries`: read-only helpers for consumer features
+- `queries`: read-only helpers for consumer features (incl. `neighborhood`)
 
 Hooks into ingestion live in `app.ingestion` and `app.routes.papers`.
 """
@@ -27,12 +28,12 @@ from app.graph.schema import (
     GraphEdge,
     GraphNode,
     author_node_id,
+    category_node_id,
     concept_node_id,
     paper_node_id,
     slug_author,
+    slug_category,
     slug_concept,
-    slug_theme,
-    theme_node_id,
 )
 from app.graph.storage import (
     GRAPH_SCHEMA_VERSION,
@@ -51,6 +52,7 @@ __all__ = [
     "GraphNode",
     "GraphSchemaMismatchError",
     "author_node_id",
+    "category_node_id",
     "concept_node_id",
     "evict_graph_lock",
     "get_lock",
@@ -63,8 +65,7 @@ __all__ = [
     "paper_node_id",
     "read_graph",
     "slug_author",
+    "slug_category",
     "slug_concept",
-    "slug_theme",
-    "theme_node_id",
     "write_graph_atomic",
 ]

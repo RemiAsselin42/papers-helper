@@ -16,6 +16,7 @@ const SAMPLE: GraphData = {
   corrupt: false,
   source_count: 1,
   semantic_threshold: 0.6,
+  community_count: 1,
 }
 
 function stubFetch(response: GraphData | { status: number }) {

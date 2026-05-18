@@ -1,20 +1,32 @@
 import type { GraphNodeType } from '../../api/graph'
 import styles from './GraphView.module.scss'
 
+/** How node fill colour is derived: by node type (the default — papers,
+ * authors, categories, concepts each get their own colour) or by Louvain
+ * community (each detected cluster gets a distinct hue). */
+export type ColorMode = 'type' | 'community'
+
 export interface FilterState {
   paper: boolean
   author: boolean
-  theme: boolean
+  category: boolean
   concept: boolean
   semanticThreshold: number
+  colorBy: ColorMode
 }
 
 export const DEFAULT_FILTERS: FilterState = {
   paper: true,
   author: true,
-  theme: true,
+  category: true,
   concept: true,
   semanticThreshold: 0.6,
+  colorBy: 'type',
+}
+
+const COLOR_MODE_LABELS: Record<ColorMode, string> = {
+  type: 'Par type',
+  community: 'Par communauté',
 }
 
 interface Props {
@@ -26,14 +38,14 @@ interface Props {
 const SWATCHES: Record<GraphNodeType, string> = {
   paper: styles.swatchPaper,
   author: styles.swatchAuthor,
-  theme: styles.swatchTheme,
+  category: styles.swatchCategory,
   concept: styles.swatchConcept,
 }
 
 const LABELS: Record<GraphNodeType, string> = {
   paper: 'Papers',
   author: 'Auteurs',
-  theme: 'Thèmes',
+  category: 'Catégories',
   concept: 'Concepts',
 }
 
@@ -45,7 +57,7 @@ export function GraphFilters({ filters, onChange, counts }: Props) {
     <div className={styles.filters}>
       <div className={styles.filtersTitle}>Filtres</div>
       <div className={styles.toggleRow}>
-        {(['paper', 'author', 'theme', 'concept'] as GraphNodeType[]).map((type) => (
+        {(['paper', 'author', 'category', 'concept'] as GraphNodeType[]).map((type) => (
           <label key={type} className={styles.toggle}>
             <input
               type="checkbox"
@@ -57,6 +69,20 @@ export function GraphFilters({ filters, onChange, counts }: Props) {
               {LABELS[type]}
               {counts[type] != null && ` (${counts[type]})`}
             </span>
+          </label>
+        ))}
+      </div>
+      <div className={styles.toggleRow}>
+        <div className={styles.filtersTitle}>Couleur</div>
+        {(['type', 'community'] as ColorMode[]).map((mode) => (
+          <label key={mode} className={styles.toggle}>
+            <input
+              type="radio"
+              name="graph-color-by"
+              checked={filters.colorBy === mode}
+              onChange={() => onChange({ ...filters, colorBy: mode })}
+            />
+            <span>{COLOR_MODE_LABELS[mode]}</span>
           </label>
         ))}
       </div>

@@ -399,8 +399,12 @@ export default function App() {
           <GraphView
             projectId={projectId}
             refreshKey={graphRefreshKey}
-            onOpenSource={(stem) => {
+            onOpenSource={(stem, label) => {
               setOpenStem(stem)
+              // Seed the SourceList text search with the paper title so the
+              // clicked source surfaces there even if a stale filter would
+              // otherwise hide it; clear the other filters for the same reason.
+              setSourceFilter({ ...DEFAULT_FILTERS, search: label })
               setActiveView('sources')
             }}
             onFilterSources={(filter) => {

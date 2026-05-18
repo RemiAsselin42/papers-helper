@@ -25,6 +25,7 @@ function makeSource(overrides: Partial<SourceInfo>): SourceInfo {
     doi: '',
     abstract: '',
     notes: '',
+    categories: '',
     indexed: true,
     index_error: '',
     ...overrides,

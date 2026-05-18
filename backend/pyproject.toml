@@ -19,6 +19,7 @@ dependencies = [
     "bibtexparser==2.0.0b9",
     "openai>=1.0.0",
     "anthropic>=0.40.0",
+    "networkx>=3.2",
 ]
 
 [dependency-groups]

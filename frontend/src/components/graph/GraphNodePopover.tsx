@@ -8,14 +8,16 @@ import styles from './GraphView.module.scss'
 const TYPE_LABEL: Record<GraphNodeType, string> = {
   paper: 'Paper',
   author: 'Auteur',
-  theme: 'Thème',
+  category: 'Catégorie',
   concept: 'Concept',
 }
 
 interface Props {
   node: GraphNode
   position: CanvasPosition
-  onOpenSource: (stem: string) => void
+  /** `label` is the un-truncated paper title — the caller uses it to seed the
+   * SourceList text search so the clicked source surfaces there too. */
+  onOpenSource: (stem: string, label: string) => void
   onFilterSources: (filter: { author?: string; category?: string }) => void
   onClose: () => void
 }
@@ -69,7 +71,7 @@ export function GraphNodePopover({
             className={styles.button}
             onClick={() => {
               const stem = _stemFromPaperId(node.id)
-              if (stem) onOpenSource(stem)
+              if (stem) onOpenSource(stem, node.label)
             }}
           >
             <ExternalLink size={18} /> Ouvrir
@@ -84,7 +86,7 @@ export function GraphNodePopover({
             <Eye size={20} /> Voir les sources
           </button>
         )}
-        {(node.type === 'theme' || node.type === 'concept') && (
+        {(node.type === 'category' || node.type === 'concept') && (
           <button
             type="button"
             className={styles.button}

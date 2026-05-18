@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAutoEnrich } from '../hooks/useAutoEnrich'
 
-function sseResponse(payloads: object[]): Response {
+function sseResponse(payloads: unknown[]): Response {
   const chunks = payloads.map((p) => `data: ${JSON.stringify(p)}\n\n`).join('')
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {

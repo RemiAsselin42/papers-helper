@@ -22,9 +22,9 @@ from app.graph.schema import (
     Graph,
     GraphEdge,
     author_node_id,
+    category_node_id,
     concept_node_id,
     paper_node_id,
-    theme_node_id,
 )
 from app.ingestion import SidecarMeta
 
@@ -114,13 +114,13 @@ class TestDerivePaperContribution:
         assert author_node_id("Doe", "Jane") in author_ids
         assert sum(1 for e in edges if e.type == "authored_by") == 2
 
-    def test_theme_split_and_edges(self) -> None:
+    def test_category_split_and_edges(self) -> None:
         meta = _meta("p", categories="AI, NLP")
         _paper, aux, edges = derive_paper_contribution(meta, [])
-        theme_ids = {n.id for n in aux if n.type == "theme"}
-        assert theme_node_id("AI") in theme_ids
-        assert theme_node_id("NLP") in theme_ids
-        assert sum(1 for e in edges if e.type == "theme_of") == 2
+        category_ids = {n.id for n in aux if n.type == "category"}
+        assert category_node_id("AI") in category_ids
+        assert category_node_id("NLP") in category_ids
+        assert sum(1 for e in edges if e.type == "category_of") == 2
 
     def test_concept_nodes_and_edges(self) -> None:
         meta = _meta("p")
@@ -270,6 +270,76 @@ class TestRemovePaper:
         assert author_node_id("Roe", "M") in endpoints
 
 
+class TestFuzzyAuthors:
+    """A bare-family author node ("Smith", no given name) should be folded
+    into its unique initialled sibling ("Smith, J.")."""
+
+    def _add(self, graph: Graph, meta: SidecarMeta) -> None:
+        paper, aux, edges = derive_paper_contribution(meta, [])
+        merge_paper(graph, paper, aux, edges, [])
+
+    def test_bare_family_merges_into_initialled(self) -> None:
+        graph = Graph.empty()
+        self._add(graph, _meta("p1", authors=[{"family": "Smith", "given": ""}]))
+        self._add(graph, _meta("p2", authors=[{"family": "Smith", "given": "J."}]))
+        author_ids = {n.id for n in graph.nodes if n.type == "author"}
+        assert author_ids == {author_node_id("Smith", "J.")}
+        # p1's authored_by edge was rewired onto the surviving node.
+        target = author_node_id("Smith", "J.")
+        sources = {e.source for e in graph.edges if e.type == "authored_by" and e.target == target}
+        assert sources == {paper_node_id("p1"), paper_node_id("p2")}
+
+    def test_bare_family_kept_when_ambiguous(self) -> None:
+        graph = Graph.empty()
+        # Two initialled spellings land first; the bare "Smith" arrives once
+        # both smith_j and smith_k already exist, so it has no unambiguous
+        # home and is left standing.
+        self._add(graph, _meta("p1", authors=[{"family": "Smith", "given": "John"}]))
+        self._add(graph, _meta("p2", authors=[{"family": "Smith", "given": "Kate"}]))
+        self._add(graph, _meta("p3", authors=[{"family": "Smith", "given": ""}]))
+        author_ids = {n.id for n in graph.nodes if n.type == "author"}
+        assert author_node_id("Smith", "") in author_ids
+        assert author_node_id("Smith", "John") in author_ids
+        assert author_node_id("Smith", "Kate") in author_ids
+
+    def test_aliases_folded_onto_survivor(self) -> None:
+        graph = Graph.empty()
+        self._add(graph, _meta("p1", authors=[{"family": "Smith", "given": ""}]))
+        self._add(graph, _meta("p2", authors=[{"family": "Smith", "given": "Jane"}]))
+        node = next(n for n in graph.nodes if n.id == author_node_id("Smith", "Jane"))
+        givens = {a.get("given") for a in node.data.get("aliases") or []}
+        assert "" in givens
+        assert "Jane" in givens
+
+    def test_no_merge_when_no_bare_node(self) -> None:
+        graph = Graph.empty()
+        self._add(graph, _meta("p1", authors=[{"family": "Smith", "given": "John"}]))
+        self._add(graph, _meta("p2", authors=[{"family": "Smith", "given": "J."}]))
+        # Both already slug to smith_j — one node, nothing to fuzzy-merge.
+        author_ids = [n.id for n in graph.nodes if n.type == "author"]
+        assert author_ids == [author_node_id("Smith", "John")]
+
+    def test_co_authored_uses_merged_identity(self) -> None:
+        # p1: bare "Smith" co-authoring with "Doe, K". p2: "Smith, J." alone.
+        # After the bare node folds into smith_j, the co_authored edge from p1
+        # must connect the *survivor* to Doe.
+        graph = Graph.empty()
+        self._add(
+            graph,
+            _meta(
+                "p1",
+                authors=[{"family": "Smith", "given": ""}, {"family": "Doe", "given": "K"}],
+            ),
+        )
+        self._add(graph, _meta("p2", authors=[{"family": "Smith", "given": "J."}]))
+        co = [e for e in graph.edges if e.type == "co_authored"]
+        assert len(co) == 1
+        endpoints = {co[0].source, co[0].target}
+        assert author_node_id("Smith", "J.") in endpoints
+        assert author_node_id("Doe", "K") in endpoints
+        assert author_node_id("Smith", "") not in endpoints
+
+
 class TestGraphStats:
     def test_counts_by_type(self) -> None:
         graph = Graph.empty()
@@ -283,6 +353,6 @@ class TestGraphStats:
         stats = graph_stats(graph)
         assert stats["nodes"]["paper"] == 1
         assert stats["nodes"]["author"] == 1
-        assert stats["nodes"]["theme"] == 1
+        assert stats["nodes"]["category"] == 1
         assert stats["nodes"]["concept"] == 1
         assert stats["node_total"] == 4

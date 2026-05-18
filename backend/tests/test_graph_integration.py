@@ -3,7 +3,7 @@
 Validates that:
 - The indexing pass yields a `graph_updated` SSE event and writes graph.json.
 - DELETE /papers/{stem} removes the paper node from the graph.
-- PATCH /papers/{stem} re-derives the paper's author/theme/concept nodes.
+- PATCH /papers/{stem} re-derives the paper's author/category/concept nodes.
 - POST /papers/reindex multiplexes graph_* events into the stream.
 """
 

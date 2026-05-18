@@ -14,9 +14,10 @@ from app.graph.schema import (
     GraphEdge,
     GraphNode,
     author_node_id,
+    category_node_id,
     concept_node_id,
     paper_node_id,
-    theme_node_id,
+    slug_author,
 )
 
 if TYPE_CHECKING:
@@ -147,19 +148,19 @@ def author_nodes_and_edges_for(
     return nodes, edges
 
 
-def theme_nodes_and_edges_for(
+def category_nodes_and_edges_for(
     paper_id: str, categories: list[str]
 ) -> tuple[list[GraphNode], list[GraphEdge]]:
     nodes: list[GraphNode] = []
     edges: list[GraphEdge] = []
     seen: set[str] = set()
     for cat in categories:
-        node_id = theme_node_id(cat)
+        node_id = category_node_id(cat)
         if not node_id or node_id in seen:
             continue
         seen.add(node_id)
-        nodes.append(GraphNode(id=node_id, type="theme", label=cat, data={"paper_count": 1}))
-        edges.append(GraphEdge(source=paper_id, target=node_id, type="theme_of"))
+        nodes.append(GraphNode(id=node_id, type="category", label=cat, data={"paper_count": 1}))
+        edges.append(GraphEdge(source=paper_id, target=node_id, type="category_of"))
     return nodes, edges
 
 
@@ -216,12 +217,14 @@ def remove_paper(graph: Graph, paper_id: str) -> None:
     """Public removal: drop the paper, recompute co_authored from what's left,
     and prune orphaned auxiliary nodes."""
     _strip_paper_contributions(graph, paper_id)
+    merge_fuzzy_authors(graph)
+    _dedup_edges(graph)
     _recompute_co_authored(graph)
     _prune_orphans(graph)
 
 
 def _prune_orphans(graph: Graph) -> None:
-    """Drop author/theme/concept nodes that have no incident edges left.
+    """Drop author/category/concept nodes that have no incident edges left.
     Paper nodes are never auto-pruned — only `remove_paper` removes them."""
     referenced: set[str] = set()
     for edge in graph.edges:
@@ -231,10 +234,10 @@ def _prune_orphans(graph: Graph) -> None:
     # Rebuild paper_count metadata from incident edges so the UI can size nodes.
     counts: dict[str, int] = {}
     for edge in graph.edges:
-        if edge.type in ("authored_by", "theme_of", "concept_of"):
+        if edge.type in ("authored_by", "category_of", "concept_of"):
             counts[edge.target] = counts.get(edge.target, 0) + 1
     for node in graph.nodes:
-        if node.type in ("author", "theme", "concept"):
+        if node.type in ("author", "category", "concept"):
             node.data["paper_count"] = counts.get(node.id, 0)
 
 
@@ -266,6 +269,109 @@ def _recompute_co_authored(graph: Graph) -> None:
         graph.edges.append(GraphEdge(source=a, target=b, type="co_authored", weight=float(count)))
 
 
+# ---------------------------------------------------------------------------
+# Fuzzy author de-duplication
+# ---------------------------------------------------------------------------
+
+
+def _author_is_bare(node: GraphNode) -> bool:
+    """True iff every alias on this author node lacks a given name — i.e. the
+    author was only ever cited as a bare family name ("Smith", never
+    "Smith, J."). Such a node slugs to `author:<family>` with no initial."""
+    aliases = node.data.get("aliases")
+    if not isinstance(aliases, list) or not aliases:
+        return False
+    return all(isinstance(a, dict) and not str(a.get("given", "")).strip() for a in aliases)
+
+
+def _author_family_key(node: GraphNode) -> str:
+    """Family-name slug shared by every spelling of an author. Both the bare
+    `author:smith` node and the initialled `author:smith_j` node resolve to
+    the same key, so the dedup pass can group them together."""
+    aliases = node.data.get("aliases")
+    if isinstance(aliases, list):
+        for alias in aliases:
+            if isinstance(alias, dict):
+                family = slug_author(str(alias.get("family", "")), "")
+                if family:
+                    return family
+    # Fallback for nodes without aliases: use the raw id.
+    return node.id[len("author:") :] if node.id.startswith("author:") else node.id
+
+
+def merge_fuzzy_authors(graph: Graph) -> int:
+    """Merge each bare-family author node into its initialled sibling.
+
+    The slug `family_initial` already collapses "Smith, J." and "Smith, John"
+    into one node — what it cannot collapse is an author cited *without* a
+    given name: "Smith" slugs to `author:smith`, "Smith, J." to
+    `author:smith_j`. This pass folds the bare node into the initialled one.
+
+    Conservative on purpose: a bare node is only merged when its family has
+    *exactly one* initialled candidate. With several ("Smith, J." vs
+    "Smith, K." next to a bare "Smith") the right target is unknowable, so the
+    bare node is left standing rather than guessing.
+
+    Rewires `authored_by` edges onto the survivor and folds the bare node's
+    aliases into it. `co_authored` is recomputed downstream from the rewired
+    `authored_by` set, so it needs no special handling here. Returns the
+    number of nodes merged away. Idempotent.
+    """
+    authors = [n for n in graph.nodes if n.type == "author"]
+    groups: dict[str, list[GraphNode]] = {}
+    for node in authors:
+        groups.setdefault(_author_family_key(node), []).append(node)
+
+    redirects: dict[str, str] = {}
+    for group in groups.values():
+        if len(group) < 2:
+            continue
+        bare = [n for n in group if _author_is_bare(n)]
+        named = [n for n in group if not _author_is_bare(n)]
+        if len(named) != 1 or not bare:
+            continue
+        target = named[0]
+        for node in bare:
+            if node.id == target.id or node.id in redirects:
+                continue
+            redirects[node.id] = target.id
+            for alias in node.data.get("aliases") or []:
+                if isinstance(alias, dict):
+                    _merge_alias(target, alias)
+
+    if not redirects:
+        return 0
+
+    graph.nodes = [n for n in graph.nodes if n.id not in redirects]
+    for edge in graph.edges:
+        if edge.source in redirects:
+            edge.source = redirects[edge.source]
+        if edge.target in redirects:
+            edge.target = redirects[edge.target]
+    return len(redirects)
+
+
+def _dedup_edges(graph: Graph) -> None:
+    """Collapse duplicate `(source, target, type)` edges, keeping the max
+    weight. The fuzzy author merge can create these when one paper credited
+    the same author under two spellings. `co_authored` / `semantic` are left
+    untouched — they are recomputed / canonicalised by their own passes."""
+    seen: dict[tuple[str, str, str], GraphEdge] = {}
+    out: list[GraphEdge] = []
+    for edge in graph.edges:
+        if edge.type in ("co_authored", "semantic"):
+            out.append(edge)
+            continue
+        key = (edge.source, edge.target, edge.type)
+        prev = seen.get(key)
+        if prev is None:
+            seen[key] = edge
+            out.append(edge)
+        elif edge.weight > prev.weight:
+            prev.weight = edge.weight
+    graph.edges = out
+
+
 def _canonical_semantic(a: str, b: str) -> tuple[str, str]:
     """Order endpoints so `(min, max)` keys are stable for undirected semantic
     edges and we can dedupe across multiple paper adds."""
@@ -286,12 +392,19 @@ def merge_paper(
     1. Remove any previous incarnation of the paper (and orphaned aux nodes).
     2. Add paper node + aux nodes (merging aliases / accumulating data on
        existing aux nodes).
-    3. Add authored_by / theme_of / concept_of edges.
+    3. Add authored_by / category_of / concept_of edges.
     4. Add semantic edges, canonicalised so (a,b) and (b,a) collapse; keep the
        max observed weight when an edge already exists from another paper's
        point of view.
-    5. Recompute co_authored from scratch.
-    6. Prune orphans.
+    5. Fuzzy-merge bare-family author nodes into their initialled sibling,
+       then collapse any duplicate edges the rewire produced.
+    6. Recompute co_authored from scratch.
+    7. Prune orphans.
+
+    Steps 5-7 each scan the whole graph, so a batch ingest of N papers is
+    O(N) full-graph passes — `rebuild` adds papers one at a time. Fine at V1
+    scale (<1000 papers, same ceiling as the whole-graph GET in queries.py);
+    revisit with a batch mode if that ceiling is lifted.
     """
     _strip_paper_contributions(graph, paper.id)
     graph.nodes.append(paper)
@@ -335,6 +448,8 @@ def merge_paper(
             )
     graph.edges = remaining + list(existing_sem.values())
 
+    merge_fuzzy_authors(graph)
+    _dedup_edges(graph)
     _recompute_co_authored(graph)
     _prune_orphans(graph)
 
@@ -359,9 +474,9 @@ def derive_paper_contribution(
     aux_edges.extend(authored_by_edges)
 
     categories = split_categories(meta.categories)
-    theme_nodes, theme_edges = theme_nodes_and_edges_for(paper.id, categories)
-    aux_nodes.extend(theme_nodes)
-    aux_edges.extend(theme_edges)
+    category_nodes, category_edges = category_nodes_and_edges_for(paper.id, categories)
+    aux_nodes.extend(category_nodes)
+    aux_edges.extend(category_edges)
 
     concept_nodes, concept_edges = concept_nodes_and_edges_for(paper.id, concepts)
     aux_nodes.extend(concept_nodes)

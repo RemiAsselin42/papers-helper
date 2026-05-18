@@ -2,12 +2,14 @@
  * Deterministic per-category color. The hash is FNV-1a 32-bit on the
  * trimmed lowercased name, mapped to a fixed-saturation/lightness HSL
  * triplet. The same name always yields the same color across the modal
- * pills, the filter dropdown swatch, and the graph theme nodes.
+ * pills, the filter dropdown swatch, and the graph category nodes.
  *
  * `bg/fg/border` are tuned for pills on a light surface (soft tinted
  * background, deep text, mid border). `solid` is the saturated fill used
- * for cytoscape theme nodes on the cream graph canvas.
+ * for cytoscape category nodes on the cream graph canvas.
  */
+
+import { legacyHsl } from './hsl'
 
 function fnv1a32(s: string): number {
   let h = 0x811c9dc5
@@ -28,11 +30,14 @@ export interface CategoryColors {
 export function categoryColor(name: string): CategoryColors {
   const key = name.trim().toLowerCase()
   const hue = fnv1a32(key) % 360
+  // `legacyHsl` emits the comma-separated form: `solid` feeds cytoscape via
+  // `categoryThemeColor`, whose colour parser rejects the modern
+  // space-separated `hsl()` syntax and falls back to grey.
   return {
-    bg: `hsl(${hue} 65% 92%)`,
-    fg: `hsl(${hue} 60% 28%)`,
-    border: `hsl(${hue} 55% 70%)`,
-    solid: `hsl(${hue} 65% 55%)`,
+    bg: legacyHsl(hue, 65, 92),
+    fg: legacyHsl(hue, 60, 28),
+    border: legacyHsl(hue, 55, 70),
+    solid: legacyHsl(hue, 65, 55),
   }
 }
 

@@ -8,12 +8,12 @@ describe('GraphFilters', () => {
       <GraphFilters
         filters={DEFAULT_FILTERS}
         onChange={() => {}}
-        counts={{ paper: 3, author: 5, theme: 2, concept: 7 }}
+        counts={{ paper: 3, author: 5, category: 2, concept: 7 }}
       />
     )
     expect(screen.getByText(/Papers \(3\)/)).toBeTruthy()
     expect(screen.getByText(/Auteurs \(5\)/)).toBeTruthy()
-    expect(screen.getByText(/Thèmes \(2\)/)).toBeTruthy()
+    expect(screen.getByText(/Catégories \(2\)/)).toBeTruthy()
     expect(screen.getByText(/Concepts \(7\)/)).toBeTruthy()
   })
 
@@ -31,5 +31,13 @@ describe('GraphFilters', () => {
     const slider = screen.getByRole('slider')
     fireEvent.change(slider, { target: { value: '0.85' } })
     expect(onChange).toHaveBeenCalledWith({ ...DEFAULT_FILTERS, semanticThreshold: 0.85 })
+  })
+
+  it('picking the community colour mode calls onChange', () => {
+    const onChange = vi.fn()
+    render(<GraphFilters filters={DEFAULT_FILTERS} onChange={onChange} counts={{}} />)
+    const communityRadio = screen.getByRole('radio', { name: /communauté/i })
+    fireEvent.click(communityRadio)
+    expect(onChange).toHaveBeenCalledWith({ ...DEFAULT_FILTERS, colorBy: 'community' })
   })
 })

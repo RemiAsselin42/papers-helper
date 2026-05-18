@@ -26,7 +26,7 @@ export function setStoredOllamaUrl(url: string | null): void {
   }
 }
 
-export function ollamaHeaders(): HeadersInit {
+export function ollamaHeaders(): Record<string, string> {
   const url = localStorage.getItem(OLLAMA_URL_KEY)
   return url ? { 'X-Ollama-URL': url } : {}
 }

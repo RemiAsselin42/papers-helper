@@ -8,6 +8,7 @@ import styles from './GraphCanvas.module.scss'
 import {
   buildLayout,
   buildStylesheet,
+  communityColor,
   edgeLabel,
   nodeColor,
   resolveTheme,
@@ -74,10 +75,19 @@ export function GraphCanvas({
           // Truncated label for the canvas — the popover shows the full one.
           label: truncateLabel(n.label, n.type),
           nodeType: n.type,
-          // Theme nodes derive their colour from the category name so the
-          // graph stays visually consistent with the modal pills and filter
-          // swatch. Other types use the static per-type colour.
-          color: n.type === 'theme' ? categoryThemeColor(n.label) : nodeColor(n.type, theme),
+          // In "community" mode every node is coloured by its Louvain
+          // cluster index. In "type" mode (default) category nodes derive
+          // their colour from the category name — keeping the graph
+          // consistent with the modal pills and filter swatch — and other
+          // types use the static per-type colour.
+          color:
+            filters.colorBy === 'community'
+              ? communityColor(
+                  typeof n.data.community === 'number' ? n.data.community : 0
+                )
+              : n.type === 'category'
+                ? categoryThemeColor(n.label)
+                : nodeColor(n.type, theme),
         },
       }))
 

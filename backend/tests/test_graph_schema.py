@@ -8,12 +8,12 @@ from app.graph.schema import (
     GraphEdge,
     GraphNode,
     author_node_id,
+    category_node_id,
     concept_node_id,
     paper_node_id,
     slug_author,
+    slug_category,
     slug_concept,
-    slug_theme,
-    theme_node_id,
 )
 
 
@@ -48,15 +48,15 @@ class TestSlugAuthor:
         assert slug_author("Smith", "-Jean") == "smith_j"
 
 
-class TestSlugThemeAndConcept:
-    def test_theme_lowercased(self) -> None:
-        assert slug_theme("Natural Language Processing") == "natural_language_processing"
+class TestSlugCategoryAndConcept:
+    def test_category_lowercased(self) -> None:
+        assert slug_category("Natural Language Processing") == "natural_language_processing"
 
     def test_concept_strips_diacritics(self) -> None:
         assert slug_concept("Réseau de neurones") == "reseau_de_neurones"
 
     def test_empty_string_returns_empty(self) -> None:
-        assert slug_theme("") == ""
+        assert slug_category("") == ""
         assert slug_concept("") == ""
 
 
@@ -67,8 +67,8 @@ class TestNodeIDs:
     def test_author_id_empty_when_no_family(self) -> None:
         assert author_node_id("", "John") == ""
 
-    def test_theme_id_includes_slug(self) -> None:
-        assert theme_node_id("ML") == "theme:ml"
+    def test_category_id_includes_slug(self) -> None:
+        assert category_node_id("ML") == "category:ml"
 
     def test_concept_id_includes_slug(self) -> None:
         assert concept_node_id("Transformers") == "concept:transformers"
@@ -89,4 +89,11 @@ class TestRoundTrip:
         g = Graph.empty()
         d = g.to_dict()
         assert d["nodes"] == [] and d["edges"] == []
-        assert d["version"] == 1
+        assert d["version"] == 2
+
+    def test_legacy_theme_node_migrated_on_read(self) -> None:
+        # graph.json written before the rename used type "theme" / "theme_of".
+        node = GraphNode.from_dict({"id": "theme:ml", "type": "theme", "label": "ML"})
+        assert node.type == "category"
+        edge = GraphEdge.from_dict({"source": "paper:a", "target": "theme:ml", "type": "theme_of"})
+        assert edge.type == "category_of"

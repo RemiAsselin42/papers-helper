@@ -1,10 +1,10 @@
 import { allLlmHeaders } from './llm'
 
-export type GraphNodeType = 'paper' | 'author' | 'theme' | 'concept'
+export type GraphNodeType = 'paper' | 'author' | 'category' | 'concept'
 export type GraphEdgeType =
   | 'authored_by'
   | 'co_authored'
-  | 'theme_of'
+  | 'category_of'
   | 'concept_of'
   | 'semantic'
 
@@ -56,6 +56,24 @@ export interface GraphData {
    * the edges actually stored on disk.
    */
   semantic_threshold: number
+  /**
+   * Number of Louvain communities the backend found on this read. Each node
+   * carries its own `data.community` index; this count lets the UI size a
+   * legend without scanning every node. Communities are computed on read,
+   * not persisted — they always reflect the current node/edge set.
+   */
+  community_count: number
+}
+
+/** Sub-graph returned by `GET /graph/neighbors/{node_id}` — the centre node
+ * plus everything within `depth` hops. The seam for lazily exploring a graph
+ * too large to ship whole (V1 still loads everything; this is the >1000-paper
+ * escape hatch). */
+export interface GraphNeighbors {
+  node_id: string
+  depth: number
+  nodes: GraphNode[]
+  edges: GraphEdge[]
 }
 
 /**
@@ -156,4 +174,23 @@ export function syncGraph(
   signal?: AbortSignal
 ): Promise<ReadableStream<Uint8Array>> {
   return postSseStream(`/api/projects/${projectId}/graph/sync`, signal)
+}
+
+/**
+ * Fetch the sub-graph within `depth` hops of `nodeId`. `nodeId` is a
+ * `type:slug` identifier (e.g. `paper:my-doc`); it is URL-encoded so its
+ * colon survives the round-trip to the backend's `:path` route param.
+ */
+export async function graphNeighbors(
+  projectId: string,
+  nodeId: string,
+  depth = 1,
+  signal?: AbortSignal
+): Promise<GraphNeighbors> {
+  const res = await fetch(
+    `/api/projects/${projectId}/graph/neighbors/${encodeURIComponent(nodeId)}?depth=${depth}`,
+    { headers: allLlmHeaders(), signal }
+  )
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
 }

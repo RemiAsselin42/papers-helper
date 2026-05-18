@@ -39,7 +39,31 @@ def _patch_projects_dir(projects_dir: Path) -> Generator[None, None, None]:
 def test_read_missing_returns_empty() -> None:
     g = read_graph("nonexistent")
     assert g.nodes == [] and g.edges == []
-    assert g.version == 1
+    assert g.version == GRAPH_SCHEMA_VERSION
+
+
+def test_legacy_v1_graph_migrates_theme_to_category(projects_dir: Path) -> None:
+    """A v1 graph.json (theme / theme_of) loads under the current names."""
+    pid = "p-legacy"
+    (projects_dir / pid).mkdir()
+    graph_path(pid).write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "nodes": [
+                    {"id": "paper:a", "type": "paper", "label": "A"},
+                    {"id": "theme:ml", "type": "theme", "label": "ML"},
+                ],
+                "edges": [
+                    {"source": "paper:a", "target": "theme:ml", "type": "theme_of"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    g = read_graph(pid)
+    assert {n.type for n in g.nodes} == {"paper", "category"}
+    assert g.edges[0].type == "category_of"
 
 
 def test_write_then_read_round_trip(projects_dir: Path) -> None:

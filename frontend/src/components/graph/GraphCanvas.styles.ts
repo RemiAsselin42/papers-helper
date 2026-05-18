@@ -1,5 +1,6 @@
 import cytoscape, { type Core, type Layouts } from 'cytoscape'
 import type { GraphNodeType } from '../../api/graph'
+import { legacyHsl } from '../../utils/hsl'
 
 // Per-edge-type spring rest length. With charge repulsion doing most of the
 // spacing work, these can be shorter than cola required: the charge pushes
@@ -7,7 +8,7 @@ import type { GraphNodeType } from '../../api/graph'
 // neighbours together.
 const EDGE_LENGTH: Record<string, number> = {
   authored_by: 80,
-  theme_of: 90,
+  category_of: 90,
   concept_of: 90,
   co_authored: 120,
   semantic: 200,
@@ -20,14 +21,14 @@ const EDGE_LENGTH: Record<string, number> = {
 const LABEL_MAX_CHARS: Record<GraphNodeType, number> = {
   paper: 60,
   author: 30,
-  theme: 30,
+  category: 30,
   concept: 30,
 }
 
 const NODE_COLOR_VAR: Record<GraphNodeType, string> = {
   paper: '--color-accent',
   author: '--color-emphasis-2',
-  theme: '--color-success',
+  category: '--color-success',
   concept: '--color-error',
 }
 
@@ -64,7 +65,7 @@ export function resolveTheme(): GraphTheme {
     nodeFill: {
       paper: _readVar(NODE_COLOR_VAR.paper, '#ccd5ae'),
       author: _readVar(NODE_COLOR_VAR.author, '#d4a373'),
-      theme: _readVar(NODE_COLOR_VAR.theme, '#628f4b'),
+      category: _readVar(NODE_COLOR_VAR.category, '#628f4b'),
       concept: _readVar(NODE_COLOR_VAR.concept, '#b85c38'),
     },
   }
@@ -72,6 +73,27 @@ export function resolveTheme(): GraphTheme {
 
 export function nodeColor(type: GraphNodeType, theme: GraphTheme): string {
   return theme.nodeFill[type]
+}
+
+/** Stable fill colour for a Louvain community index. Hues rotate by the
+ * golden angle so consecutive indices land far apart on the wheel.
+ *
+ * Hue alone is not enough: golden-angle steps still leave many index pairs
+ * only ~12-20° apart (e.g. communities 0 and 13), and at a fixed
+ * saturation/lightness the eye cannot separate two reds — so a lone cluster
+ * ends up the same colour as an unrelated connected one. Rotating saturation
+ * and lightness across three tiers gives every near-hue pair a second
+ * distinguishing channel; all tiers stay dark/saturated enough to read on
+ * the cream canvas. */
+export function communityColor(index: number): string {
+  const i = Math.max(0, Math.floor(index))
+  const hue = (i * 137.508) % 360
+  const tier = i % 3
+  const sat = [68, 52, 62][tier]
+  const light = [44, 62, 53][tier]
+  // `legacyHsl` emits the comma-separated form cytoscape's colour parser
+  // requires; the modern space-separated syntax renders grey.
+  return legacyHsl(hue.toFixed(1), sat, light)
 }
 
 /** Render a CSL-shaped author record as "Nom, Prénom" (bibliographic
@@ -107,7 +129,7 @@ function _cleanAuthorLabel(label: string): string {
 }
 
 /** Display-only cleanup applied everywhere graph labels surface (canvas,
- * popover, footer). Paper/theme/concept titles often carry BibTeX braces
+ * popover, footer). Paper/category/concept titles often carry BibTeX braces
  * (`{Vergleich}` for protected casing) which we strip; author labels may
  * still be in their CSL JSON form, which we flatten to "Prenom Nom". */
 export function cleanLabel(label: string, type: GraphNodeType): string {
@@ -130,8 +152,8 @@ export function edgeLabel(type: string, weight: number): string {
       return 'écrit par'
     case 'co_authored':
       return weight > 1 ? `co-auteurs ×${weight.toFixed(0)}` : 'co-auteurs'
-    case 'theme_of':
-      return 'thème'
+    case 'category_of':
+      return 'catégorie'
     case 'concept_of':
       return 'concept'
     case 'semantic':

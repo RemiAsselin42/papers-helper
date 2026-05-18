@@ -56,7 +56,7 @@ const GraphCanvas = lazy(() => import('./GraphCanvas').then((m) => ({ default: m
 interface Props {
   projectId: string
   refreshKey: number
-  onOpenSource: (stem: string) => void
+  onOpenSource: (stem: string, label: string) => void
   onFilterSources: (filter: { author?: string; category?: string }) => void
 }
 

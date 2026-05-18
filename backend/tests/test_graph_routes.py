@@ -152,3 +152,63 @@ class TestSourceCount:
         )
         resp = client.get(f"/projects/{project_dir.name}/graph")
         assert resp.json()["source_count"] == 2
+
+
+def _two_paper_graph() -> Graph:
+    """`paper:a` — `author:x` — `paper:b`: a small chain used by the
+    neighbourhood + community tests."""
+    return Graph(
+        nodes=[
+            GraphNode(id="paper:a", type="paper", label="A"),
+            GraphNode(id="author:x", type="author", label="X"),
+            GraphNode(id="paper:b", type="paper", label="B"),
+        ],
+        edges=[
+            GraphEdge(source="paper:a", target="author:x", type="authored_by"),
+            GraphEdge(source="paper:b", target="author:x", type="authored_by"),
+        ],
+    )
+
+
+class TestCommunities:
+    def test_get_graph_stamps_community_on_every_node(
+        self, client: TestClient, project_dir: Path
+    ) -> None:
+        write_graph_atomic(project_dir.name, _two_paper_graph())
+        resp = client.get(f"/projects/{project_dir.name}/graph")
+        body = resp.json()
+        assert resp.status_code == 200
+        assert body["community_count"] >= 1
+        for node in body["nodes"]:
+            assert isinstance(node["data"]["community"], int)
+
+
+class TestNeighborsEndpoint:
+    def test_404_when_project_missing(self, client: TestClient) -> None:
+        resp = client.get("/projects/nope/graph/neighbors/paper:a")
+        assert resp.status_code == 404
+
+    def test_404_when_node_absent(self, client: TestClient, project_dir: Path) -> None:
+        write_graph_atomic(project_dir.name, _two_paper_graph())
+        resp = client.get(f"/projects/{project_dir.name}/graph/neighbors/paper:missing")
+        assert resp.status_code == 404
+
+    def test_depth_1_returns_direct_neighbours(self, client: TestClient, project_dir: Path) -> None:
+        write_graph_atomic(project_dir.name, _two_paper_graph())
+        resp = client.get(f"/projects/{project_dir.name}/graph/neighbors/paper:a")
+        body = resp.json()
+        assert resp.status_code == 200
+        assert body["depth"] == 1
+        assert {n["id"] for n in body["nodes"]} == {"paper:a", "author:x"}
+
+    def test_depth_2_reaches_the_far_paper(self, client: TestClient, project_dir: Path) -> None:
+        write_graph_atomic(project_dir.name, _two_paper_graph())
+        resp = client.get(f"/projects/{project_dir.name}/graph/neighbors/paper:a?depth=2")
+        body = resp.json()
+        assert resp.status_code == 200
+        assert {n["id"] for n in body["nodes"]} == {"paper:a", "author:x", "paper:b"}
+
+    def test_depth_out_of_range_is_rejected(self, client: TestClient, project_dir: Path) -> None:
+        write_graph_atomic(project_dir.name, _two_paper_graph())
+        resp = client.get(f"/projects/{project_dir.name}/graph/neighbors/paper:a?depth=99")
+        assert resp.status_code == 422

@@ -1,8 +1,9 @@
 """HTTP surface for the knowledge graph.
 
-- `GET  /projects/{id}/graph`         → JSON dump (nodes, edges, stats).
-- `POST /projects/{id}/graph/rebuild` → SSE stream re-deriving the entire graph
-                                         from the sources currently on disk.
+- `GET  /projects/{id}/graph`               → JSON dump (nodes, edges, stats).
+- `GET  /projects/{id}/graph/neighbors/{id}` → sub-graph around one node.
+- `POST /projects/{id}/graph/rebuild`       → SSE stream re-deriving the entire
+                                               graph from the sources on disk.
 """
 
 from __future__ import annotations
@@ -10,7 +11,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -24,6 +25,8 @@ from app.graph import (
 )
 from app.graph.build import graph_stats
 from app.graph.builder import SEMANTIC_THRESHOLD
+from app.graph.communities import assign_communities
+from app.graph.queries import neighborhood
 from app.ingestion import iter_source_files
 
 router = APIRouter(prefix="/projects/{project_id}/graph", tags=["graph"])
@@ -62,6 +65,20 @@ class GraphResponse(BaseModel):
     # edges. Exposed so the frontend's filter slider seeds from the same
     # source of truth instead of duplicating the constant.
     semantic_threshold: float = SEMANTIC_THRESHOLD
+    # Number of Louvain communities found on this read. Each node carries its
+    # own `data["community"]` index; this is exposed so the UI can size a
+    # legend without scanning every node.
+    community_count: int = 0
+
+
+class GraphNeighborsResponse(BaseModel):
+    """Sub-graph returned by `GET /graph/neighbors/{node_id}` — the centre
+    node plus everything within `depth` hops."""
+
+    node_id: str
+    depth: int = 1
+    nodes: list[GraphNodeResponse] = []
+    edges: list[GraphEdgeResponse] = []
 
 
 def _check_project_exists(project_id: str) -> None:
@@ -93,6 +110,10 @@ async def get_graph(project_id: str) -> GraphResponse:
                 source_count=source_count,
                 semantic_threshold=SEMANTIC_THRESHOLD,
             )
+        # Communities are a derived view, not persisted: computing on read
+        # keeps them consistent with the current node/edge set and lets
+        # graphs built before this feature shipped light up without a rebuild.
+        community_count = assign_communities(graph)
         return GraphResponse(
             version=graph.version,
             embed_model=graph.embed_model,
@@ -108,6 +129,40 @@ async def get_graph(project_id: str) -> GraphResponse:
             stats=graph_stats(graph),
             source_count=source_count,
             semantic_threshold=SEMANTIC_THRESHOLD,
+            community_count=community_count,
+        )
+
+    return await asyncio.to_thread(_fetch)
+
+
+@router.get("/neighbors/{node_id:path}", response_model=GraphNeighborsResponse)
+async def get_neighbors(
+    project_id: str,
+    node_id: str,
+    depth: int = Query(default=1, ge=1, le=5),
+) -> GraphNeighborsResponse:
+    """Return the sub-graph within *depth* hops of *node_id*.
+
+    `node_id` is a `type:slug` identifier (e.g. `paper:my-doc`); the `:path`
+    converter keeps any slashes a stem might contain intact. 404 if the node
+    is absent from the graph.
+    """
+    _check_project_exists(project_id)
+
+    def _fetch() -> GraphNeighborsResponse:
+        nodes, edges = neighborhood(project_id, node_id, depth)
+        if not nodes:
+            raise HTTPException(status_code=404, detail="Node not found in graph")
+        return GraphNeighborsResponse(
+            node_id=node_id,
+            depth=depth,
+            nodes=[
+                GraphNodeResponse(id=n.id, type=n.type, label=n.label, data=n.data) for n in nodes
+            ],
+            edges=[
+                GraphEdgeResponse(source=e.source, target=e.target, type=e.type, weight=e.weight)
+                for e in edges
+            ],
         )
 
     return await asyncio.to_thread(_fetch)
