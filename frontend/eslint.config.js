@@ -32,6 +32,16 @@ export default tseslint.config(
       ...jsxA11y.flatConfigs.recommended.rules,
       ...a11yWarnOverrides,
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+      // Deprecated upstream and fully superseded by label-has-associated-control;
+      // keeping it on only double-reports every unlabelled control.
+      'jsx-a11y/label-has-for': 'off',
+      // autoFocus is intentional UX in our modals — focus belongs on the primary
+      // field the instant the dialog opens.
+      'jsx-a11y/no-autofocus': 'off',
+      // Our dropdowns implement the standard WAI-ARIA listbox pattern
+      // (<ul role="listbox"> / <li role="option">), which this rule flags as a
+      // false positive even though it is the spec-recommended markup.
+      'jsx-a11y/no-noninteractive-element-to-interactive-role': 'off',
     },
   },
 )

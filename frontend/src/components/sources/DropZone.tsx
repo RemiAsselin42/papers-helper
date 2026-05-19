@@ -332,6 +332,7 @@ export function DropZone({
           type="file"
           accept={ACCEPTED_INPUT_ATTR + ',.zip'}
           multiple
+          aria-label="Sélectionner des fichiers à importer"
           className={styles.input}
           onChange={onFileChange}
           disabled={disabled}

@@ -129,6 +129,10 @@
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
+  border: none;
+  padding: 0;
+  background: none;
+  font: inherit;
   color: var(--color-text-muted);
   cursor: help;
   transition: color 150ms ease;

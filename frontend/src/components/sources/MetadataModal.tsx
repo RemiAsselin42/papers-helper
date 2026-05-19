@@ -443,6 +443,7 @@ export function MetadataModal({
   return (
     <div
       className={styles.overlay}
+      role="presentation"
       onMouseDown={(e) => e.target === e.currentTarget && requestClose()}
     >
       <div className={styles.dialog} role="dialog" aria-modal aria-label="Modifier les métadonnées">
@@ -455,9 +456,13 @@ export function MetadataModal({
 
         <div className={styles.body}>
           <div className={styles.field}>
-            <label className={styles.label}>Titre</label>
+            <label className={styles.label} htmlFor="md-title">
+              Titre
+            </label>
             <input
               ref={firstInputRef}
+              id="md-title"
+              aria-label="Titre"
               className={styles.input}
               value={draft.pdf_title}
               onChange={(e) => setField('pdf_title', e.target.value)}
@@ -467,7 +472,7 @@ export function MetadataModal({
           </div>
 
           <div className={styles.field}>
-            <label className={styles.label}>Catégories</label>
+            <span className={styles.label}>Catégories</span>
             <div className={styles.categoriesRow}>
               {draft.categories.map((cat) => {
                 const c = categoryColor(cat)
@@ -516,6 +521,7 @@ export function MetadataModal({
                     >
                       <input
                         ref={newCategoryInputRef}
+                        aria-label="Nom de la catégorie"
                         className={styles.input}
                         value={newCategoryDraft}
                         onChange={(e) => setNewCategoryDraft(e.target.value)}
@@ -576,12 +582,13 @@ export function MetadataModal({
           </div>
 
           <div className={styles.field}>
-            <label className={styles.label}>Auteurs</label>
+            <span className={styles.label}>Auteurs</span>
             <div className={styles.authorsList}>
               {draft.authors.map((author, i) => (
                 <div key={i} className={styles.authorRow}>
                   <input
                     className={styles.input}
+                    aria-label="Nom de l’auteur"
                     value={author.last_name}
                     onChange={(e) => setAuthor(i, 'last_name', e.target.value)}
                     placeholder="Nom"
@@ -589,6 +596,7 @@ export function MetadataModal({
                   />
                   <input
                     className={styles.input}
+                    aria-label="Prénom de l’auteur"
                     value={author.first_name}
                     onChange={(e) => setAuthor(i, 'first_name', e.target.value)}
                     placeholder="Prénom"
@@ -614,8 +622,12 @@ export function MetadataModal({
 
           <div className={styles.row}>
             <div className={styles.field}>
-              <label className={styles.label}>Année</label>
+              <label className={styles.label} htmlFor="md-year">
+                Année
+              </label>
               <input
+                id="md-year"
+                aria-label="Année"
                 className={styles.input}
                 value={draft.year}
                 onChange={(e) => setField('year', e.target.value)}
@@ -624,8 +636,12 @@ export function MetadataModal({
               />
             </div>
             <div className={`${styles.field} ${styles.fieldGrow}`}>
-              <label className={styles.label}>Publication / Éditeur</label>
+              <label className={styles.label} htmlFor="md-publication">
+                Publication / Éditeur
+              </label>
               <input
+                id="md-publication"
+                aria-label="Publication / Éditeur"
                 className={styles.input}
                 value={draft.publication}
                 onChange={(e) => setField('publication', e.target.value)}
@@ -636,8 +652,12 @@ export function MetadataModal({
           </div>
 
           <div className={styles.field}>
-            <label className={styles.label}>DOI</label>
+            <label className={styles.label} htmlFor="md-doi">
+              DOI
+            </label>
             <input
+              id="md-doi"
+              aria-label="DOI"
               className={styles.input}
               value={draft.doi}
               onChange={(e) => setField('doi', e.target.value)}
@@ -647,9 +667,13 @@ export function MetadataModal({
           </div>
 
           <div className={styles.field}>
-            <label className={styles.label}>Résumé</label>
+            <label className={styles.label} htmlFor="md-abstract">
+              Résumé
+            </label>
             <div className={styles.textareaWrap}>
               <textarea
+                id="md-abstract"
+                aria-label="Résumé"
                 className={
                   ollamaAvailable ? `${styles.textarea} ${styles.textareaWithIa}` : styles.textarea
                 }
@@ -704,8 +728,12 @@ export function MetadataModal({
           </div>
 
           <div className={styles.field}>
-            <label className={styles.label}>Notes</label>
+            <label className={styles.label} htmlFor="md-notes">
+              Notes
+            </label>
             <textarea
+              id="md-notes"
+              aria-label="Notes"
               className={styles.textarea}
               value={draft.notes}
               onChange={(e) => setField('notes', e.target.value)}

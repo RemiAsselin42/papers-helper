@@ -90,7 +90,7 @@ export function ProblematiqueEdit({
 
       <div className={styles.form}>
         <div className={styles.group}>
-          <label className={styles.fieldLabel}>Problème de recherche</label>
+          <span className={styles.fieldLabel}>Problème de recherche</span>
           <AutoTextarea
             className={styles.textarea}
             value={draft.research_problem}
@@ -132,7 +132,7 @@ export function ProblematiqueEdit({
         </div>
 
         <div className={styles.group}>
-          <label className={styles.fieldLabel}>Hypothèses</label>
+          <span className={styles.fieldLabel}>Hypothèses</span>
           {draft.hypotheses.map((h, i) => (
             <div key={h._id} className={styles.itemBlock}>
               <div className={styles.itemBlockHeader}>
@@ -204,7 +204,7 @@ export function ProblematiqueEdit({
         </div>
 
         <div className={styles.group}>
-          <label className={styles.fieldLabel}>Approches planifiées</label>
+          <span className={styles.fieldLabel}>Approches planifiées</span>
           {draft.planned_approaches.map((a, i) => (
             <div key={a._id} className={styles.itemBlock}>
               <div className={styles.itemBlockHeader}>
@@ -221,6 +221,7 @@ export function ProblematiqueEdit({
               <input
                 className={styles.inputTitle}
                 type="text"
+                aria-label={`Titre de l’approche ${i + 1}`}
                 value={a.title}
                 onChange={(e) => setApproachField(a._id, 'title', e.target.value)}
                 placeholder="Titre (optionnel)"
@@ -246,7 +247,7 @@ export function ProblematiqueEdit({
         </div>
 
         <div className={styles.group}>
-          <label className={styles.fieldLabel}>Résultats attendus</label>
+          <span className={styles.fieldLabel}>Résultats attendus</span>
           <AutoTextarea
             className={styles.textarea}
             value={draft.expected_outcomes}

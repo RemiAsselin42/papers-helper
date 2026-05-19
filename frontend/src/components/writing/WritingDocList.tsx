@@ -92,6 +92,7 @@ export function WritingDocList({
                   {isEditing ? (
                     <input
                       ref={inputRef}
+                      aria-label="Renommer le document"
                       className={styles.titleInput}
                       value={draft}
                       onChange={(e) => setDraft(e.target.value)}

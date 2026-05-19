@@ -91,6 +91,7 @@ export function ConversationList({
                   {isEditing ? (
                     <input
                       ref={inputRef}
+                      aria-label="Renommer la conversation"
                       className={styles.titleInput}
                       value={draft}
                       onChange={(e) => setDraft(e.target.value)}

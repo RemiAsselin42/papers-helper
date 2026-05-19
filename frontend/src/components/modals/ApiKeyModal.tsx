@@ -38,7 +38,11 @@ export function ApiKeyModal({ provider, onSave, onClose }: Props) {
   }
 
   return (
-    <div className={styles.overlay} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div
+      className={styles.overlay}
+      role="presentation"
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
       <div
         className={styles.dialog}
         role="dialog"
@@ -71,6 +75,7 @@ export function ApiKeyModal({ provider, onSave, onClose }: Props) {
           <input
             id="api-key-input"
             type="password"
+            aria-label="Clé API"
             className={styles.input}
             value={key}
             onChange={(e) => setKey(e.target.value)}

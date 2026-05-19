@@ -92,9 +92,11 @@ export function GraphNodeFooter({
           <strong>Similaires :</strong>
           <ul>
             {semanticNeighbors.map((n) => (
-              <li key={n.id} onClick={() => onPickNode(n.id)}>
-                {n.label}{' '}
-                <span className={styles.infoMeta}>({n.weight.toFixed(2)})</span>
+              <li key={n.id}>
+                <button type="button" onClick={() => onPickNode(n.id)}>
+                  {n.label}{' '}
+                  <span className={styles.infoMeta}>({n.weight.toFixed(2)})</span>
+                </button>
               </li>
             ))}
           </ul>
@@ -106,9 +108,11 @@ export function GraphNodeFooter({
           <strong>Voisins :</strong>
           <ul>
             {neighbors.slice(0, 10).map((n) => (
-              <li key={n.id} onClick={() => onPickNode(n.id)}>
-                {cleanLabel(n.label, n.type)}{' '}
-                <span className={styles.infoMeta}>({TYPE_LABEL[n.type]})</span>
+              <li key={n.id}>
+                <button type="button" onClick={() => onPickNode(n.id)}>
+                  {cleanLabel(n.label, n.type)}{' '}
+                  <span className={styles.infoMeta}>({TYPE_LABEL[n.type]})</span>
+                </button>
               </li>
             ))}
           </ul>

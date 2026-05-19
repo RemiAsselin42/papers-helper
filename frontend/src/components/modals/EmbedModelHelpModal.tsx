@@ -54,7 +54,11 @@ export function EmbedModelHelpModal({ onClose }: Props) {
   }, [onClose])
 
   return (
-    <div className={styles.overlay} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div
+      className={styles.overlay}
+      role="presentation"
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
       <div className={styles.dialog} role="dialog" aria-modal aria-label="Modèles d’embedding">
         <div className={styles.header}>
           <span className={styles.headerTitle}>Modèles d’embedding</span>

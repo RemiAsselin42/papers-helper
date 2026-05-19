@@ -148,8 +148,13 @@ export function ModelSelector({
             const ready = hasKey(p)
             const isOllama = p === 'ollama'
             return (
+              // The <li> is just a layout wrapper — the listbox option is the
+              // button inside — so role="presentation" both keeps the a11y
+              // tree correct and lets it carry the mouse-only hover handlers
+              // that reveal the Ollama model flyout.
               <li
                 key={p}
+                role="presentation"
                 className={isOllama ? styles.ollamaRow : undefined}
                 onMouseEnter={isOllama ? () => setOllamaHover(true) : undefined}
                 onMouseLeave={isOllama ? () => setOllamaHover(false) : undefined}

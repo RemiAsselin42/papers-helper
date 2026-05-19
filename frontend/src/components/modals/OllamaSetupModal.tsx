@@ -58,6 +58,7 @@ export function OllamaSetupModal({ healthData, onConnected, onDismiss }: OllamaS
   return (
     <div
       className={styles.overlay}
+      role="presentation"
       onMouseDown={(e) => e.target === e.currentTarget && handleDismiss()}
     >
       <div className={styles.dialog} role="dialog" aria-modal aria-label="Configuration Ollama">
@@ -218,6 +219,7 @@ export function OllamaSetupModal({ healthData, onConnected, onDismiss }: OllamaS
                 <input
                   id="ollama-url-input"
                   type="url"
+                  aria-label="URL Ollama"
                   className={styles.urlInput}
                   value={urlInput}
                   onChange={(e) => setUrlInput(e.target.value)}

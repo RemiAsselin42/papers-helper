@@ -399,11 +399,17 @@
   }
 
   li {
+    display: flex;
+  }
+
+  button {
     cursor: pointer;
     padding: 2px 8px;
     border-radius: var(--radius-sm);
     background: var(--color-surface);
     border: var(--border);
+    font: inherit;
+    color: inherit;
 
     &:hover {
       background: var(--color-emphasis);

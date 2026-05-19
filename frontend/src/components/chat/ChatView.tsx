@@ -49,6 +49,7 @@ function SettingsToggle({ title, hint, checked, onChange }: SettingsToggleProps)
       <span className={styles.settingsSwitch}>
         <input
           type="checkbox"
+          aria-label={title}
           className={styles.settingsSwitchInput}
           checked={checked}
           onChange={onChange}
@@ -70,7 +71,7 @@ function SettingsToggle({ title, hint, checked, onChange }: SettingsToggleProps)
  * leftward to avoid clipping past the viewport's right boundary).
  */
 function InfoTooltip({ text }: { text: string }) {
-  const triggerRef = useRef<HTMLSpanElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null)
 
   function show() {
@@ -93,12 +94,11 @@ function InfoTooltip({ text }: { text: string }) {
 
   return (
     <>
-      <span
+      <button
+        type="button"
         ref={triggerRef}
         className={styles.settingsInfo}
         aria-label={text}
-        role="img"
-        tabIndex={0}
         onMouseEnter={show}
         onMouseLeave={hide}
         onFocus={show}
@@ -108,7 +108,7 @@ function InfoTooltip({ text }: { text: string }) {
         onClick={(e) => e.preventDefault()}
       >
         <Info size={16} aria-hidden="true" />
-      </span>
+      </button>
       {pos &&
         createPortal(
           <div
@@ -217,6 +217,9 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
       }
     }
 
+    // Snapshot the opener now: by cleanup time the ref may already point
+    // elsewhere, so the cleanup must close over this value, not read .current.
+    const opener = settingsOpenerRef.current
     document.addEventListener('keydown', onKeyDown)
     return () => {
       document.removeEventListener('keydown', onKeyDown)
@@ -224,7 +227,7 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
       // when focus has already moved elsewhere (e.g. user clicked outside)
       // avoids stealing focus from another interactive target.
       if (document.activeElement === document.body) {
-        settingsOpenerRef.current?.focus({ preventScroll: true })
+        opener?.focus({ preventScroll: true })
       }
     }
   }, [settingsOpen])
@@ -556,7 +559,7 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
   return (
     <div className={styles.wrapper}>
       {(historyOpen || settingsOpen) && (
-        <div className={styles.backdrop} onClick={() => setOpenPanel(null)} />
+        <div className={styles.backdrop} role="presentation" onClick={() => setOpenPanel(null)} />
       )}
 
       <div className={`${styles.panel} ${styles.panelLeft} ${historyOpen ? styles.panelOpen : ''}`}>
@@ -702,6 +705,7 @@ export function ChatView({ projectId, provider, onConfigureOllama, onRequestApiK
           <textarea
             ref={textareaRef}
             className={styles.textarea}
+            aria-label="Message"
             value={chat.input}
             onChange={(e) => {
               chat.setInput(e.target.value)

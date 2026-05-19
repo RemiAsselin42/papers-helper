@@ -30,6 +30,7 @@ export function NewProjectView({ onCreated }: NewProjectViewProps) {
         <input
           className={styles.input}
           type="text"
+          aria-label="Project name"
           placeholder="Project name"
           value={name}
           onChange={(e) => setName(e.target.value)}
