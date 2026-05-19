@@ -56,8 +56,9 @@ describe('SettingsView', () => {
     await waitFor(() => {
       expect(screen.getByText('Surcharges du projet courant')).toBeInTheDocument()
     })
-    // One "Par défaut (…)" option per overridable field (model, granularity, IA).
-    expect(screen.getAllByText(/Par défaut/).length).toBeGreaterThanOrEqual(3)
+    // One "Par défaut (…)" option per select-overridable field (model,
+    // granularity). `auto_enrich` is a toggle that mirrors the global default.
+    expect(screen.getAllByText(/Par défaut/).length).toBeGreaterThanOrEqual(2)
   })
 
   it('lists pulled Ollama models as embedding-model options', async () => {

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import { HelpCircle, Loader2 } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Check, HelpCircle, Loader2 } from 'lucide-react'
 import { listModels } from '../../api/models'
 import {
   GRANULARITY_LABELS,
@@ -34,8 +34,21 @@ export function SettingsView({ projectId, onSaved, onReindex }: Props) {
   const [projectDraft, setProjectDraft] = useState<ProjectSettings | null>(null)
   const [savingGlobal, setSavingGlobal] = useState(false)
   const [savingProject, setSavingProject] = useState(false)
+  const [savedGlobal, setSavedGlobal] = useState(false)
+  const [savedProject, setSavedProject] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showModelHelp, setShowModelHelp] = useState(false)
+
+  // Confirmation « Enregistrement ok » : affichée 5 s après un succès.
+  const savedGlobalTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const savedProjectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(
+    () => () => {
+      if (savedGlobalTimer.current) clearTimeout(savedGlobalTimer.current)
+      if (savedProjectTimer.current) clearTimeout(savedProjectTimer.current)
+    },
+    []
+  )
 
   useEffect(() => {
     setBundle(null)
@@ -78,6 +91,9 @@ export function SettingsView({ projectId, onSaved, onReindex }: Props) {
       setGlobalDraft(next.global_defaults)
       setProjectDraft(next.overrides)
       onSaved?.()
+      setSavedGlobal(true)
+      if (savedGlobalTimer.current) clearTimeout(savedGlobalTimer.current)
+      savedGlobalTimer.current = setTimeout(() => setSavedGlobal(false), 2500)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erreur d'enregistrement")
     } finally {
@@ -96,6 +112,9 @@ export function SettingsView({ projectId, onSaved, onReindex }: Props) {
       setGlobalDraft(next.global_defaults)
       setProjectDraft(next.overrides)
       onSaved?.()
+      setSavedProject(true)
+      if (savedProjectTimer.current) clearTimeout(savedProjectTimer.current)
+      savedProjectTimer.current = setTimeout(() => setSavedProject(false), 2500)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erreur d'enregistrement")
     } finally {
@@ -170,12 +189,17 @@ export function SettingsView({ projectId, onSaved, onReindex }: Props) {
           </select>
         </label>
 
-        <label className={styles.checkboxField}>
-          <input
-            type="checkbox"
-            checked={globalDraft.auto_enrich}
-            onChange={(e) => setGlobalDraft({ ...globalDraft, auto_enrich: e.target.checked })}
-          />
+        <label className={styles.toggleRow}>
+          <span className={styles.switch}>
+            <input
+              type="checkbox"
+              aria-label="Enrichissement IA automatique à l’import"
+              className={styles.switchInput}
+              checked={globalDraft.auto_enrich}
+              onChange={(e) => setGlobalDraft({ ...globalDraft, auto_enrich: e.target.checked })}
+            />
+            <span className={styles.switchTrack} aria-hidden="true" />
+          </span>
           <span className={styles.label}>Enrichissement IA automatique à l’import</span>
         </label>
 
@@ -187,7 +211,8 @@ export function SettingsView({ projectId, onSaved, onReindex }: Props) {
             disabled={savingGlobal}
           >
             {savingGlobal && <Loader2 size={16} className={styles.spin} />}
-            Enregistrer les défauts
+            {!savingGlobal && savedGlobal && <Check size={16} />}
+            {savedGlobal && !savingGlobal ? 'Enregistrement ok' : 'Enregistrer les défauts'}
           </button>
         </div>
         <p className={styles.hint}>
@@ -240,24 +265,19 @@ export function SettingsView({ projectId, onSaved, onReindex }: Props) {
           </select>
         </label>
 
-        <label className={styles.field}>
+        <label className={styles.toggleRow}>
+          <span className={styles.switch}>
+            <input
+              type="checkbox"
+              aria-label="Enrichissement IA automatique à l’import"
+              className={styles.switchInput}
+              // Pas de surcharge → le toggle reflète le défaut global.
+              checked={projectDraft.auto_enrich ?? globalDraft.auto_enrich}
+              onChange={(e) => setProjectDraft({ ...projectDraft, auto_enrich: e.target.checked })}
+            />
+            <span className={styles.switchTrack} aria-hidden="true" />
+          </span>
           <span className={styles.label}>Enrichissement IA automatique à l’import</span>
-          <select
-            className={styles.select}
-            value={projectDraft.auto_enrich === null ? '' : String(projectDraft.auto_enrich)}
-            onChange={(e) =>
-              setProjectDraft({
-                ...projectDraft,
-                auto_enrich: e.target.value === '' ? null : e.target.value === 'true',
-              })
-            }
-          >
-            <option value="">
-              Par défaut ({bundle.global_defaults.auto_enrich ? 'activé' : 'désactivé'})
-            </option>
-            <option value="true">Activé</option>
-            <option value="false">Désactivé</option>
-          </select>
         </label>
 
         <div className={styles.actions}>
@@ -268,7 +288,8 @@ export function SettingsView({ projectId, onSaved, onReindex }: Props) {
             disabled={savingProject}
           >
             {savingProject && <Loader2 size={16} className={styles.spin} />}
-            Enregistrer le projet
+            {!savingProject && savedProject && <Check size={16} />}
+            {savedProject && !savingProject ? 'Enregistrement ok' : 'Enregistrer le projet'}
           </button>
         </div>
       </section>
