@@ -58,8 +58,6 @@ TODO.md
 # Logs
 *.log
 
-# Dev heartbeat files (dev.sh)
-*.heartbeat
 # Graphify — locally generated artifacts
 graphify-out/
 context/
