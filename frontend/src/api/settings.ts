@@ -39,12 +39,6 @@ export interface ProjectSettingsBundle {
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
 
-export async function getGlobalSettings(): Promise<AppSettings> {
-  const res = await fetch('/api/settings')
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return res.json()
-}
-
 export async function saveGlobalSettings(settings: AppSettings): Promise<AppSettings> {
   const res = await fetch('/api/settings', {
     method: 'PUT',

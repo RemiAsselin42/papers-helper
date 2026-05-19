@@ -159,20 +159,6 @@ export async function createConversation(
   return res.json()
 }
 
-export async function updateConversation(
-  projectId: string,
-  conversationId: string,
-  payload: ConversationWritePayload
-): Promise<Conversation> {
-  const res = await fetch(`/api/projects/${projectId}/conversations/${conversationId}`, {
-    method: 'PUT',
-    headers: jsonHeaders(),
-    body: JSON.stringify(payload),
-  })
-  if (!res.ok) throw new Error(`Failed to update conversation: ${res.status}`)
-  return res.json()
-}
-
 export async function renameConversation(
   projectId: string,
   conversationId: string,

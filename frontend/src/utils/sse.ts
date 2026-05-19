@@ -65,12 +65,3 @@ export async function readSseEvents<T = unknown>(
     }
   }
 }
-
-/** Drain an SSE body without parsing — used when the caller only cares about completion. */
-export async function drainStream(body: ReadableStream<Uint8Array>): Promise<void> {
-  const reader = body.getReader()
-  while (true) {
-    const { done } = await reader.read()
-    if (done) break
-  }
-}

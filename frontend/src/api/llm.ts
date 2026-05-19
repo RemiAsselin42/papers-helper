@@ -9,7 +9,7 @@ export const PROVIDER_LABELS: Record<LLMProvider, string> = {
   deepseek: 'DeepSeek',
 }
 
-export const DEFAULT_MODELS: Record<Exclude<LLMProvider, 'ollama'>, string> = {
+const DEFAULT_MODELS: Record<Exclude<LLMProvider, 'ollama'>, string> = {
   openai: 'gpt-4o',
   anthropic: 'claude-sonnet-4-6',
   gemini: 'gemini-2.0-flash',
@@ -49,14 +49,6 @@ export function setStoredApiKey(
 
 export function getStoredExternalModel(provider: Exclude<LLMProvider, 'ollama'>): string {
   return localStorage.getItem(`llmModel_${provider}`) ?? DEFAULT_MODELS[provider]
-}
-
-export function setStoredExternalModel(
-  provider: Exclude<LLMProvider, 'ollama'>,
-  model: string
-): void {
-  if (model) localStorage.setItem(`llmModel_${provider}`, model)
-  else localStorage.removeItem(`llmModel_${provider}`)
 }
 
 const OLLAMA_MODEL_STORAGE_KEY = 'ollamaModel'

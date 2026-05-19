@@ -65,17 +65,6 @@ export interface GraphData {
   community_count: number
 }
 
-/** Sub-graph returned by `GET /graph/neighbors/{node_id}` — the centre node
- * plus everything within `depth` hops. The seam for lazily exploring a graph
- * too large to ship whole (V1 still loads everything; this is the >1000-paper
- * escape hatch). */
-export interface GraphNeighbors {
-  node_id: string
-  depth: number
-  nodes: GraphNode[]
-  edges: GraphEdge[]
-}
-
 /**
  * SSE events emitted by `POST /graph/rebuild` and `POST /graph/sync`. The
  * shapes mirror what `app/graph/builder.py` writes so both ends drift
@@ -174,23 +163,4 @@ export function syncGraph(
   signal?: AbortSignal
 ): Promise<ReadableStream<Uint8Array>> {
   return postSseStream(`/api/projects/${projectId}/graph/sync`, signal)
-}
-
-/**
- * Fetch the sub-graph within `depth` hops of `nodeId`. `nodeId` is a
- * `type:slug` identifier (e.g. `paper:my-doc`); it is URL-encoded so its
- * colon survives the round-trip to the backend's `:path` route param.
- */
-export async function graphNeighbors(
-  projectId: string,
-  nodeId: string,
-  depth = 1,
-  signal?: AbortSignal
-): Promise<GraphNeighbors> {
-  const res = await fetch(
-    `/api/projects/${projectId}/graph/neighbors/${encodeURIComponent(nodeId)}?depth=${depth}`,
-    { headers: allLlmHeaders(), signal }
-  )
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return res.json()
 }
