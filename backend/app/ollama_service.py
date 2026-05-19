@@ -19,6 +19,7 @@ _EMBED_NUM_CTX = 8192
 class OllamaEmbeddingFunction(EmbeddingFunction[Documents]):
     def __init__(self, model: str = OLLAMA_EMBED_MODEL, base_url: str = OLLAMA_BASE_URL) -> None:
         self.model = model
+        self.base_url = base_url
         self._client = ollama.Client(host=base_url)
 
     def __call__(self, input: Documents) -> Embeddings:
@@ -27,6 +28,17 @@ class OllamaEmbeddingFunction(EmbeddingFunction[Documents]):
             input=input,
             options={"num_ctx": _EMBED_NUM_CTX},
         ).embeddings
+
+    @staticmethod
+    def name() -> str:
+        return "papers-helper-ollama"
+
+    def get_config(self) -> dict[str, Any]:
+        return {"model": self.model, "base_url": self.base_url}
+
+    @staticmethod
+    def build_from_config(config: dict[str, Any]) -> OllamaEmbeddingFunction:
+        return OllamaEmbeddingFunction(model=config["model"], base_url=config["base_url"])
 
 
 class OllamaGenerationService:

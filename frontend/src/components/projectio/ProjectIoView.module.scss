@@ -1,0 +1,238 @@
+@use '../../styles/mixins' as *;
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  width: 100%;
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.titleIcon {
+  color: var(--color-emphasis);
+  flex-shrink: 0;
+}
+
+.title {
+  font-size: var(--font-size-heading-lg);
+  font-weight: 700;
+  line-height: var(--line-height-heading-lg);
+}
+
+.subtitle {
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text-muted);
+}
+
+.card {
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.cardTitle {
+  font-size: var(--font-size-body);
+  font-weight: 700;
+}
+
+.toggleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  cursor: pointer;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  width: 36px;
+  height: 20px;
+}
+
+.switchInput {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.switchTrack {
+  position: absolute;
+  inset: 0;
+  background: var(--color-background);
+  border: var(--border);
+  border-radius: 999px;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    background: var(--color-text-muted);
+    border-radius: 50%;
+    transition:
+      transform 150ms ease,
+      background-color 150ms ease;
+  }
+}
+
+.switchInput:checked + .switchTrack {
+  background: var(--color-emphasis);
+  border-color: var(--color-emphasis);
+
+  &::after {
+    transform: translateX(16px);
+    background: var(--color-background);
+  }
+}
+
+.switchInput:focus-visible + .switchTrack {
+  outline: 2px solid var(--color-emphasis-2, var(--color-emphasis));
+  outline-offset: 2px;
+}
+
+.label {
+  font-size: var(--font-size-label);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btnPrimary {
+  @include btn-primary;
+  gap: var(--space-xs);
+}
+
+.btnSecondary {
+  @include btn-secondary;
+  gap: var(--space-xs);
+}
+
+.hint {
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text-muted);
+}
+
+.muted {
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text-muted);
+}
+
+.error {
+  font-size: var(--font-size-body-sm);
+  color: var(--color-error);
+}
+
+.dropZone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  background: var(--color-background);
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-family: var(--font);
+  font-size: var(--font-size-body);
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--color-emphasis-2);
+  }
+}
+
+.hiddenInput {
+  display: none;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(44, 36, 22, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--space-lg);
+}
+
+.dialog {
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.dialogHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-md) var(--space-md) var(--space-lg);
+  border-bottom: var(--border);
+}
+
+.dialogTitle {
+  font-size: var(--font-size-heading-md);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.closeBtn {
+  @include btn-icon;
+}
+
+.dialogBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: var(--color-background);
+  font-size: var(--font-size-body-sm);
+}
+
+.conflictActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -38,7 +38,9 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByRole('navigation')).toBeInTheDocument()
     })
-    expect(await screen.findByRole('button', { name: /import/i })).toBeInTheDocument()
-    expect(await screen.findByRole('button', { name: /sources/i })).toBeInTheDocument()
+    // Exact names: an `aria-label="Export / Import"` tab also exists, so a
+    // loose /import/i would match two buttons.
+    expect(await screen.findByRole('button', { name: 'Import' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Sources' })).toBeInTheDocument()
   })
 })

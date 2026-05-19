@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import {
+  ArrowLeftRight,
   Bug,
   Files,
   MessageSquare,
@@ -24,6 +25,7 @@ export type View =
   | 'chat'
   | 'graph'
   | 'citations'
+  | 'project-io'
   | 'settings'
   | 'debug'
   | 'new-project'
@@ -164,6 +166,17 @@ export function Sidebar({
       </div>
 
       <div className={styles.bottom}>
+        <button
+          className={`${styles.tab} ${activeView === 'project-io' ? styles.tabActive : ''}`}
+          onClick={() => onViewChange('project-io')}
+          aria-label="Export / Import"
+          title="Exporter / importer un projet"
+        >
+          <span className={styles.icon}>
+            <ArrowLeftRight size={20} />
+          </span>
+          <span className={styles.label}>Échange</span>
+        </button>
         <button
           className={`${styles.tab} ${activeView === 'settings' ? styles.tabActive : ''}`}
           onClick={() => onViewChange('settings')}

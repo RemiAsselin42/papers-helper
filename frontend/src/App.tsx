@@ -30,6 +30,7 @@ import {
 } from './components/sources/SourceList.filters'
 import { setCachedSourceCount, clearCachedSourceCount } from './components/sources/SourceList.cache'
 import { ProblematiqueView } from './components/problematique/ProblematiqueView'
+import { ProjectIoView } from './components/projectio/ProjectIoView'
 import { SettingsView } from './components/settings/SettingsView'
 import { WritingView } from './components/writing/WritingView'
 import { Sidebar, type View } from './components/layout/Sidebar'
@@ -248,6 +249,22 @@ export default function App() {
     bump()
   }
 
+  function handleProjectImported(project: ProjectInfo, mode: 'new' | 'replace') {
+    setCachedSourceCount(project.id, 0)
+    if (mode === 'replace') {
+      // Same id, content swapped on disk — refresh the entry in place.
+      setProjects((prev) => prev.map((p) => (p.id === project.id ? project : p)))
+      setCurrentProjectId(project.id)
+      bump()
+      return
+    }
+    // Fresh project (plain import or duplicate) — mirror handleProjectCreated.
+    setProjects((prev) => [project, ...prev.filter((p) => p.id !== project.id)])
+    setCurrentProjectId(project.id)
+    setActiveView('import')
+    bump()
+  }
+
   function handleProjectDeleted(id: string) {
     clearCachedSourceCount(id)
     const next = projects.filter((p) => p.id !== id)
@@ -428,6 +445,13 @@ export default function App() {
         )}
         {activeView === 'citations' && (
           <CitationsView projectId={projectId} onOpenSource={handleOpenSource} />
+        )}
+        {activeView === 'project-io' && (
+          <ProjectIoView
+            projectId={projectId}
+            projectName={projects.find((p) => p.id === projectId)?.name ?? ''}
+            onImported={handleProjectImported}
+          />
         )}
         {activeView === 'settings' && (
           <SettingsView

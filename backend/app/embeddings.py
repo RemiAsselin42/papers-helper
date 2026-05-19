@@ -48,6 +48,7 @@ class OpenAIEmbeddingFunction(EmbeddingFunction[Documents]):
     def __init__(self, api_key: str, model: str) -> None:
         from openai import OpenAI
 
+        self.api_key = api_key
         self.model = model
         self._client = OpenAI(api_key=api_key)
 
@@ -55,11 +56,23 @@ class OpenAIEmbeddingFunction(EmbeddingFunction[Documents]):
         resp = self._client.embeddings.create(model=self.model, input=list(input))
         return cast(Embeddings, [d.embedding for d in resp.data])
 
+    @staticmethod
+    def name() -> str:
+        return "papers-helper-openai"
+
+    def get_config(self) -> dict[str, str]:
+        return {"api_key": self.api_key, "model": self.model}
+
+    @staticmethod
+    def build_from_config(config: dict[str, str]) -> OpenAIEmbeddingFunction:
+        return OpenAIEmbeddingFunction(api_key=config["api_key"], model=config["model"])
+
 
 class GeminiEmbeddingFunction(EmbeddingFunction[Documents]):
     def __init__(self, api_key: str, model: str) -> None:
         from openai import OpenAI
 
+        self.api_key = api_key
         self.model = model
         self._client = OpenAI(
             api_key=api_key,
@@ -69,6 +82,17 @@ class GeminiEmbeddingFunction(EmbeddingFunction[Documents]):
     def __call__(self, input: Documents) -> Embeddings:
         resp = self._client.embeddings.create(model=self.model, input=list(input))
         return cast(Embeddings, [d.embedding for d in resp.data])
+
+    @staticmethod
+    def name() -> str:
+        return "papers-helper-gemini"
+
+    def get_config(self) -> dict[str, str]:
+        return {"api_key": self.api_key, "model": self.model}
+
+    @staticmethod
+    def build_from_config(config: dict[str, str]) -> GeminiEmbeddingFunction:
+        return GeminiEmbeddingFunction(api_key=config["api_key"], model=config["model"])
 
 
 def resolve_embed_config(
