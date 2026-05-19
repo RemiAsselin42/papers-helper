@@ -205,12 +205,15 @@ export function useAutoEnrich(
   // Switching projects (or unmount) cancels any in-flight run; queued items
   // for the old project would patch the wrong dataset otherwise.
   useEffect(() => {
+    // The cancelled-stem Set is created once and only ever mutated, so a
+    // snapshot taken now is the same instance the cleanup needs to clear.
+    const cancelled = cancelledRef.current
     return () => {
       abortRef.current?.abort()
       queueRef.current = []
       runningRef.current = false
       runningStemRef.current = null
-      cancelledRef.current.clear()
+      cancelled.clear()
     }
   }, [projectId])
 
