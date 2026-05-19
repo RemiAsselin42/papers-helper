@@ -198,11 +198,28 @@ class TestSearch:
         )
         resp = client.post(
             f"/projects/{project_dir.name}/citations/search",
-            json={"query": "neural", "stem": "paper-b"},
+            json={"query": "neural", "stems": ["paper-b"]},
         )
         assert resp.status_code == 200
         results = resp.json()["results"]
         assert {r["stem"] for r in results} == {"paper-b"}
+
+    def test_filter_by_multiple_stems(self, client: TestClient, project_dir: Path) -> None:
+        _seed(
+            project_dir.name,
+            [
+                ("paper-a::0", _QUERY_VEC, _chunk_meta("paper-a", 0, 1)),
+                ("paper-b::0", [0.4, 0.4, 0.4], _chunk_meta("paper-b", 0, 1)),
+                ("paper-c::0", [0.5, 0.5, 0.5], _chunk_meta("paper-c", 0, 1)),
+            ],
+        )
+        resp = client.post(
+            f"/projects/{project_dir.name}/citations/search",
+            json={"query": "neural", "stems": ["paper-a", "paper-c"]},
+        )
+        assert resp.status_code == 200
+        results = resp.json()["results"]
+        assert {r["stem"] for r in results} == {"paper-a", "paper-c"}
 
     def test_filter_by_author(self, client: TestClient, project_dir: Path) -> None:
         _seed(
@@ -214,11 +231,28 @@ class TestSearch:
         )
         resp = client.post(
             f"/projects/{project_dir.name}/citations/search",
-            json={"query": "neural", "author": "Doe, A."},
+            json={"query": "neural", "authors": ["Doe, A."]},
         )
         assert resp.status_code == 200
         results = resp.json()["results"]
         assert {r["author"] for r in results} == {"Doe, A."}
+
+    def test_filter_by_multiple_authors(self, client: TestClient, project_dir: Path) -> None:
+        _seed(
+            project_dir.name,
+            [
+                ("paper-a::0", _QUERY_VEC, _chunk_meta("paper-a", 0, 1, author="Smith, J.")),
+                ("paper-b::0", [0.4, 0.4, 0.4], _chunk_meta("paper-b", 0, 1, author="Doe, A.")),
+                ("paper-c::0", [0.5, 0.5, 0.5], _chunk_meta("paper-c", 0, 1, author="Roe, B.")),
+            ],
+        )
+        resp = client.post(
+            f"/projects/{project_dir.name}/citations/search",
+            json={"query": "neural", "authors": ["Smith, J.", "Roe, B."]},
+        )
+        assert resp.status_code == 200
+        results = resp.json()["results"]
+        assert {r["author"] for r in results} == {"Smith, J.", "Roe, B."}
 
     def test_filter_by_category_post_filters_csv(
         self, client: TestClient, project_dir: Path
@@ -232,7 +266,45 @@ class TestSearch:
         )
         resp = client.post(
             f"/projects/{project_dir.name}/citations/search",
-            json={"query": "neural", "category": "nlp"},
+            json={"query": "neural", "categories": ["nlp"]},
+        )
+        assert resp.status_code == 200
+        results = resp.json()["results"]
+        assert {r["stem"] for r in results} == {"paper-a"}
+
+    def test_filter_by_multiple_categories(self, client: TestClient, project_dir: Path) -> None:
+        _seed(
+            project_dir.name,
+            [
+                ("paper-a::0", _QUERY_VEC, _chunk_meta("paper-a", 0, 1, categories="ml, nlp")),
+                ("paper-b::0", [0.4, 0.4, 0.4], _chunk_meta("paper-b", 0, 1, categories="vision")),
+                ("paper-c::0", [0.5, 0.5, 0.5], _chunk_meta("paper-c", 0, 1, categories="robot")),
+            ],
+        )
+        resp = client.post(
+            f"/projects/{project_dir.name}/citations/search",
+            json={"query": "neural", "categories": ["nlp", "vision"]},
+        )
+        assert resp.status_code == 200
+        results = resp.json()["results"]
+        assert {r["stem"] for r in results} == {"paper-a", "paper-b"}
+
+    def test_filters_combine_with_and(self, client: TestClient, project_dir: Path) -> None:
+        # stems OR-match within the field; combined with authors via AND.
+        _seed(
+            project_dir.name,
+            [
+                ("paper-a::0", _QUERY_VEC, _chunk_meta("paper-a", 0, 1, author="Smith, J.")),
+                ("paper-b::0", [0.4, 0.4, 0.4], _chunk_meta("paper-b", 0, 1, author="Doe, A.")),
+            ],
+        )
+        resp = client.post(
+            f"/projects/{project_dir.name}/citations/search",
+            json={
+                "query": "neural",
+                "stems": ["paper-a", "paper-b"],
+                "authors": ["Smith, J."],
+            },
         )
         assert resp.status_code == 200
         results = resp.json()["results"]
@@ -259,7 +331,7 @@ class TestSearch:
         _seed(project_dir.name, rows)
         resp = client.post(
             f"/projects/{project_dir.name}/citations/search",
-            json={"query": "neural", "limit": 2, "category": "nlp"},
+            json={"query": "neural", "limit": 2, "categories": ["nlp"]},
         )
         assert resp.status_code == 200
         results = resp.json()["results"]

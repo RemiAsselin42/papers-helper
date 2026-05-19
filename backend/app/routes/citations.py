@@ -50,10 +50,12 @@ class CitationSearchRequest(BaseModel):
     limit: int = Field(default=_DEFAULT_LIMIT, ge=1, le=_MAX_LIMIT)
     # Strict (exact-phrase) mode — relaxes the quality floors, see below.
     strict: bool = False
-    # Optional metadata filters — null means "no filter on this field".
-    stem: str | None = None
-    author: str | None = None
-    category: str | None = None
+    # Optional metadata filters — an empty list means "no filter on this
+    # field". Each list is OR-combined (any selected value matches); the three
+    # fields are AND-combined together.
+    stems: list[str] = Field(default_factory=list)
+    authors: list[str] = Field(default_factory=list)
+    categories: list[str] = Field(default_factory=list)
 
 
 class CitationHit(BaseModel):
@@ -108,10 +110,11 @@ def _meta_int(meta: dict[str, Any], key: str) -> int:
         return 0
 
 
-def _category_match(meta: dict[str, Any], category: str) -> bool:
+def _category_match(meta: dict[str, Any], categories: list[str]) -> bool:
+    """True if the chunk carries *any* of the selected categories (OR)."""
     raw = str(meta.get("categories") or "")
     cats = {c.strip().lower() for c in raw.split(",") if c.strip()}
-    return category.strip().lower() in cats
+    return any(c.strip().lower() in cats for c in categories if c.strip())
 
 
 # ---------------------------------------------------------------------------
@@ -135,12 +138,14 @@ async def search_citations(project_id: str, body: CitationSearchRequest) -> Cita
             return []
 
         # Exact-match filters that Chroma can evaluate go to the DB; the
-        # category filter is post-applied in Python (CSV metadata).
+        # category filter is post-applied in Python (CSV metadata). Each
+        # multi-value field becomes an `$in` (OR), and the fields are
+        # AND-combined.
         conditions: list[dict[str, Any]] = []
-        if body.stem:
-            conditions.append({"source_stem": body.stem})
-        if body.author:
-            conditions.append({"author": body.author})
+        if body.stems:
+            conditions.append({"source_stem": {"$in": body.stems}})
+        if body.authors:
+            conditions.append({"author": {"$in": body.authors}})
         where: dict[str, Any] | None = None
         if len(conditions) == 1:
             where = conditions[0]
@@ -155,7 +160,7 @@ async def search_citations(project_id: str, body: CitationSearchRequest) -> Cita
         # when most candidates miss the category, so rank the whole collection
         # for a category search and let the post-filter trim it. Bounded: one
         # local project's chunk count.
-        if body.category:
+        if body.categories:
             n_results = count
 
         qres = collection.query(
@@ -174,7 +179,7 @@ async def search_citations(project_id: str, body: CitationSearchRequest) -> Cita
             if not doc:
                 continue
             meta_d = dict(meta) if meta else {}
-            if body.category and not _category_match(meta_d, body.category):
+            if body.categories and not _category_match(meta_d, body.categories):
                 continue
             similarity = max(0.0, min(1.0, 1.0 - float(dist)))
             # Quality floors apply in normal mode only. Strict mode is lexical

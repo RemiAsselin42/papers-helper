@@ -66,31 +66,6 @@
   gap: var(--space-xs);
 }
 
-.filterSelect {
-  padding: 6px var(--space-sm);
-  border: var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-family: var(--font);
-  font-size: var(--font-size-label);
-  line-height: 1.4;
-  cursor: pointer;
-  max-width: 220px;
-
-  &:focus {
-    outline: none;
-    border-color: var(--color-emphasis-2);
-  }
-
-  option {
-    font-family: var(--font);
-    font-size: var(--font-size-label);
-    background: var(--color-surface);
-    color: var(--color-text);
-  }
-}
-
 .resetBtn {
   @include btn-icon;
 }

@@ -5,6 +5,7 @@ import { listSources, type SourceInfo } from '../../api/papers'
 import { splitCategoriesCsv } from '../../utils/categories'
 import { stripStopWords } from '../../utils/stopWords'
 import { CitationResultCard } from './CitationResultCard'
+import { FilterMultiSelect } from './FilterMultiSelect'
 import { hasStrictMatch } from './snippetHighlight'
 import styles from './CitationsView.module.scss'
 
@@ -29,9 +30,11 @@ export function CitationsView({ projectId, onOpenSource }: Props) {
   // snippet highlighting until the next search.
   const [searchedQuery, setSearchedQuery] = useState('')
   const [searchedStrict, setSearchedStrict] = useState(false)
-  const [stem, setStem] = useState('')
-  const [author, setAuthor] = useState('')
-  const [category, setCategory] = useState('')
+  // Multi-value metadata filters — each is OR-matched within its field, and
+  // the three fields are AND-combined by the backend.
+  const [selectedStems, setSelectedStems] = useState<string[]>([])
+  const [selectedAuthors, setSelectedAuthors] = useState<string[]>([])
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [sources, setSources] = useState<SourceInfo[]>([])
   // `null` = no search run yet (shows the prompt); `[]` = searched, no match.
   const [results, setResults] = useState<CitationHit[] | null>(null)
@@ -51,9 +54,9 @@ export function CitationsView({ projectId, onOpenSource }: Props) {
     setStrict(false)
     setSearchedQuery('')
     setSearchedStrict(false)
-    setStem('')
-    setAuthor('')
-    setCategory('')
+    setSelectedStems([])
+    setSelectedAuthors([])
+    setSelectedCategories([])
     setResults(null)
     setError(null)
     setLimit(_PAGE_SIZE)
@@ -84,7 +87,14 @@ export function CitationsView({ projectId, onOpenSource }: Props) {
     return [...set].sort()
   }, [sources])
 
-  const hasFilters = stem !== '' || author !== '' || category !== ''
+  const hasFilters =
+    selectedStems.length > 0 || selectedAuthors.length > 0 || selectedCategories.length > 0
+
+  const resetFilters = useCallback(() => {
+    setSelectedStems([])
+    setSelectedAuthors([])
+    setSelectedCategories([])
+  }, [])
 
   const runSearch = useCallback(
     async (searchLimit: number, isLoadMore = false) => {
@@ -107,9 +117,9 @@ export function CitationsView({ projectId, onOpenSource }: Props) {
           projectId,
           effectiveQuery,
           {
-            stem: stem || undefined,
-            author: author || undefined,
-            category: category || undefined,
+            stems: selectedStems,
+            authors: selectedAuthors,
+            categories: selectedCategories,
           },
           searchLimit,
           strict,
@@ -142,7 +152,7 @@ export function CitationsView({ projectId, onOpenSource }: Props) {
         }
       }
     },
-    [projectId, query, strict, stem, author, category]
+    [projectId, query, strict, selectedStems, selectedAuthors, selectedCategories]
   )
 
   return (
@@ -184,61 +194,42 @@ export function CitationsView({ projectId, onOpenSource }: Props) {
         </div>
 
         <div className={styles.filterRow}>
-          <select
-            className={styles.filterSelect}
-            value={stem}
-            onChange={(e) => setStem(e.target.value)}
-            aria-label="Filtrer par source"
-          >
-            <option value="">Toutes les sources</option>
-            {sortedSources.map((s) => (
-              <option key={s.stem} value={s.stem}>
-                {s.pdf_title || s.filename}
-              </option>
-            ))}
-          </select>
+          <FilterMultiSelect
+            emptyLabel="Toutes les sources"
+            ariaLabel="Filtrer par source"
+            options={sortedSources.map((s) => ({
+              value: s.stem,
+              label: s.pdf_title || s.filename,
+            }))}
+            selected={selectedStems}
+            onChange={setSelectedStems}
+          />
 
           {authors.length > 0 && (
-            <select
-              className={styles.filterSelect}
-              value={author}
-              onChange={(e) => setAuthor(e.target.value)}
-              aria-label="Filtrer par auteur"
-            >
-              <option value="">Tous les auteurs</option>
-              {authors.map((a) => (
-                <option key={a} value={a}>
-                  {a}
-                </option>
-              ))}
-            </select>
+            <FilterMultiSelect
+              emptyLabel="Tous les auteurs"
+              ariaLabel="Filtrer par auteur"
+              options={authors.map((a) => ({ value: a, label: a }))}
+              selected={selectedAuthors}
+              onChange={setSelectedAuthors}
+            />
           )}
 
           {categories.length > 0 && (
-            <select
-              className={styles.filterSelect}
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              aria-label="Filtrer par catégorie"
-            >
-              <option value="">Toutes les catégories</option>
-              {categories.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+            <FilterMultiSelect
+              emptyLabel="Toutes les catégories"
+              ariaLabel="Filtrer par catégorie"
+              options={categories.map((c) => ({ value: c, label: c }))}
+              selected={selectedCategories}
+              onChange={setSelectedCategories}
+            />
           )}
 
           {hasFilters && (
             <button
               type="button"
               className={styles.resetBtn}
-              onClick={() => {
-                setStem('')
-                setAuthor('')
-                setCategory('')
-              }}
+              onClick={resetFilters}
               aria-label="Réinitialiser les filtres"
               title="Réinitialiser les filtres"
             >

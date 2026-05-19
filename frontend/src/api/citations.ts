@@ -15,11 +15,15 @@ export interface CitationHit {
   year: string
 }
 
-/** Optional metadata filters narrowing the citation search. */
+/**
+ * Optional metadata filters narrowing the citation search. Each list is
+ * OR-matched within its field; the three fields are AND-combined. An empty
+ * (or omitted) list means "no filter on that field".
+ */
 export interface CitationSearchFilters {
-  stem?: string
-  author?: string
-  category?: string
+  stems?: string[]
+  authors?: string[]
+  categories?: string[]
 }
 
 /** A single chunk, as returned by the "show more context" endpoint. */

@@ -1,0 +1,160 @@
+@use '../../styles/mixins' as *;
+
+.root {
+  position: relative;
+  display: inline-block;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  max-width: 220px;
+  padding: 6px var(--space-sm);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font);
+  font-size: var(--font-size-label);
+  line-height: 1.4;
+  cursor: pointer;
+  transition: var(--transition-short);
+
+  &:focus-visible {
+    outline: none;
+    border-color: var(--color-emphasis-2);
+  }
+}
+
+// Active = at least one value selected.
+.triggerActive {
+  border-color: var(--color-emphasis-2);
+}
+
+.triggerLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chevron {
+  @include chevron;
+  color: var(--color-text-muted);
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+// Floating panel — sits above the result list.
+.popover {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + var(--space-xs));
+  left: 0;
+  min-width: 100%;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-xs);
+  max-height: calc(100vh - 230px);
+  overflow-y: auto;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 5px var(--space-xs);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--font-size-label);
+  color: var(--color-text);
+
+  &:hover {
+    background: var(--color-background);
+  }
+
+  // Custom checkbox (appearance: none) — background/border are fully
+  // controllable via the --color-* tokens in the rules below.
+  input[type='checkbox'] {
+    appearance: none;
+    -webkit-appearance: none;
+    flex-shrink: 0;
+    display: grid;
+    place-content: center;
+    width: 15px;
+    height: 15px;
+    margin: 0;
+    border: var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--color-background);
+    cursor: pointer;
+    transition: var(--transition-short);
+
+    // Checkmark — a rotated, two-sided box revealed on :checked.
+    &::before {
+      content: '';
+      width: 4px;
+      height: 8px;
+      margin-top: -2px;
+      border: solid var(--color-background);
+      border-width: 0 2px 2px 0;
+      transform: rotate(45deg) scale(0);
+      transition: transform 120ms;
+    }
+
+    &:checked {
+      border-color: var(--color-emphasis);
+      background: var(--color-emphasis);
+    }
+
+    &:checked::before {
+      transform: rotate(45deg) scale(1);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-emphasis-2);
+      outline-offset: 1px;
+    }
+  }
+}
+
+// Cap + ellipsise long source / author names instead of letting the panel
+// sprawl — the whole point of the custom dropdown over a native select.
+.optionLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emptyHint {
+  padding: var(--space-xs);
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+}
+
+.clearBtn {
+  border: none;
+  border-top: var(--border);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: var(--font);
+  font-size: var(--font-size-label);
+  text-align: left;
+  padding: var(--space-sm);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--color-text);
+  }
+}
