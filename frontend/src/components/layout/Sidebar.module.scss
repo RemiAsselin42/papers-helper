@@ -4,7 +4,7 @@
   position: fixed;
   left: var(--space-md);
   top: calc(var(--space-md) + 48px + var(--space-lg));
-  height: calc(100dvh - var(--space-md) - 48px - var(--space-lg) - var(--space-lg));
+  height: calc(100dvh - var(--space-md) - 48px - var(--space-lg) - var(--space-md));
   width: 48px;
   background: var(--color-surface);
   border: var(--border);
