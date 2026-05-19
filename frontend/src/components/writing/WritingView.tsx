@@ -40,7 +40,7 @@ interface Props {
   ollamaAvailable: boolean
 }
 
-type SaveState = 'idle' | 'saving' | 'saved' | 'error'
+export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
 const SAVE_DEBOUNCE_MS = 800
 
@@ -397,6 +397,8 @@ export function WritingView({ projectId, ollamaAvailable }: Props) {
             <DocumentEditor
               key={currentDoc.id}
               initialHtml={currentDoc.content_html}
+              docTitle={currentDoc.title}
+              saveState={saveState}
               onChange={(html) => applyDocChange({ content_html: html })}
               onEditorReady={(editor) => {
                 editorRef.current = editor

@@ -24,6 +24,10 @@ data/
 node_modules/
 dist/
 coverage/
+
+# Vendored paged.js polyfill — regenerated from node_modules by
+# frontend/scripts/copy-pagedjs.mjs on `prebuild`.
+frontend/public/paged.polyfill.min.js
 .env
 .env.local
 .env.*.local

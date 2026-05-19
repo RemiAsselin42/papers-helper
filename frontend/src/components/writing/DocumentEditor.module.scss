@@ -6,19 +6,71 @@
   gap: var(--space-sm);
 }
 
+// Focus mode: editor + toolbar take over the whole viewport, hiding the rest.
+.rootFocus {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  padding: var(--space-md);
+  background: var(--color-background);
+}
+
+// Save-status badge — only shown in focus mode (the normal status row is
+// hidden behind the full-screen overlay).
+.focusSave {
+  position: absolute;
+  bottom: var(--space-md);
+  right: var(--space-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: var(--color-surface);
+  color: var(--color-success);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.focusSaveErr {
+  color: var(--color-error);
+  border-color: var(--color-error);
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+  color: var(--color-text);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .editor {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  margin: 0 auto;
+
+  // Gray gutter so the A4 sheets float with space around them, like Word.
+  background: var(--color-background);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 0;
+
+  border: var(--border);
+  width: fit-content;
+  border-radius: var(--radius-sm);
 
   // The document text follows academic presentation norms (Times New Roman,
   // black on white, 1.5 line spacing) — distinct from the app's parchment UI.
+  // Page sheet width, side margins and border are applied inline by the
+  // PaginationPlus extension; page breaks / footer are rendered as decorations.
   :global(.ProseMirror) {
-    min-height: 100%;
-    padding: var(--space-lg);
     background: #fff;
-    border: var(--border);
-    border-radius: var(--radius-sm);
     outline: none;
     color: #000;
     font-family: 'Times New Roman', Times, serif;
@@ -70,5 +122,12 @@
       pointer-events: none;
       color: var(--color-text-muted);
     }
+  }
+
+  // Page number in the bottom-right footer — matches the document typography.
+  :global(.rm-page-footer-right) {
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 12pt;
+    color: #000;
   }
 }

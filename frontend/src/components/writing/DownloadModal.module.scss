@@ -1,0 +1,126 @@
+@use '../../styles/mixins' as *;
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(44, 36, 22, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--space-lg);
+}
+
+.modal {
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  width: min(440px, 100%);
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md);
+  border-bottom: var(--border);
+
+  h3 {
+    margin: 0;
+    font-size: var(--font-size-heading-md);
+  }
+}
+
+.close {
+  @include btn-icon;
+}
+
+.intro {
+  margin: var(--space-md) var(--space-md) 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text-muted);
+}
+
+.formats {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-sm) var(--space-md) var(--space-md) var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.format {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: var(--space-sm);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--color-background);
+  font-family: var(--font);
+  cursor: pointer;
+  text-align: left;
+  transition: var(--transition-short);
+
+  &:hover {
+    color: var(--color-background);
+    background: var(--color-emphasis);
+    border-color: var(--color-emphasis);
+
+    .formatLabel,
+    .formatHint {
+      color: var(--color-background);
+    }
+  }
+}
+
+.formatSelected {
+  border-color: var(--color-emphasis);
+  background: var(--color-emphasis);
+
+  .formatLabel {
+    color: var(--color-background);
+  }
+}
+
+.formatText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.formatLabel {
+  font-weight: 700;
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text);
+}
+
+.formatHint {
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text-muted);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border-top: var(--border);
+}
+
+.cancelBtn {
+  @include btn-secondary;
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--font-size-body-sm);
+}
+
+.downloadBtn {
+  @include btn-primary;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--font-size-body-sm);
+}

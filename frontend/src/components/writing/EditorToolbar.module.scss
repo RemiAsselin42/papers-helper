@@ -9,6 +9,8 @@
   background: var(--color-surface);
   border: var(--border);
   border-radius: var(--radius-sm);
+  align-self: center;
+  min-width: 800px;
 }
 
 .btn {
@@ -35,16 +37,24 @@
   background: var(--color-border);
 }
 
-// Font-size control: a text input (so the datalist suggestions open on click)
-// paired with a custom ▲/▼ stepper column (native number spinners only exist
-// on type="number", which doesn't show the datalist).
+// Pushes the download + focus-mode buttons to the far right of the toolbar.
+.pushRight {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+// Font-size control: a text input paired with a custom ▲/▼ stepper column and
+// a hand-made suggestions dropdown (no native spinners, no <datalist>).
 .sizeField {
+  position: relative;
   display: flex;
   align-items: stretch;
 }
 
 .sizeInput {
-  width: 40px;
+  width: 44px;
   background: var(--color-background);
   color: var(--color-text);
   border: var(--border);
@@ -53,6 +63,7 @@
   padding: 4px var(--space-xs);
   font-family: var(--font);
   font-size: var(--font-size-body-sm);
+  text-align: right;
 
   &:focus {
     outline: none;
@@ -88,4 +99,54 @@
   & + & {
     border-top: var(--border);
   }
+}
+
+// Hand-made suggestions dropdown — always lists the full set, unfiltered.
+.sizeMenu {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  z-index: 10;
+  margin: 0;
+  padding: var(--space-xs);
+  list-style: none;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  gap: 1px;
+
+  // Hide the scrollbar — still scrollable via wheel/trackpad.
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.sizeOption {
+  display: block;
+  width: 100%;
+  padding: 4px var(--space-sm);
+  text-align: right;
+  background: transparent;
+  color: var(--color-text);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: var(--font-size-body-sm);
+  transition: var(--transition-short);
+
+  &:hover {
+    background: var(--color-emphasis);
+    color: var(--color-background);
+  }
+}
+
+.sizeOptionActive {
+  background: var(--color-emphasis);
+  color: var(--color-background);
 }
