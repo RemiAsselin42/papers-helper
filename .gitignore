@@ -55,6 +55,9 @@ mempalace.yaml
 # TODOs
 TODO.md
 
+# Design notes (local only)
+DESIGN.md
+
 # Logs
 *.log
 
