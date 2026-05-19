@@ -1,10 +1,32 @@
 @use '../../styles/mixins' as *;
 
+// Viewport-height flex column so the header (title + "Modifier") stays fixed
+// while only the content below scrolls. Mirrors SourceList's `.scrollHost`:
+// .content top padding (md + 48px header + xl) + bottom padding (xl).
+.root {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - var(--space-md) - 48px - var(--space-xl) - var(--space-xl));
+  min-height: 0;
+}
+
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: var(--space-lg);
+  gap: var(--space-md);
+  flex: 0 0 auto;
+}
+
+// Scrollable region under the fixed header — used by both read and edit modes.
+.scrollBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: var(--space-xs);
+  display: flex;
+  flex-direction: column;
   gap: var(--space-md);
 }
 
@@ -170,6 +192,8 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .fieldLabel {
@@ -376,4 +400,5 @@
   justify-content: flex-end;
   gap: var(--space-sm);
   padding-top: var(--space-xs);
+  flex: 0 0 auto;
 }

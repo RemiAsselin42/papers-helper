@@ -89,175 +89,177 @@ export function ProblematiqueEdit({
       </div>
 
       <div className={styles.form}>
-        <div className={styles.group}>
-          <span className={styles.fieldLabel}>Problème de recherche</span>
-          <AutoTextarea
-            className={styles.textarea}
-            value={draft.research_problem}
-            onChange={(e) => set('research_problem', e.target.value)}
-            placeholder="Quelle est la question ou le problème central de cette recherche ?"
-            disabled={isSaving}
-          />
-          {draft.sub_research_problem === null ? (
-            <button
-              className={styles.btnAdd}
-              onClick={() => set('sub_research_problem', '')}
+        <div className={styles.scrollBody}>
+          <div className={styles.group}>
+            <span className={styles.fieldLabel}>Problème de recherche</span>
+            <AutoTextarea
+              className={styles.textarea}
+              value={draft.research_problem}
+              onChange={(e) => set('research_problem', e.target.value)}
+              placeholder="Quelle est la question ou le problème central de cette recherche ?"
               disabled={isSaving}
-              type="button"
-            >
-              <Plus size={16} /> Ajouter une sous-problématique
-            </button>
-          ) : (
-            <div className={styles.subGroup}>
-              <div className={styles.subGroupHeader}>
-                <span className={styles.subFieldLabel}>Sous-problématique</span>
-                <button
-                  className={styles.btnRemove}
-                  onClick={() => set('sub_research_problem', null)}
-                  disabled={isSaving}
-                  type="button"
-                >
-                  <Trash2 size={20} />
-                </button>
-              </div>
-              <AutoTextarea
-                className={styles.textarea}
-                value={draft.sub_research_problem}
-                onChange={(e) => set('sub_research_problem', e.target.value)}
-                placeholder="Précision ou déclinaison du problème principal…"
-                disabled={isSaving}
-              />
-            </div>
-          )}
-        </div>
-
-        <div className={styles.group}>
-          <span className={styles.fieldLabel}>Hypothèses</span>
-          {draft.hypotheses.map((h, i) => (
-            <div key={h._id} className={styles.itemBlock}>
-              <div className={styles.itemBlockHeader}>
-                <span className={styles.itemNumber}>Hypothèse {i + 1}</span>
-                <button
-                  className={styles.btnRemove}
-                  onClick={() => removeHypothesis(h._id)}
-                  disabled={isSaving}
-                  type="button"
-                >
-                  <Trash2 size={20} />
-                </button>
-              </div>
-              <AutoTextarea
-                className={styles.textarea}
-                value={h.text}
-                onChange={(e) => setHypoText(h._id, e.target.value)}
-                placeholder="Formule ton hypothèse…"
-                disabled={isSaving}
-              />
-              <div className={styles.itemBlockHeader}>
-                <span className={styles.itemNumber}>
-                  Sous-hypothèse{h.subs.length > 0 ? 's' : ''}{' '}
-                  {h.subs.length > 0 && `(${h.subs.length})`}
-                </span>
-              </div>
-              {h.subs.length > 0 && (
-                <div className={styles.subList}>
-                  {h.subs.map((s, j) => (
-                    <div key={s._id} className={styles.subItem}>
-                      <span className={styles.subItemBullet}>{j + 1}.</span>
-                      <AutoTextarea
-                        className={`${styles.textarea} ${styles.textareaSub}`}
-                        value={s.text}
-                        onChange={(e) => setSubHypText(h._id, s._id, e.target.value)}
-                        placeholder="Sous-hypothèse…"
-                        disabled={isSaving}
-                      />
-                      <button
-                        className={styles.btnRemove}
-                        onClick={() => removeSubHyp(h._id, s._id)}
-                        disabled={isSaving}
-                        type="button"
-                      >
-                        <Trash2 size={20} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+            />
+            {draft.sub_research_problem === null ? (
               <button
-                className={styles.btnAddSm}
-                onClick={() => addSubHyp(h._id)}
+                className={styles.btnAdd}
+                onClick={() => set('sub_research_problem', '')}
                 disabled={isSaving}
                 type="button"
               >
-                <Plus size={16} /> Sous-hypothèse
+                <Plus size={16} /> Ajouter une sous-problématique
               </button>
-            </div>
-          ))}
-          <button
-            className={styles.btnAdd}
-            onClick={addHypothesis}
-            disabled={isSaving}
-            type="button"
-          >
-            <Plus size={16} /> Ajouter une hypothèse
-          </button>
-        </div>
+            ) : (
+              <div className={styles.subGroup}>
+                <div className={styles.subGroupHeader}>
+                  <span className={styles.subFieldLabel}>Sous-problématique</span>
+                  <button
+                    className={styles.btnRemove}
+                    onClick={() => set('sub_research_problem', null)}
+                    disabled={isSaving}
+                    type="button"
+                  >
+                    <Trash2 size={20} />
+                  </button>
+                </div>
+                <AutoTextarea
+                  className={styles.textarea}
+                  value={draft.sub_research_problem}
+                  onChange={(e) => set('sub_research_problem', e.target.value)}
+                  placeholder="Précision ou déclinaison du problème principal…"
+                  disabled={isSaving}
+                />
+              </div>
+            )}
+          </div>
 
-        <div className={styles.group}>
-          <span className={styles.fieldLabel}>Approches planifiées</span>
-          {draft.planned_approaches.map((a, i) => (
-            <div key={a._id} className={styles.itemBlock}>
-              <div className={styles.itemBlockHeader}>
-                <span className={styles.itemNumber}>Approche {i + 1}</span>
+          <div className={styles.group}>
+            <span className={styles.fieldLabel}>Hypothèses</span>
+            {draft.hypotheses.map((h, i) => (
+              <div key={h._id} className={styles.itemBlock}>
+                <div className={styles.itemBlockHeader}>
+                  <span className={styles.itemNumber}>Hypothèse {i + 1}</span>
+                  <button
+                    className={styles.btnRemove}
+                    onClick={() => removeHypothesis(h._id)}
+                    disabled={isSaving}
+                    type="button"
+                  >
+                    <Trash2 size={20} />
+                  </button>
+                </div>
+                <AutoTextarea
+                  className={styles.textarea}
+                  value={h.text}
+                  onChange={(e) => setHypoText(h._id, e.target.value)}
+                  placeholder="Formule ton hypothèse…"
+                  disabled={isSaving}
+                />
+                <div className={styles.itemBlockHeader}>
+                  <span className={styles.itemNumber}>
+                    Sous-hypothèse{h.subs.length > 0 ? 's' : ''}{' '}
+                    {h.subs.length > 0 && `(${h.subs.length})`}
+                  </span>
+                </div>
+                {h.subs.length > 0 && (
+                  <div className={styles.subList}>
+                    {h.subs.map((s, j) => (
+                      <div key={s._id} className={styles.subItem}>
+                        <span className={styles.subItemBullet}>{j + 1}.</span>
+                        <AutoTextarea
+                          className={`${styles.textarea} ${styles.textareaSub}`}
+                          value={s.text}
+                          onChange={(e) => setSubHypText(h._id, s._id, e.target.value)}
+                          placeholder="Sous-hypothèse…"
+                          disabled={isSaving}
+                        />
+                        <button
+                          className={styles.btnRemove}
+                          onClick={() => removeSubHyp(h._id, s._id)}
+                          disabled={isSaving}
+                          type="button"
+                        >
+                          <Trash2 size={20} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <button
-                  className={styles.btnRemove}
-                  onClick={() => removeApproach(a._id)}
+                  className={styles.btnAddSm}
+                  onClick={() => addSubHyp(h._id)}
                   disabled={isSaving}
                   type="button"
                 >
-                  <Trash2 size={20} />
+                  <Plus size={16} /> Sous-hypothèse
                 </button>
               </div>
-              <input
-                className={styles.inputTitle}
-                type="text"
-                aria-label={`Titre de l’approche ${i + 1}`}
-                value={a.title}
-                onChange={(e) => setApproachField(a._id, 'title', e.target.value)}
-                placeholder="Titre (optionnel)"
-                disabled={isSaving}
-              />
-              <AutoTextarea
-                className={styles.textarea}
-                value={a.text}
-                onChange={(e) => setApproachField(a._id, 'text', e.target.value)}
-                placeholder="Décris cette approche ou méthodologie…"
-                disabled={isSaving}
-              />
-            </div>
-          ))}
-          <button
-            className={styles.btnAdd}
-            onClick={addApproach}
-            disabled={isSaving}
-            type="button"
-          >
-            <Plus size={16} /> Ajouter une approche
-          </button>
-        </div>
+            ))}
+            <button
+              className={styles.btnAdd}
+              onClick={addHypothesis}
+              disabled={isSaving}
+              type="button"
+            >
+              <Plus size={16} /> Ajouter une hypothèse
+            </button>
+          </div>
 
-        <div className={styles.group}>
-          <span className={styles.fieldLabel}>Résultats attendus</span>
-          <AutoTextarea
-            className={styles.textarea}
-            value={draft.expected_outcomes}
-            onChange={(e) => set('expected_outcomes', e.target.value)}
-            placeholder="Quels sont les apports ou contributions espérés ?"
-            disabled={isSaving}
-          />
-        </div>
+          <div className={styles.group}>
+            <span className={styles.fieldLabel}>Approches planifiées</span>
+            {draft.planned_approaches.map((a, i) => (
+              <div key={a._id} className={styles.itemBlock}>
+                <div className={styles.itemBlockHeader}>
+                  <span className={styles.itemNumber}>Approche {i + 1}</span>
+                  <button
+                    className={styles.btnRemove}
+                    onClick={() => removeApproach(a._id)}
+                    disabled={isSaving}
+                    type="button"
+                  >
+                    <Trash2 size={20} />
+                  </button>
+                </div>
+                <input
+                  className={styles.inputTitle}
+                  type="text"
+                  aria-label={`Titre de l’approche ${i + 1}`}
+                  value={a.title}
+                  onChange={(e) => setApproachField(a._id, 'title', e.target.value)}
+                  placeholder="Titre (optionnel)"
+                  disabled={isSaving}
+                />
+                <AutoTextarea
+                  className={styles.textarea}
+                  value={a.text}
+                  onChange={(e) => setApproachField(a._id, 'text', e.target.value)}
+                  placeholder="Décris cette approche ou méthodologie…"
+                  disabled={isSaving}
+                />
+              </div>
+            ))}
+            <button
+              className={styles.btnAdd}
+              onClick={addApproach}
+              disabled={isSaving}
+              type="button"
+            >
+              <Plus size={16} /> Ajouter une approche
+            </button>
+          </div>
 
-        {saveError && <p className={styles.saveError}>{saveError}</p>}
+          <div className={styles.group}>
+            <span className={styles.fieldLabel}>Résultats attendus</span>
+            <AutoTextarea
+              className={styles.textarea}
+              value={draft.expected_outcomes}
+              onChange={(e) => set('expected_outcomes', e.target.value)}
+              placeholder="Quels sont les apports ou contributions espérés ?"
+              disabled={isSaving}
+            />
+          </div>
+
+          {saveError && <p className={styles.saveError}>{saveError}</p>}
+        </div>
 
         <div className={styles.actions}>
           <button className={styles.btnSecondary} onClick={onCancel} disabled={isSaving}>
