@@ -17,6 +17,8 @@ from app.graph import evict_graph_lock
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
+MAX_PROJECT_NAME_LEN = 80
+
 
 class ProjectInfo(BaseModel):
     id: str
@@ -25,6 +27,10 @@ class ProjectInfo(BaseModel):
 
 
 class CreateProjectRequest(BaseModel):
+    name: str
+
+
+class UpdateProjectRequest(BaseModel):
     name: str
 
 
@@ -59,6 +65,18 @@ class Problematique(BaseModel):
         return data
 
 
+def _validate_project_name(raw: str) -> str:
+    name = raw.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Project name cannot be empty")
+    if len(name) > MAX_PROJECT_NAME_LEN:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Project name must be {MAX_PROJECT_NAME_LEN} characters or fewer",
+        )
+    return name
+
+
 def _read_project(project_id: str) -> ProjectInfo | None:
     path = PROJECTS_DIR / project_id / "project.json"
     if not path.exists():
@@ -87,11 +105,7 @@ async def list_projects() -> list[ProjectInfo]:
 
 @router.post("/", response_model=ProjectInfo, status_code=201)
 async def create_project(body: CreateProjectRequest) -> ProjectInfo:
-    name = body.name.strip()
-    if not name:
-        raise HTTPException(status_code=422, detail="Project name cannot be empty")
-    if len(name) > 80:
-        raise HTTPException(status_code=422, detail="Project name must be 80 characters or fewer")
+    name = _validate_project_name(body.name)
 
     project_id = str(uuid.uuid4())
     created_at = datetime.now(UTC).isoformat()
@@ -108,6 +122,27 @@ async def create_project(body: CreateProjectRequest) -> ProjectInfo:
         return info
 
     return await asyncio.to_thread(_create)
+
+
+@router.patch("/{project_id}", response_model=ProjectInfo)
+async def update_project(project_id: str, body: UpdateProjectRequest) -> ProjectInfo:
+    name = _validate_project_name(body.name)
+
+    def _update() -> ProjectInfo | None:
+        info = _read_project(project_id)
+        if info is None:
+            return None
+        updated = info.model_copy(update={"name": name})
+        (PROJECTS_DIR / project_id / "project.json").write_text(
+            json.dumps(updated.model_dump(), ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return updated
+
+    updated = await asyncio.to_thread(_update)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return updated
 
 
 def _problematique_path(project_id: str) -> Path:

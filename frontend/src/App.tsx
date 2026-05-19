@@ -265,6 +265,10 @@ export default function App() {
     bump()
   }
 
+  function handleProjectRenamed(project: ProjectInfo) {
+    setProjects((prev) => prev.map((p) => (p.id === project.id ? project : p)))
+  }
+
   function handleProjectDeleted(id: string) {
     clearCachedSourceCount(id)
     const next = projects.filter((p) => p.id !== id)
@@ -350,6 +354,8 @@ export default function App() {
       return (
         <AllProjectsView
           projects={projects}
+          onProjectRenamed={handleProjectRenamed}
+          onProjectSelect={handleProjectSelect}
           currentProjectId={currentProjectId}
           onProjectDeleted={handleProjectDeleted}
         />

@@ -27,10 +27,11 @@
   border: var(--border);
   border-radius: var(--radius-md);
   padding: var(--space-md);
+  border-color: var(--color-emphasis-2);
 }
 
 .cardCurrent {
-  border-color: var(--color-emphasis-2);
+  border-color: var(--color-emphasis);
 }
 
 .cardBody {
@@ -47,6 +48,23 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.nameInput {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--font-size-body);
+  font-family: var(--font);
+  font-weight: 600;
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--color-background);
+  color: var(--color-text);
+  border: var(--border);
+  border-radius: var(--radius-sm);
+
+  &:focus-visible {
+    outline: none;
+  }
 }
 
 .date {

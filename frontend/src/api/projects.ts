@@ -23,6 +23,19 @@ export async function createProject(name: string): Promise<ProjectInfo> {
   return res.json()
 }
 
+export async function updateProject(id: string, name: string): Promise<ProjectInfo> {
+  const res = await fetch(`/api/projects/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  })
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}))
+    throw new Error(detail?.detail ?? `Failed to update project: ${res.status}`)
+  }
+  return res.json()
+}
+
 export async function deleteProject(id: string): Promise<void> {
   const res = await fetch(`/api/projects/${id}`, { method: 'DELETE' })
   if (!res.ok) throw new Error(`Failed to delete project: ${res.status}`)
