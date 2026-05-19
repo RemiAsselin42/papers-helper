@@ -1,28 +1,10 @@
 import type { GraphNodeType } from '../../api/graph'
+import type { ColorMode, FilterState } from './filterState'
 import styles from './GraphView.module.scss'
 
-/** How node fill colour is derived: by node type (the default — papers,
- * authors, categories, concepts each get their own colour) or by Louvain
- * community (each detected cluster gets a distinct hue). */
-export type ColorMode = 'type' | 'community'
-
-export interface FilterState {
-  paper: boolean
-  author: boolean
-  category: boolean
-  concept: boolean
-  semanticThreshold: number
-  colorBy: ColorMode
-}
-
-export const DEFAULT_FILTERS: FilterState = {
-  paper: true,
-  author: true,
-  category: true,
-  concept: true,
-  semanticThreshold: 0.6,
-  colorBy: 'type',
-}
+// Type-only re-exports are erased at build time, so they keep existing
+// `from './GraphFilters'` type imports working without breaking Fast Refresh.
+export type { ColorMode, FilterState } from './filterState'
 
 const COLOR_MODE_LABELS: Record<ColorMode, string> = {
   type: 'Par type',
@@ -61,6 +43,7 @@ export function GraphFilters({ filters, onChange, counts }: Props) {
           <label key={type} className={styles.toggle}>
             <input
               type="checkbox"
+              aria-label={LABELS[type]}
               checked={filters[type]}
               onChange={(e) => setType(type, e.target.checked)}
             />
@@ -79,6 +62,7 @@ export function GraphFilters({ filters, onChange, counts }: Props) {
             <input
               type="radio"
               name="graph-color-by"
+              aria-label={COLOR_MODE_LABELS[mode]}
               checked={filters.colorBy === mode}
               onChange={() => onChange({ ...filters, colorBy: mode })}
             />
@@ -93,6 +77,7 @@ export function GraphFilters({ filters, onChange, counts }: Props) {
         <input
           id="semantic-threshold"
           type="range"
+          aria-label="Seuil de similarité sémantique"
           min={0.5}
           max={1}
           step={0.01}

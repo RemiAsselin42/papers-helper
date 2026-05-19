@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { DEFAULT_FILTERS, GraphFilters } from '../components/graph/GraphFilters'
+import { DEFAULT_FILTERS } from '../components/graph/filterState'
+import { GraphFilters } from '../components/graph/GraphFilters'
 
 describe('GraphFilters', () => {
   it('renders all four node-type toggles with counts', () => {
