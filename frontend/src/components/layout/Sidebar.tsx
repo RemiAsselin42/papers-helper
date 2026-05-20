@@ -17,19 +17,22 @@ import { type ProjectInfo } from '../../api/projects'
 import { ProjectSwitcher } from './ProjectSwitcher'
 import styles from './Sidebar.module.scss'
 
-export type View =
-  | 'import'
-  | 'sources'
-  | 'problematique'
-  | 'writing'
-  | 'chat'
-  | 'graph'
-  | 'citations'
-  | 'project-io'
-  | 'settings'
-  | 'debug'
-  | 'new-project'
-  | 'all-projects'
+export const VIEWS = [
+  'import',
+  'sources',
+  'problematique',
+  'writing',
+  'chat',
+  'graph',
+  'citations',
+  'project-io',
+  'settings',
+  'debug',
+  'new-project',
+  'all-projects',
+] as const
+
+export type View = (typeof VIEWS)[number]
 
 interface SidebarProps {
   activeView: View

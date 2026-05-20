@@ -33,12 +33,18 @@ import { ProblematiqueView } from './components/problematique/ProblematiqueView'
 import { ProjectIoView } from './components/projectio/ProjectIoView'
 import { SettingsView } from './components/settings/SettingsView'
 import { WritingView } from './components/writing/WritingView'
-import { Sidebar, type View } from './components/layout/Sidebar'
+import { Sidebar, VIEWS, type View } from './components/layout/Sidebar'
 
 const STORAGE_KEY = 'currentProjectId'
+const VIEW_STORAGE_KEY = 'activeView'
+
+function readStoredView(): View {
+  const stored = localStorage.getItem(VIEW_STORAGE_KEY)
+  return stored && (VIEWS as readonly string[]).includes(stored) ? (stored as View) : 'import'
+}
 
 export default function App() {
-  const [activeView, setActiveView] = useState<View>('import')
+  const [activeView, setActiveView] = useState<View>(() => readStoredView())
   const [refreshKey, setRefreshKey] = useState(0)
   const [graphRefreshKey, setGraphRefreshKey] = useState(0)
   const [importStates, setImportStates] = useState<FileState[]>([])
@@ -219,6 +225,10 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    localStorage.setItem(VIEW_STORAGE_KEY, activeView)
+  }, [activeView])
+
+  useEffect(() => {
     if (currentProjectId !== null) {
       localStorage.setItem(STORAGE_KEY, currentProjectId)
     } else {
@@ -290,10 +300,14 @@ export default function App() {
   // Hard-gate: Chat view and the IA generators rely on Ollama (chat for the
   // model, /condense for the map step). When it disappears mid-session we
   // bounce the user out of an unreachable view rather than leaving them
-  // staring at a broken page.
+  // staring at a broken page. Wait for the health check to actually resolve
+  // (healthData !== null) before bouncing — otherwise a reload on /chat
+  // bounces to /sources during the initial check, even when Ollama is up.
   useEffect(() => {
-    if (!ollamaHealthy && activeView === 'chat') setActiveView('sources')
-  }, [ollamaHealthy, activeView])
+    if (healthData !== null && !ollamaHealthy && activeView === 'chat') {
+      setActiveView('sources')
+    }
+  }, [healthData, ollamaHealthy, activeView])
 
   const sidebar = (
     <Sidebar
@@ -303,7 +317,9 @@ export default function App() {
       currentProjectId={currentProjectId}
       onProjectSelect={handleProjectSelect}
       loading={!projectsLoaded}
-      ollamaAvailable={ollamaHealthy}
+      // Keep Chat visible during the initial health check; mirrors the bounce
+      // guard above so reloading on /chat doesn't flicker the tab.
+      ollamaAvailable={ollamaHealthy || healthData === null}
     />
   )
 
