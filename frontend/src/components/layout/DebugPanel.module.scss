@@ -1,11 +1,16 @@
 .panel {
   width: 100%;
+  max-height: var(--view-scroll-height);
   border: var(--border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .header {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -52,11 +57,15 @@
 }
 
 .body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   padding: var(--space-md);
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
   background: var(--color-background);
+  border-radius: var(--radius-md);
 }
 
 .empty {

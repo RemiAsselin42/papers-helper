@@ -135,10 +135,13 @@ export function SettingsView({ projectId, onSaved, onReindex }: Props) {
 
   return (
     <div className={styles.page}>
-      <h1 className={styles.title}>Paramètres</h1>
-      <p className={styles.subtitle}>Les réglages du projet surchargent les défauts globaux.</p>
+      <div className={styles.header}>
+        <h1 className={styles.title}>Paramètres</h1>
+        <p className={styles.subtitle}>Les réglages du projet surchargent les défauts globaux.</p>
+      </div>
 
-      <section className={styles.card}>
+      <div className={styles.scrollBody}>
+        <section className={styles.card}>
         <h2 className={styles.cardTitle}>Défauts globaux</h2>
 
         <div className={styles.field}>
@@ -315,7 +318,8 @@ export function SettingsView({ projectId, onSaved, onReindex }: Props) {
         </dl>
       </section>
 
-      {error && <p className={styles.error}>{error}</p>}
+        {error && <p className={styles.error}>{error}</p>}
+      </div>
 
       {showModelHelp && <EmbedModelHelpModal onClose={() => setShowModelHelp(false)} />}
     </div>

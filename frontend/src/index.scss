@@ -64,6 +64,10 @@
   --padding-lg: var(--space-lg);
   --padding-xl: var(--space-xl);
   --padding-2xl: var(--space-2xl);
+
+  // Scrollable view height: viewport minus AppContent top/bottom padding
+  // (--space-md top, --space-xl bottom) minus the 48px app header.
+  --view-scroll-height: calc(100dvh - var(--space-md) - 48px - var(--space-xl) - var(--space-xl));
 }
 
 *,

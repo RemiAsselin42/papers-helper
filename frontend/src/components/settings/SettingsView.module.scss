@@ -3,8 +3,27 @@
 .page {
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
+  height: var(--view-scroll-height);
+  min-height: 0;
   width: 100%;
+}
+
+.header {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-md);
+}
+
+.scrollBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: var(--space-xs);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
 }
 
 .title {
