@@ -89,40 +89,16 @@ body {
 }
 
 // ── Scrollbars ───────────────────────────────────────────────────────────────
-// Thin emphasis-colored thumb on a transparent track. Scoped to `html` (Firefox
-// inherits) and `body` descendants for WebKit — avoids the universal `*`
-// selector which forced the rule onto every pseudo-element and inflated
-// stylesheet weight in DevTools.
+// Visually hidden everywhere; scroll behavior preserved.
 
 html {
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-emphasis) transparent;
+  scrollbar-width: none; // Firefox
+  -ms-overflow-style: none; // legacy Edge/IE
 }
 
 body ::-webkit-scrollbar,
 body::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-body ::-webkit-scrollbar-track,
-body::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-body ::-webkit-scrollbar-thumb,
-body::-webkit-scrollbar-thumb {
-  background: var(--color-emphasis);
-  border-radius: var(--radius-sm);
-}
-
-body ::-webkit-scrollbar-thumb:hover,
-body::-webkit-scrollbar-thumb:hover {
-  background: var(--color-emphasis);
-  opacity: 0.85;
-}
-
-body ::-webkit-scrollbar-corner,
-body::-webkit-scrollbar-corner {
-  background: transparent;
+  width: 0;
+  height: 0;
+  display: none;
 }
