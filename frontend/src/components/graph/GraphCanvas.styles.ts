@@ -26,7 +26,7 @@ const LABEL_MAX_CHARS: Record<GraphNodeType, number> = {
 }
 
 const NODE_COLOR_VAR: Record<GraphNodeType, string> = {
-  paper: '--color-accent',
+  paper: '--color-emphasis',
   author: '--color-emphasis-2',
   category: '--color-success',
   concept: '--color-error',
@@ -63,7 +63,7 @@ export function resolveTheme(): GraphTheme {
     success: _readVar('--color-success', '#628f4b'),
     error: _readVar('--color-error', '#b85c38'),
     nodeFill: {
-      paper: _readVar(NODE_COLOR_VAR.paper, '#ccd5ae'),
+      paper: _readVar(NODE_COLOR_VAR.paper, '#2c2416'),
       author: _readVar(NODE_COLOR_VAR.author, '#d4a373'),
       category: _readVar(NODE_COLOR_VAR.category, '#628f4b'),
       concept: _readVar(NODE_COLOR_VAR.concept, '#b85c38'),
@@ -297,8 +297,8 @@ export function buildStylesheet(theme: GraphTheme): cytoscape.StylesheetJson {
         'font-weight': 500,
         color: theme.text,
         'text-rotation': 'autorotate',
-        'text-background-color': theme.surface,
-        'text-background-opacity': 0,
+        'text-background-color': theme.background,
+        'text-background-opacity': 1,
         'text-background-padding': '3px',
         'text-background-shape': 'roundrectangle',
         'text-border-color': theme.border,
