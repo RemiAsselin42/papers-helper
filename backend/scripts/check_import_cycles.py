@@ -143,6 +143,26 @@ def load_baseline() -> set[tuple[str, ...]]:
     return {tuple(item) for item in data}
 
 
+def build_app_graph() -> grimp.ImportGraph:
+    """Graphe d'imports de `app` — SOURCE UNIQUE reutilisee par les autres gates.
+
+    Semantique RUNTIME (exclude_type_checking_imports=True) : on IGNORE les
+    imports places sous `if TYPE_CHECKING:` (ils ne s'executent pas). Deux raisons :
+      1) aligner la semantique sur le frontend (tsPreCompilationDeps:false =
+         dependances RUNTIME uniquement) -> meme definition des deux cotes ;
+      2) l'idiome standard pour casser un cycle Python est de deplacer un import
+         sous `if TYPE_CHECKING:` ; sans ce flag on punirait cette bonne pratique.
+    cache_dir=None : analyse toujours fraiche, aucun artefact .grimp_cache.
+    sys.path : on rend `app` trouvable quel que soit le repertoire courant.
+    """
+    sys.path.insert(0, str(BACKEND_DIR))
+    return grimp.build_graph(
+        *discover_packages(),
+        exclude_type_checking_imports=True,
+        cache_dir=None,
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -154,22 +174,7 @@ def main() -> int:
 
     # Tarjan est recursif (profondeur max = nb de modules) : marge de securite.
     sys.setrecursionlimit(10_000)
-    # Rend `app` trouvable par grimp quel que soit le repertoire courant.
-    sys.path.insert(0, str(BACKEND_DIR))
-
-    # exclude_type_checking_imports=True : on IGNORE les imports places sous
-    # `if TYPE_CHECKING:` (ils ne s'executent pas). Deux raisons :
-    #  1) aligner la semantique sur le frontend (tsPreCompilationDeps:false =
-    #     cycles RUNTIME uniquement) -> meme definition d'un cycle des deux cotes ;
-    #  2) l'idiome standard pour casser un cycle Python est justement de deplacer
-    #     un import sous `if TYPE_CHECKING:` ; sans ce flag, appliquer ce remede
-    #     laisserait le gate rouge -> on punirait la bonne pratique.
-    # cache_dir=None : analyse toujours fraiche, aucun artefact .grimp_cache.
-    graph = grimp.build_graph(
-        *discover_packages(),
-        exclude_type_checking_imports=True,
-        cache_dir=None,
-    )
+    graph = build_app_graph()
 
     # Filet de securite : aucun .py ne doit echapper au graphe analyse.
     missing = expected_modules() - graph.modules

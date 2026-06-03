@@ -1,1 +1,44 @@
-[]
+[
+  {
+    "type": "dependency",
+    "from": "src/utils/enrich.ts",
+    "to": "src/api/categorize.ts",
+    "unresolvedTo": "../api/categorize",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "layer-utils"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/utils/enrich.ts",
+    "to": "src/api/condense.ts",
+    "unresolvedTo": "../api/condense",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "layer-utils"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/utils/providerConfig.ts",
+    "to": "src/api/llm.ts",
+    "unresolvedTo": "../api/llm",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "layer-utils"
+    }
+  }
+]

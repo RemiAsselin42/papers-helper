@@ -39,12 +39,13 @@ jobs:
 
       - run: pnpm typecheck
 
-      # Gate 1 — dependances circulaires (frontend). Le script `lint:cycles`
-      # lance dependency-cruiser avec --ignore-known : seuls les cycles ABSENTS
-      # du baseline (frontend/.dependency-cruiser-known-violations.json) font
-      # echouer le step. Un step en echec fait echouer le job => le workflow
-      # Frontend => bloque la PR. C'est l'autorite bloquante.
-      - run: pnpm lint:cycles
+      # Gates 1+2 — architecture (frontend). Le script `lint:arch` lance
+      # dependency-cruiser avec --ignore-known sur TOUTE la config : la regle
+      # `no-circular` (cycles) ET les regles `layer-*` (couches). Seules les
+      # violations ABSENTES du baseline (frontend/.dependency-cruiser-known-
+      # violations.json) font echouer le step. Un step en echec fait echouer le
+      # job => le workflow Frontend => bloque la PR. C'est l'autorite bloquante.
+      - run: pnpm lint:arch
 
   test:
     name: Test

@@ -38,6 +38,12 @@ jobs:
       # le workflow Backend => bloque la PR. C'est l'autorite bloquante.
       - run: uv run python scripts/check_import_cycles.py
 
+      # Gate 2 — contrats de couches (backend). Reutilise le MEME graphe runtime
+      # que le Gate 1 (build_app_graph). Echoue (exit 1) sur toute remontee de
+      # couche ABSENTE du baseline backend/import-layers-baseline.json ; ou
+      # (exit 2) si un module n'est rattache a aucune couche. Step bloquant.
+      - run: uv run python scripts/check_layers.py
+
   typecheck:
     name: Typecheck
     runs-on: ubuntu-latest
