@@ -31,6 +31,13 @@ jobs:
 
       - run: uv run ruff format --check .
 
+      # Gate 1 — dependances circulaires (backend). Le script construit le graphe
+      # d'imports de `app` avec grimp et echoue (exit 1) sur tout cycle ABSENT du
+      # baseline backend/import-cycles-baseline.json. Les cycles deja connus
+      # (dette existante) sont toleres. Un step en echec fait echouer le job =>
+      # le workflow Backend => bloque la PR. C'est l'autorite bloquante.
+      - run: uv run python scripts/check_import_cycles.py
+
   typecheck:
     name: Typecheck
     runs-on: ubuntu-latest
