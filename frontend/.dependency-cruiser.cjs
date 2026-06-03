@@ -1,8 +1,14 @@
 /**
- * Gate 1 — détection des dépendances circulaires (frontend).
+ * Gates d'architecture (frontend) — dependency-cruiser.
  *
- * Volontairement RÉDUIT à la seule règle `no-circular`. On n'ajoute aucune
- * autre règle d'architecture ici tant que le Gate 1 n'est pas validé.
+ * Gate 1 : `no-circular` — aucun cycle d'imports.
+ * Gate 2 : contrats de COUCHES — une couche basse ne doit pas importer une
+ *          couche plus haute. Couches (bas -> haut) :
+ *            L0 types/constants/prompts < L1 utils < L2 api < L3 hooks
+ *            < L4 components < L5 racine (App.tsx / main.tsx).
+ * Les deux partagent le meme baseline (--ignore-known) : cliquet (les violations
+ * existantes sont tolerees, seules les NOUVELLES bloquent). Semantique RUNTIME
+ * des deux gates (tsPreCompilationDeps:false ci-dessous), alignee sur le backend.
  *
  * @type {import('dependency-cruiser').IConfiguration}
  */
@@ -26,6 +32,46 @@ module.exports = {
       to: {
         circular: true,
       },
+    },
+
+    // --- Gate 2 : contrats de couches (une regle par frontiere) -------------
+    // Chaque regle interdit a une couche d'importer une couche PLUS HAUTE.
+    // `from.path` = la couche basse ; `to.path` = les couches plus hautes.
+    // Descente et meme-couche ne matchent aucune regle => autorisees.
+    {
+      name: 'layer-leaves',
+      severity: 'error',
+      comment: 'Les feuilles (types/constants/prompts) ne doivent rien importer de plus haut.',
+      from: { path: '^src/(types|constants|prompts)/' },
+      to: { path: '^src/(utils|api|hooks|components)/' },
+    },
+    {
+      name: 'layer-utils',
+      severity: 'error',
+      comment: 'utils (L1) ne doit pas importer api/hooks/components (plus haut).',
+      from: { path: '^src/utils/' },
+      to: { path: '^src/(api|hooks|components)/' },
+    },
+    {
+      name: 'layer-api',
+      severity: 'error',
+      comment: 'api (L2) ne doit pas importer hooks/components (plus haut).',
+      from: { path: '^src/api/' },
+      to: { path: '^src/(hooks|components)/' },
+    },
+    {
+      name: 'layer-hooks',
+      severity: 'error',
+      comment: 'hooks (L3) ne doit pas importer components (plus haut).',
+      from: { path: '^src/hooks/' },
+      to: { path: '^src/components/' },
+    },
+    {
+      name: 'layer-root',
+      severity: 'error',
+      comment: 'La racine de composition (App.tsx/main.tsx) ne doit etre importee par personne.',
+      from: { path: '^src/(types|constants|prompts|utils|api|hooks|components)/' },
+      to: { path: '^src/(App|main)\\.tsx$' },
     },
   ],
   options: {
