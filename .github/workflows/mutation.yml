@@ -1,0 +1,48 @@
+name: Mutation (backend _bibtex)
+
+# Gate 3 — mutation testing, scope STRICT au module app/parsers/_bibtex.py.
+# Declenche sur PR (paths backend/**) pour mesurer le runtime ; selon le chiffre
+# mesure (regle 15), on gardera ce job sur chaque PR (si rapide) ou on basculera
+# en manuel/planifie (si long). workflow_dispatch permet aussi un lancement manuel.
+on:
+  pull_request:
+    branches: [main]
+    paths: ["backend/**"]
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  mutation:
+    name: Mutation _bibtex
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: latest
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - run: uv sync --group dev
+
+      # On mesure le temps de `mutmut run`. `|| true` : mutmut peut sortir != 0
+      # quand des mutants survivent — ce n'est PAS un echec ici, c'est le wrapper
+      # (cliquet) qui decide. La mutation est scopee a _bibtex via [tool.mutmut].
+      - name: Run mutmut on _bibtex (timed)
+        run: |
+          start=$SECONDS
+          uv run mutmut run || true
+          echo "::notice::mutmut run duration = $((SECONDS - start))s"
+          uv run mutmut results || true
+          uv run mutmut export_cicd_stats
+          echo "--- mutants/mutmut-cicd-stats.json ---"
+          cat mutants/mutmut-cicd-stats.json
+
+      # Le GATE : score >= plancher (cliquet) ; 0 mutant => echec (filet).
+      # Jour 1 (mutation-floor.json absent) le plancher vaut 0 => ne bloque pas.
+      - name: Mutation-score ratchet
+        run: uv run python scripts/check_mutation_score.py

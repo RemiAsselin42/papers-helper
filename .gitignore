@@ -8,6 +8,9 @@ venv/
 .ruff_cache/
 .pytest_cache/
 
+# mutmut (Gate 3) — dossier de travail / mutants generes, jamais versionne
+mutants/
+
 # SQLite / DB
 *.db
 *.sqlite

@@ -29,10 +29,25 @@ dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
     "grimp>=3.14",
+    "mutmut>=3.5.0",
 ]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+[tool.mutmut]
+# Gate 3 — mutation testing, SCOPE STRICT au seul module _bibtex (regle 14) :
+# on ne MUTE que ce fichier (logique de parsing pure et deterministe).
+paths_to_mutate = ["app/parsers/_bibtex.py"]
+# mutmut copie le code a muter dans mutants/ et y lance les tests. Sans le reste
+# du paquet, les imports des tests (app.parsers.__init__ qui importe tous les
+# parsers, et app.parsers._html) casseraient. On copie donc TOUT app/ (non mute)
+# pour que les tests tournent ; l'instrumentation de _bibtex est appliquee APRES
+# la copie (ordre du run mutmut), donc la version mutee gagne.
+also_copy = ["app"]
+# Par mutant, on ne joue QUE les tests du module cible (sinon 400+ tests x N
+# mutants = ingerable). test_parsers.py couvre _bibtex.
+pytest_add_cli_args_test_selection = ["tests/test_parsers.py"]
 
 [tool.mypy]
 python_version = "3.12"
