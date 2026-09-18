@@ -35,11 +35,25 @@ class _ConceptList(BaseModel):
 # no code fence or prose to strip. An object root is Ollama's documented shape.
 _CONCEPTS_SCHEMA = _ConceptList.model_json_schema()
 
+# The grammar lets the model emit whitespace before `{`, and a small model
+# sometimes gets stuck there (seen: 1,000+ tokens and an Ollama `bad_alloc`).
+# Naming the JSON shape in the prompt makes it open with `{`; this cap bounds
+# the rare runaway left. A normal reply is 40-60 tokens.
+_GENERATION_OPTIONS = {"num_predict": 200}
+
+# French, with the language directive last: small local models drift into
+# English otherwise, and FR/EN variants of one concept never merge in the graph.
 _PROMPT_TEMPLATE = (
-    "Extract 3 to 5 distinct concepts or keywords from this academic paper. "
-    'Return them in the "concepts" field, as short strings (1-4 words each).\n\n'
-    "Title: {title}\n"
-    "Abstract: {abstract}\n"
+    "Extrais de cet article académique 3 à 5 concepts ou mots-clés distincts, "
+    "courts (1 à 4 mots chacun). Réponds uniquement par un objet JSON de la "
+    'forme {{"concepts": ["…", "…"]}}.\n\n'
+    "Titre : {title}\n"
+    "Résumé : {abstract}\n\n"
+    "Chaque concept doit IMPÉRATIVEMENT être rédigé en français, même si "
+    "l'article est en anglais : traduis tout terme anglais (par ex. "
+    "« Perceived usefulness » → « Utilité perçue », « Workarounds » → "
+    "« Contournements »). Garde tels quels les sigles et les noms de modèles "
+    "(TIC, UTAUT, ADKAR)."
 )
 
 
@@ -47,7 +61,11 @@ def _default_generator() -> GeneratorCallable:
     # The model picked in the UI, carried by the request that triggered the
     # graph update (index pass, rebuild, metadata PATCH).
     service = OllamaGenerationService(model=get_ollama_model())
-    return partial(service.stream_generate_messages, json_schema=_CONCEPTS_SCHEMA)
+    return partial(
+        service.stream_generate_messages,
+        json_schema=_CONCEPTS_SCHEMA,
+        options=_GENERATION_OPTIONS,
+    )
 
 
 async def extract_concepts(
@@ -73,8 +91,8 @@ async def extract_concepts(
             return []
 
     prompt = _PROMPT_TEMPLATE.format(
-        title=title or "(unknown)",
-        abstract=abstract or "(unknown)",
+        title=title or "(inconnu)",
+        abstract=abstract or "(inconnu)",
     )
     messages: list[dict[str, Any]] = [{"role": "user", "content": prompt}]
 

@@ -65,15 +65,16 @@ async def test_extract_concepts_handles_streamed_tokens() -> None:
 
 
 @pytest.mark.asyncio
-async def test_default_generator_uses_picked_model_and_schema() -> None:
-    calls: list[tuple[str, dict[str, Any] | None]] = []
+async def test_default_generator_uses_picked_model_schema_and_cap() -> None:
+    calls: list[tuple[str, dict[str, Any] | None, dict[str, Any] | None]] = []
 
     async def fake_stream(
         self: OllamaGenerationService,
         messages: list[dict[str, Any]],
         json_schema: dict[str, Any] | None = None,
+        options: dict[str, Any] | None = None,
     ) -> AsyncIterator[str]:
-        calls.append((self.model, json_schema))
+        calls.append((self.model, json_schema, options))
         yield '{"concepts": ["a"]}'
 
     # Set as the middleware does from X-Ollama-Model; the test runs in its own
@@ -81,7 +82,7 @@ async def test_default_generator_uses_picked_model_and_schema() -> None:
     set_request_ollama_model("qwen3:4b")
     with patch.object(OllamaGenerationService, "stream_generate_messages", fake_stream):
         assert await extract_concepts(title="t", abstract="a") == ["a"]
-    assert calls == [("qwen3:4b", _CONCEPTS_SCHEMA)]
+    assert calls == [("qwen3:4b", _CONCEPTS_SCHEMA, {"num_predict": 200})]
 
 
 @pytest.mark.asyncio
