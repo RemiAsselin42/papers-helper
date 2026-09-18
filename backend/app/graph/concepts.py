@@ -8,10 +8,12 @@ hard requirement.
 
 from __future__ import annotations
 
-import json
 import logging
 from collections.abc import AsyncIterator, Callable
+from functools import partial
 from typing import Any
+
+from pydantic import BaseModel, ValidationError
 
 from app.config import OLLAMA_GENERATION_MODEL
 from app.ollama_service import OllamaGenerationService
@@ -24,10 +26,18 @@ GeneratorCallable = Callable[[list[dict[str, Any]]], AsyncIterator[str]]
 # routes don't drift from the inputs `extract_concepts` actually reads.
 CONCEPT_INPUT_FIELDS: frozenset[str] = frozenset({"pdf_title", "abstract"})
 
+
+class _ConceptList(BaseModel):
+    concepts: list[str]
+
+
+# Sent as Ollama's `format`, so the reply is always JSON matching this schema —
+# no code fence or prose to strip. An object root is Ollama's documented shape.
+_CONCEPTS_SCHEMA = _ConceptList.model_json_schema()
+
 _PROMPT_TEMPLATE = (
     "Extract 3 to 5 distinct concepts or keywords from this academic paper. "
-    "Return strictly a JSON array of short strings (1-4 words each). "
-    "No prose, no markdown, no preamble — only the JSON array.\n\n"
+    'Return them in the "concepts" field, as short strings (1-4 words each).\n\n'
     "Title: {title}\n"
     "Abstract: {abstract}\n"
 )
@@ -35,7 +45,7 @@ _PROMPT_TEMPLATE = (
 
 def _default_generator() -> GeneratorCallable:
     service = OllamaGenerationService(model=OLLAMA_GENERATION_MODEL)
-    return service.stream_generate_messages
+    return partial(service.stream_generate_messages, json_schema=_CONCEPTS_SCHEMA)
 
 
 async def extract_concepts(
@@ -78,36 +88,17 @@ async def extract_concepts(
 
 
 def _parse_concepts(text: str, *, max_concepts: int) -> list[str]:
-    """Pull a JSON array of strings out of an LLM response, tolerating common
-    surrounding fluff (code fences, prose preamble, trailing chatter)."""
-    if not text:
-        return []
-    s = text.strip()
-    # Strip a leading code fence if present (```json … ``` or ``` … ```).
-    if s.startswith("```"):
-        first_nl = s.find("\n")
-        if first_nl != -1:
-            s = s[first_nl + 1 :]
-        if s.endswith("```"):
-            s = s[:-3]
-    s = s.strip()
-    # Locate the first JSON array in the text.
-    start = s.find("[")
-    end = s.rfind("]")
-    if start == -1 or end == -1 or end < start:
-        return []
+    """Validate the schema-constrained reply, then drop blanks and
+    case-insensitive duplicates and cap the list. A reply that doesn't match
+    the schema (cut-off stream, a fake generator in tests) yields `[]`."""
     try:
-        raw = json.loads(s[start : end + 1])
-    except json.JSONDecodeError:
-        return []
-    if not isinstance(raw, list):
+        raw = _ConceptList.model_validate_json(text).concepts
+    except ValidationError:
         return []
 
     out: list[str] = []
     seen: set[str] = set()
     for entry in raw:
-        if not isinstance(entry, str):
-            continue
         cleaned = entry.strip()
         if not cleaned:
             continue

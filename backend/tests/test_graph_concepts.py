@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 
-from app.graph.concepts import _parse_concepts, extract_concepts
+from app.graph.concepts import _CONCEPTS_SCHEMA, _parse_concepts, extract_concepts
+from app.ollama_service import OllamaGenerationService
 
 
 def _gen(*outputs: str):  # type: ignore[no-untyped-def]
@@ -21,30 +23,23 @@ def _gen(*outputs: str):  # type: ignore[no-untyped-def]
 
 
 class TestParseConcepts:
-    def test_clean_json_array(self) -> None:
-        assert _parse_concepts('["a", "b", "c"]', max_concepts=5) == ["a", "b", "c"]
-
-    def test_code_fence_stripped(self) -> None:
-        text = '```json\n["a", "b"]\n```'
-        assert _parse_concepts(text, max_concepts=5) == ["a", "b"]
-
-    def test_prose_around_array(self) -> None:
-        text = 'Sure, here are the concepts:\n["x", "y"]\nLet me know if you need more.'
-        assert _parse_concepts(text, max_concepts=5) == ["x", "y"]
+    def test_schema_object(self) -> None:
+        assert _parse_concepts('{"concepts": ["a", "b", "c"]}', max_concepts=5) == ["a", "b", "c"]
 
     def test_dedup_casefolded(self) -> None:
-        assert _parse_concepts('["AI", "ai", "ML"]', max_concepts=5) == ["AI", "ML"]
+        assert _parse_concepts('{"concepts": ["AI", "ai", "ML"]}', max_concepts=5) == ["AI", "ML"]
 
     def test_caps_at_max(self) -> None:
-        text = '["a", "b", "c", "d", "e", "f"]'
+        text = '{"concepts": ["a", "b", "c", "d", "e", "f"]}'
         assert _parse_concepts(text, max_concepts=3) == ["a", "b", "c"]
 
-    def test_non_strings_filtered(self) -> None:
-        assert _parse_concepts('["a", 1, null, "b"]', max_concepts=5) == ["a", "b"]
+    def test_blank_entries_dropped(self) -> None:
+        assert _parse_concepts('{"concepts": [" a ", "", "  "]}', max_concepts=5) == ["a"]
 
-    def test_invalid_returns_empty(self) -> None:
-        assert _parse_concepts("garbage no brackets", max_concepts=5) == []
-        assert _parse_concepts("[not, json]", max_concepts=5) == []
+    def test_off_schema_returns_empty(self) -> None:
+        assert _parse_concepts('["a", "b"]', max_concepts=5) == []
+        assert _parse_concepts('{"concepts": ["a", 1]}', max_concepts=5) == []
+        assert _parse_concepts('{"concepts": ["a"', max_concepts=5) == []
 
     def test_empty_input(self) -> None:
         assert _parse_concepts("", max_concepts=5) == []
@@ -55,7 +50,7 @@ async def test_extract_concepts_happy_path() -> None:
     result = await extract_concepts(
         title="Attention Is All You Need",
         abstract="Transformer architecture for sequence modelling.",
-        generator=_gen('["Transformers", "Attention", "Sequence Modelling"]'),
+        generator=_gen('{"concepts": ["Transformers", "Attention", "Sequence Modelling"]}'),
     )
     assert result == ["Transformers", "Attention", "Sequence Modelling"]
 
@@ -63,14 +58,31 @@ async def test_extract_concepts_happy_path() -> None:
 @pytest.mark.asyncio
 async def test_extract_concepts_handles_streamed_tokens() -> None:
     # Simulate the LLM emitting many small tokens.
-    chunks = ["[", '"a", ', '"b"', "]"]
+    chunks = ['{"conc', 'epts": [', '"a", ', '"b"', "]}"]
     result = await extract_concepts(title="t", abstract="a", generator=_gen(*chunks))
     assert result == ["a", "b"]
 
 
 @pytest.mark.asyncio
+async def test_default_generator_constrains_ollama_to_the_schema() -> None:
+    schemas: list[dict[str, Any] | None] = []
+
+    async def fake_stream(
+        self: OllamaGenerationService,
+        messages: list[dict[str, Any]],
+        json_schema: dict[str, Any] | None = None,
+    ) -> AsyncIterator[str]:
+        schemas.append(json_schema)
+        yield '{"concepts": ["a"]}'
+
+    with patch.object(OllamaGenerationService, "stream_generate_messages", fake_stream):
+        assert await extract_concepts(title="t", abstract="a") == ["a"]
+    assert schemas == [_CONCEPTS_SCHEMA]
+
+
+@pytest.mark.asyncio
 async def test_extract_concepts_empty_inputs() -> None:
-    assert await extract_concepts("", "", generator=_gen("['a']")) == []
+    assert await extract_concepts("", "", generator=_gen('{"concepts": ["a"]}')) == []
 
 
 @pytest.mark.asyncio
@@ -90,7 +102,7 @@ async def test_extract_concepts_caps_abstract_length() -> None:
     result = await extract_concepts(
         title="t",
         abstract=huge,
-        generator=_gen('["k"]'),
+        generator=_gen('{"concepts": ["k"]}'),
         max_abstract_chars=100,
     )
     assert result == ["k"]

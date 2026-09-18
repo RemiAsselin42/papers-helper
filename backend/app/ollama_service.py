@@ -52,10 +52,12 @@ class OllamaGenerationService:
         self._client = ollama.AsyncClient(host=effective_url)
 
     async def stream_generate_messages(
-        self, messages: list[dict[str, Any]]
+        self, messages: list[dict[str, Any]], json_schema: dict[str, Any] | None = None
     ) -> AsyncGenerator[str, None]:
+        # json_schema → Ollama's `format`: decoding is constrained to the schema
+        # (needs an Ollama server ≥ 0.5; older ones reject an object `format`).
         async for chunk in await self._client.chat(
-            model=self.model, messages=messages, stream=True
+            model=self.model, messages=messages, stream=True, format=json_schema
         ):
             if chunk.message.content:
                 yield chunk.message.content
