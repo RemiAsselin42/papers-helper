@@ -176,7 +176,7 @@ D'autres variables affinent le découpage et l'injection de contexte (`MAX_CHUNK
 | Backend                  | FastAPI, Python 3.12, UV                                                      |
 | Recherche sémantique     | ChromaDB (vecteurs locaux)                                                    |
 | LLM                      | Ollama (local) — `nomic-embed-text` + `llama3` ; OpenAI / Anthropic en option |
-| Extraction documents     | pypdf, python-docx, odfpy, striprtf, ebooklib, bibtexparser                   |
+| Extraction documents     | liteparse + pypdf (PDF), python-docx, odfpy, striprtf, ebooklib, bibtexparser |
 | Linter / format frontend | ESLint 9 + typescript-eslint + Prettier                                       |
 | Tests frontend           | Vitest + Testing Library (jsdom)                                              |
 | Linter / typage backend  | Ruff + mypy (strict)                                                          |

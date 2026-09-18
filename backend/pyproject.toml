@@ -20,6 +20,7 @@ dependencies = [
     "openai>=1.0.0",
     "anthropic>=0.40.0",
     "networkx>=3.2",
+    "liteparse>=2.14.6",
 ]
 
 [dependency-groups]

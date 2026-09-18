@@ -1,8 +1,11 @@
-"""Tests for the BibTeX and HTML parsers."""
+"""Tests for the BibTeX, HTML and PDF parsers."""
 
 from __future__ import annotations
 
 import json
+from unittest.mock import patch
+
+from liteparse import LayoutBlock, LayoutCell
 
 from app.parsers._bibtex import (
     _extract_file_hints,
@@ -12,6 +15,7 @@ from app.parsers._bibtex import (
     parse_bibtex,
 )
 from app.parsers._html import parse_html
+from app.parsers._pdf import _block_text, parse_pdf
 
 # ---------------------------------------------------------------------------
 # BibTeX — low-level helpers
@@ -272,3 +276,73 @@ class TestParseHtml:
         # Should not raise, even with non-UTF-8 bytes
         result = parse_html(content, "latin.html")
         assert result.source_type == "html"
+
+
+# ---------------------------------------------------------------------------
+# PDF parser
+# ---------------------------------------------------------------------------
+
+
+def _minimal_pdf(text: str, title: str) -> bytes:
+    """A one-page PDF with a single line of Helvetica text and an /Info title."""
+    stream = f"BT /F1 12 Tf 72 720 Td ({text}) Tj ET".encode()
+    bodies = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R"
+        b" /Resources << /Font << /F1 5 0 R >> >> >>",
+        b"<< /Length %d >>\nstream\n%s\nendstream" % (len(stream), stream),
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Title (%s) >>" % title.encode(),
+    ]
+    out = bytearray(b"%PDF-1.4\n")
+    offsets: list[int] = []
+    for i, body in enumerate(bodies, 1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n%s\nendobj\n" % (i, body)
+    xref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(bodies) + 1)
+    out += b"".join(b"%010d 00000 n \n" % o for o in offsets)
+    out += b"trailer\n<< /Size %d /Root 1 0 R /Info 6 0 R >>\n" % (len(bodies) + 1)
+    out += b"startxref\n%d\n" % xref + b"%%EOF\n"
+    return bytes(out)
+
+
+class TestParsePdf:
+    def test_extracts_text_and_info_title(self) -> None:
+        result = parse_pdf(_minimal_pdf("Bonjour le monde", "Titre test"), "a.pdf")
+        assert result.text == "Bonjour le monde"
+        assert result.title == "Titre test"
+        assert result.source_type == "pdf"
+
+    def test_unreadable_info_does_not_reject_the_document(self) -> None:
+        with patch("app.parsers._pdf.PdfReader", side_effect=ValueError("bad xref")):
+            result = parse_pdf(_minimal_pdf("Bonjour le monde", "Titre test"), "a.pdf")
+        assert result.text == "Bonjour le monde"
+        assert (result.title, result.author, result.year) == ("", "", "")
+
+
+class TestBlockText:
+    def test_strips_inline_markup_and_unescapes(self) -> None:
+        block = LayoutBlock(kind="paragraph", text=r"Un **mot** et *ceci*, p < .05\*\*")
+        assert _block_text(block) == "Un mot et ceci, p < .05**"
+
+    def test_table_rows_one_line_each_header_first(self) -> None:
+        block = LayoutBlock(
+            kind="table",
+            header=[LayoutCell(text=""), LayoutCell(text="Score")],
+            rows=[[LayoutCell(text="A"), LayoutCell(text=r".21\*")]],
+        )
+        assert _block_text(block) == "Score\nA .21*"
+
+    def test_list_item_keeps_marker(self) -> None:
+        block = LayoutBlock(kind="list_item", text="Premier point", marker="•")
+        assert _block_text(block) == "• Premier point"
+
+    def test_verbatim_lines_are_not_unescaped(self) -> None:
+        block = LayoutBlock(kind="grid_fallback", lines=[r"a \* b", "c"])
+        assert _block_text(block) == "a \\* b\nc"
+
+    def test_figure_and_rule_are_dropped(self) -> None:
+        assert _block_text(LayoutBlock(kind="figure")) == ""
+        assert _block_text(LayoutBlock(kind="rule")) == ""
