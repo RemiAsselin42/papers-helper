@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
+from app.config import set_request_ollama_model
 from app.graph.concepts import _CONCEPTS_SCHEMA, _parse_concepts, extract_concepts
 from app.ollama_service import OllamaGenerationService
 
@@ -64,20 +65,23 @@ async def test_extract_concepts_handles_streamed_tokens() -> None:
 
 
 @pytest.mark.asyncio
-async def test_default_generator_constrains_ollama_to_the_schema() -> None:
-    schemas: list[dict[str, Any] | None] = []
+async def test_default_generator_uses_picked_model_and_schema() -> None:
+    calls: list[tuple[str, dict[str, Any] | None]] = []
 
     async def fake_stream(
         self: OllamaGenerationService,
         messages: list[dict[str, Any]],
         json_schema: dict[str, Any] | None = None,
     ) -> AsyncIterator[str]:
-        schemas.append(json_schema)
+        calls.append((self.model, json_schema))
         yield '{"concepts": ["a"]}'
 
+    # Set as the middleware does from X-Ollama-Model; the test runs in its own
+    # task, so the context value doesn't leak into other tests.
+    set_request_ollama_model("qwen3:4b")
     with patch.object(OllamaGenerationService, "stream_generate_messages", fake_stream):
         assert await extract_concepts(title="t", abstract="a") == ["a"]
-    assert schemas == [_CONCEPTS_SCHEMA]
+    assert calls == [("qwen3:4b", _CONCEPTS_SCHEMA)]
 
 
 @pytest.mark.asyncio

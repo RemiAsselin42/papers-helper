@@ -7,7 +7,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from app.config import OLLAMA_GENERATION_MODEL
 from app.main import app
+from app.settings import AppSettings
 
 
 @pytest.fixture
@@ -94,6 +96,36 @@ def test_health_storage_inaccessible_when_dirs_missing(client: TestClient) -> No
 
     assert response.status_code == 200
     assert response.json()["storage"] == "inaccessible"
+
+
+def test_health_checks_settings_embed_model_and_picked_model(client: TestClient) -> None:
+    """The required models are the embedding model saved in the settings and
+    the model picked in the UI — not the env defaults (nomic-embed-text, llama3)."""
+    pulled = MagicMock()
+    pulled.return_value.list.return_value = MagicMock(
+        models=[MagicMock(model="bge-m3:latest"), MagicMock(model="qwen3:4b")]
+    )
+    with (
+        patch("app.main.ollama.Client", pulled),
+        patch("app.main.read_global_settings", return_value=AppSettings(embed_model="bge-m3")),
+    ):
+        response = client.get("/health", headers={"X-Ollama-Model": "qwen3:4b"})
+
+    assert response.json()["ollama_models"] == [
+        {"name": "bge-m3", "available": True},
+        {"name": "qwen3:4b", "available": True},
+    ]
+
+
+def test_health_generation_model_falls_back_to_env_default(client: TestClient) -> None:
+    with (
+        patch("app.main.ollama.Client", _mock_client_connected()),
+        patch("app.main.read_global_settings", return_value=AppSettings(embed_model="bge-m3")),
+    ):
+        response = client.get("/health")
+
+    names = [m["name"] for m in response.json()["ollama_models"]]
+    assert names == ["bge-m3", OLLAMA_GENERATION_MODEL]
 
 
 def test_health_storage_accessible_when_dirs_present(client: TestClient, tmp_path: Path) -> None:

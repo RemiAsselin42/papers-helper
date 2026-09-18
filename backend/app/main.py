@@ -12,10 +12,11 @@ from pydantic import BaseModel
 
 from app.config import (
     OLLAMA_BASE_URL,
-    OLLAMA_EMBED_MODEL,
     OLLAMA_GENERATION_MODEL,
     PROJECTS_DIR,
+    get_ollama_model,
     set_request_embed_config,
+    set_request_ollama_model,
     set_request_ollama_url,
 )
 from app.embeddings import resolve_embed_config
@@ -30,6 +31,7 @@ from app.routes import projects as projects_router
 from app.routes import settings as settings_router
 from app.routes import writing as writing_router
 from app.routes.chat import condense_routes as condense_router
+from app.settings import read_global_settings
 
 log = logging.getLogger("papers-helper.health")
 
@@ -56,6 +58,7 @@ async def ollama_url_middleware(
 ) -> Response:
     custom_url = request.headers.get("X-Ollama-URL")
     set_request_ollama_url(custom_url.rstrip("/") if custom_url else OLLAMA_BASE_URL)
+    set_request_ollama_model(request.headers.get("X-Ollama-Model") or OLLAMA_GENERATION_MODEL)
     set_request_embed_config(
         resolve_embed_config(
             request.headers.get("X-LLM-Provider"),
@@ -119,9 +122,12 @@ async def health(ollama_url: str | None = Query(default=None)) -> HealthResponse
         log.warning("Ollama health check failed at %s: %s", effective_url, ollama_error)
 
     # Always advertise the required model names so the frontend can guide the
-    # user through `ollama pull` even when Ollama itself is unreachable.
+    # user through `ollama pull` even when Ollama itself is unreachable: the
+    # embedding model saved in the settings and the generation model picked in
+    # the UI (X-Ollama-Model), not the env defaults they were seeded from.
+    settings = await asyncio.to_thread(read_global_settings)
     model_statuses: list[OllamaModelStatus] = []
-    for name in (OLLAMA_EMBED_MODEL, OLLAMA_GENERATION_MODEL):
+    for name in (settings.embed_model, get_ollama_model()):
         base = name.split(":")[0]
         available = any(p == name or p.startswith(base + ":") for p in pulled)
         model_statuses.append(OllamaModelStatus(name=name, available=available))

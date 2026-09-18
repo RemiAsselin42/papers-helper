@@ -58,6 +58,11 @@ WRITING_RAG_K: int = int(os.getenv("WRITING_RAG_K", "8"))
 WRITING_CONTEXT_CHAR_CAP: int = int(os.getenv("WRITING_CONTEXT_CHAR_CAP", "8000"))
 
 _request_ollama_url: ContextVar[str] = ContextVar("_request_ollama_url", default=OLLAMA_BASE_URL)
+# The Ollama model picked in the UI (X-Ollama-Model); the env default only
+# applies to requests that don't carry one.
+_request_ollama_model: ContextVar[str] = ContextVar(
+    "_request_ollama_model", default=OLLAMA_GENERATION_MODEL
+)
 _request_embed_config: ContextVar["EmbedConfig | None"] = ContextVar(
     "_request_embed_config", default=None
 )
@@ -69,6 +74,14 @@ def get_ollama_url() -> str:
 
 def set_request_ollama_url(url: str) -> None:
     _request_ollama_url.set(url)
+
+
+def get_ollama_model() -> str:
+    return _request_ollama_model.get()
+
+
+def set_request_ollama_model(model: str) -> None:
+    _request_ollama_model.set(model)
 
 
 def get_request_embed_config() -> "EmbedConfig | None":

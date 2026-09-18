@@ -123,6 +123,10 @@ export function allLlmHeaders(): Record<string, string> {
   // Inline read to avoid a circular import with ./health.
   const ollamaUrl = localStorage.getItem('ollamaBaseUrl')
   if (ollamaUrl) headers['X-Ollama-URL'] = ollamaUrl
+  // Backend-side Ollama work triggered by these requests (graph concepts on
+  // index/rebuild/PATCH) runs on the model picked in the UI, not the env default.
+  const ollamaModel = getStoredOllamaModel()
+  if (ollamaModel) headers['X-Ollama-Model'] = ollamaModel
   return { ...headers, ...llmHeaders(getStoredProvider()) }
 }
 

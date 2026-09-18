@@ -15,7 +15,7 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
-from app.config import OLLAMA_GENERATION_MODEL
+from app.config import get_ollama_model
 from app.ollama_service import OllamaGenerationService
 
 log = logging.getLogger(__name__)
@@ -44,7 +44,9 @@ _PROMPT_TEMPLATE = (
 
 
 def _default_generator() -> GeneratorCallable:
-    service = OllamaGenerationService(model=OLLAMA_GENERATION_MODEL)
+    # The model picked in the UI, carried by the request that triggered the
+    # graph update (index pass, rebuild, metadata PATCH).
+    service = OllamaGenerationService(model=get_ollama_model())
     return partial(service.stream_generate_messages, json_schema=_CONCEPTS_SCHEMA)
 
 

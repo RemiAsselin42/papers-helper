@@ -3,6 +3,7 @@ import {
   allLlmHeaders,
   isActiveProviderReady,
   setStoredApiKey,
+  setStoredOllamaModel,
   setStoredProvider,
 } from '../api/llm'
 
@@ -40,6 +41,12 @@ describe('allLlmHeaders', () => {
     setStoredProvider('ollama')
     localStorage.setItem('ollamaBaseUrl', 'http://192.168.1.10:11434')
     expect(allLlmHeaders()).toEqual({ 'X-Ollama-URL': 'http://192.168.1.10:11434' })
+  })
+
+  it('includes X-Ollama-Model when a model is picked', () => {
+    setStoredProvider('ollama')
+    setStoredOllamaModel('qwen3:4b')
+    expect(allLlmHeaders()).toEqual({ 'X-Ollama-Model': 'qwen3:4b' })
   })
 
   it('includes X-LLM-Provider and X-LLM-API-Key for external providers', () => {
