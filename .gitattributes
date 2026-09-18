@@ -13,3 +13,4 @@
 *.odt binary
 *.docx binary
 *.rtf binary
+graphify-out/graph.json merge=graphify
