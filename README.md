@@ -28,10 +28,10 @@ Organise tes documents (PDF, DOCX, EPUB…), citations, auteurs et thématiques 
 - **Chat RAG** — discute avec ton corpus ; mentionne des documents pour injecter leur contexte.
 - **Problématique** — éditeur dédié pour cadrer la question de recherche du projet.
 - **Assistant de rédaction** — éditeur A4 paginé avec mode focus, génération de sections assistée par LLM et export du document.
-- **Graphe de connaissances** — visualisation des liens entre documents, auteurs et catégories.
+- **Graphe de connaissances** — visualisation des liens entre documents, auteurs, catégories et concepts (extraits par LLM, en français), plus les rapprochements sémantiques entre documents.
 - **Catégorisation** — classement automatique des documents.
 - **Export / import de projet** — échange complet d'un projet entre machines.
-- **Multi-fournisseur LLM** — Ollama (local) par défaut ; OpenAI et Anthropic également supportés.
+- **Multi-fournisseur LLM** — Ollama (local) par défaut ; OpenAI, Anthropic, Google Gemini, Perplexity et DeepSeek également supportés.
 
 ---
 
@@ -66,7 +66,7 @@ Application à deux étages avec stockage **sur disque, par projet** :
 - **Frontend** (`frontend/`) — SPA Vite 6 + React 19 + TypeScript. `/api/*` est proxifié vers `localhost:8000` en dev.
 - **Backend** (`backend/`) — FastAPI (Python 3.12). Routeurs : `projects`, `papers`, `chat`, `categorize`, `conversations`, `citations`, `graph`, `settings`, `writing`, `project_io`.
 - **Stockage** — `data/projects/<uuid>/` par projet : `project.json`, `problematique.json`, `files/` (documents sources), `vectors/` (ChromaDB `PersistentClient` dédié). Aucune base SQL applicative — les métadonnées vivent dans des fichiers JSON et dans les métadonnées Chroma.
-- **Parsers** (`backend/app/parsers/`) — un parser enfichable par extension. Limites : 50 Mo par fichier, 200 Mo par requête d'upload.
+- **Parsers** (`backend/app/parsers/`) — un parser enfichable par extension. Limites : 50 Mo par fichier, 200 Mo par requête d'upload. Les PDF passent par liteparse : texte reconstruit dans l'ordre de lecture (colonnes comprises), en-têtes et pieds de page répétés retirés. Pas d'OCR : un PDF scanné sans couche texte est refusé.
 - **Ingestion** — pipeline : parse → normalisation → découpage (~500 mots, sensible aux paragraphes) → embeddings → upsert dans Chroma avec métadonnées riches (titre, auteur, année, champs BibTeX, résumé, notes, catégories).
 
 ---
@@ -79,9 +79,9 @@ Application à deux étages avec stockage **sur disque, par projet** :
 | pnpm    | ≥ 11    | `npm i -g pnpm`                                                         |
 | Python  | ≥ 3.12  | [python.org](https://python.org)                                        |
 | UV      | latest  | `pip install uv` ou `winget install astral-sh.uv`                       |
-| Ollama  | latest  | [ollama.com](https://ollama.com) — requis pour le mode local par défaut |
+| Ollama  | ≥ 0.5   | [ollama.com](https://ollama.com) — requis pour le mode local par défaut |
 
-> Ollama est nécessaire pour le fonctionnement local par défaut. Pour utiliser OpenAI ou Anthropic à la place, voir [Configuration](#configuration).
+> Ollama est nécessaire pour le fonctionnement local par défaut, en version 0.5 au moins : l'extraction de concepts du graphe s'appuie sur ses sorties JSON structurées. Pour utiliser un fournisseur externe à la place, voir [Configuration](#configuration).
 
 ---
 
@@ -106,6 +106,8 @@ cd ..
 ollama pull nomic-embed-text   # embeddings
 ollama pull llama3             # génération
 ```
+
+> Ce sont les modèles par défaut, mais tu peux en utiliser d'autres. Le modèle de génération se choisit dans le sélecteur de l'en-tête, le modèle d'embeddings dans la vue Paramètres (par ex. `bge-m3`, multilingue, adapté à un corpus en français). Seuls les modèles choisis ont besoin d'être installés.
 
 ---
 
@@ -142,46 +144,48 @@ Vérifier que tout tourne : `GET http://localhost:8000/health`
 
 > Si `ollama` est `"unavailable"`, lance Ollama Desktop ou `ollama serve`.
 
+`ollama_models` liste les modèles requis : le modèle d'embeddings des réglages et le modèle de génération choisi dans l'interface (transmis par l'en-tête `X-Ollama-Model`). Appelé sans cet en-tête, comme ci-dessus, `/health` vérifie `OLLAMA_GENERATION_MODEL`.
+
 ---
 
 ## Configuration
 
 Tout se configure par variables d'environnement (backend) :
 
-| Variable                  | Défaut                        | Description                                     |
-| ------------------------- | ----------------------------- | ----------------------------------------------- |
-| `OLLAMA_BASE_URL`         | `http://localhost:11434`      | URL du serveur Ollama                           |
-| `OLLAMA_EMBED_MODEL`      | `nomic-embed-text`            | Modèle d'embeddings                             |
-| `OLLAMA_GENERATION_MODEL` | `llama3`                      | Modèle de génération                            |
-| `DATA_DIR`                | `<repo>/data`                 | Répertoire de stockage des projets              |
-| `CORS_ORIGINS`            | `http://localhost:5173`       | Origines CORS autorisées (séparées par virgule) |
-| `CORS_METHODS`            | `GET,POST,PUT,DELETE,OPTIONS` | Méthodes CORS autorisées                        |
-| `CORS_HEADERS`            | voir `app/main.py`            | En-têtes CORS autorisés                         |
+| Variable                  | Défaut                        | Description                                                 |
+| ------------------------- | ----------------------------- | ----------------------------------------------------------- |
+| `OLLAMA_BASE_URL`         | `http://localhost:11434`      | URL du serveur Ollama                                       |
+| `OLLAMA_EMBED_MODEL`      | `nomic-embed-text`            | Modèle d'embeddings par défaut (modifiable dans Paramètres) |
+| `OLLAMA_GENERATION_MODEL` | `llama3`                      | Modèle de génération si aucun n'est choisi dans l'interface |
+| `DATA_DIR`                | `<repo>/data`                 | Répertoire de stockage des projets                          |
+| `CORS_ORIGINS`            | `http://localhost:5173`       | Origines CORS autorisées (séparées par virgule)             |
+| `CORS_METHODS`            | `GET,POST,PUT,DELETE,OPTIONS` | Méthodes CORS autorisées                                    |
+| `CORS_HEADERS`            | voir `app/main.py`            | En-têtes CORS autorisés                                     |
 
 D'autres variables affinent le découpage et l'injection de contexte (`MAX_CHUNK_CHARS`, `CHAT_*`, `CONDENSE_*`, `WRITING_*`) — voir `backend/app/config.py`.
 
-> Si tu changes `OLLAMA_EMBED_MODEL`, la collection ChromaDB du projet est recréée automatiquement au prochain accès.
+> Si le modèle d'embeddings d'un projet change (dans Paramètres ou via `OLLAMA_EMBED_MODEL`), sa collection ChromaDB est recréée au prochain accès : relance alors une réindexation.
 
-**Autres fournisseurs LLM** — l'UI (vue Paramètres) permet de basculer sur OpenAI ou Anthropic ; la clé API est transmise au backend par en-tête de requête.
+**Autres fournisseurs LLM** — l'UI (vue Paramètres) permet de basculer sur OpenAI, Anthropic, Google Gemini, Perplexity ou DeepSeek ; la clé API est transmise au backend par en-tête de requête.
 
 ---
 
 ## Stack technique
 
-| Couche                   | Technologie                                                                   |
-| ------------------------ | ----------------------------------------------------------------------------- |
-| Frontend                 | Vite 6, React 19, TypeScript 5, SCSS modules, Lucide React                    |
-| Éditeur de rédaction     | Tiptap, Paged.js                                                              |
-| Graphe                   | Cytoscape                                                                     |
-| Backend                  | FastAPI, Python 3.12, UV                                                      |
-| Recherche sémantique     | ChromaDB (vecteurs locaux)                                                    |
-| LLM                      | Ollama (local) — `nomic-embed-text` + `llama3` ; OpenAI / Anthropic en option |
-| Extraction documents     | liteparse + pypdf (PDF), python-docx, odfpy, striprtf, ebooklib, bibtexparser |
-| Linter / format frontend | ESLint 9 + typescript-eslint + Prettier                                       |
-| Tests frontend           | Vitest + Testing Library (jsdom)                                              |
-| Linter / typage backend  | Ruff + mypy (strict)                                                          |
-| Tests backend            | pytest                                                                        |
-| CI/CD                    | GitHub Actions                                                                |
+| Couche                   | Technologie                                                                                                           |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| Frontend                 | Vite 6, React 19, TypeScript 5, SCSS modules, Lucide React                                                            |
+| Éditeur de rédaction     | Tiptap, Paged.js                                                                                                      |
+| Graphe                   | Cytoscape                                                                                                             |
+| Backend                  | FastAPI, Python 3.12, UV                                                                                              |
+| Recherche sémantique     | ChromaDB (vecteurs locaux)                                                                                            |
+| LLM                      | Ollama (local) — `nomic-embed-text` + `llama3` par défaut ; OpenAI, Anthropic, Gemini, Perplexity, DeepSeek en option |
+| Extraction documents     | liteparse + pypdf (PDF), python-docx, odfpy, striprtf, ebooklib, bibtexparser                                         |
+| Linter / format frontend | ESLint 9 + typescript-eslint + Prettier                                                                               |
+| Tests frontend           | Vitest + Testing Library (jsdom)                                                                                      |
+| Linter / typage backend  | Ruff + mypy (strict)                                                                                                  |
+| Tests backend            | pytest                                                                                                                |
+| CI/CD                    | GitHub Actions                                                                                                        |
 
 ---
 
