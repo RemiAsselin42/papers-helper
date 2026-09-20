@@ -37,7 +37,8 @@ frontend/public/paged.polyfill.min.js
 .mypy_cache/
 
 # IDE
-.vscode/
+.vscode/*
+!.vscode/settings.json
 .idea/
 *.swp
 
