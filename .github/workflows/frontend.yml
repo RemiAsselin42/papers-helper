@@ -4,9 +4,10 @@ on:
   push:
     branches: [main]
     paths: ["frontend/**"]
+  # No paths filter on pull_request: every PR must report every gate, otherwise a PR
+  # that touches only docs or a workflow stays stuck on "Expected" once the checks are required.
   pull_request:
     branches: [main]
-    paths: ["frontend/**"]
 
 defaults:
   run:
@@ -14,7 +15,7 @@ defaults:
 
 jobs:
   lint-typecheck:
-    name: Lint & Typecheck
+    name: Frontend · Lint & Typecheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -48,7 +49,7 @@ jobs:
       - run: pnpm lint:arch
 
   test:
-    name: Test
+    name: Frontend · Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
