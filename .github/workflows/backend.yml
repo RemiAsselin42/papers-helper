@@ -4,9 +4,10 @@ on:
   push:
     branches: [main]
     paths: ["backend/**"]
+  # No paths filter on pull_request: every PR must report every gate, otherwise a PR
+  # that touches only docs or a workflow stays stuck on "Expected" once the checks are required.
   pull_request:
     branches: [main]
-    paths: ["backend/**"]
 
 defaults:
   run:
