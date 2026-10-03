@@ -1,0 +1,10 @@
+name: baseline-ratchet
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  ratchet:
+    uses: RemiAsselin42/claude-config/.github/workflows/baseline-ratchet.yml@lot-a-fermer-les-portes
