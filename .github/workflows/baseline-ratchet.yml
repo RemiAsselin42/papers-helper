@@ -1,0 +1,12 @@
+# Shared gate from claude-config: a gate baseline may only shrink.
+# labeled/unlabeled: setting the override label (baseline-update) must re-run the check.
+name: baseline-ratchet
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  ratchet:
+    uses: RemiAsselin42/claude-config/.github/workflows/baseline-ratchet.yml@v1
