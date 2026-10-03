@@ -26,19 +26,5 @@
       "severity": "error",
       "name": "layer-utils"
     }
-  },
-  {
-    "type": "dependency",
-    "from": "src/utils/providerConfig.ts",
-    "to": "src/api/llm.ts",
-    "unresolvedTo": "../api/llm",
-    "dependencyTypes": [
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "layer-utils"
-    }
   }
 ]
