@@ -1,0 +1,10 @@
+{
+  "package": "app",
+  "layers": [
+    {"name": "config", "modules": ["app", "app.config", "app.settings"]},
+    {"name": "adapters", "modules": ["app.ollama_service", "app.llm_service", "app.embeddings", "app.chroma", "app.parsers"]},
+    {"name": "domain", "modules": ["app.ingestion", "app.graph"]},
+    {"name": "web", "modules": ["app.routes"]},
+    {"name": "root", "modules": ["app.main"]}
+  ]
+}

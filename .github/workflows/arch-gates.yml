@@ -1,0 +1,17 @@
+# Import cycles and layer contracts, backend and frontend. The gate logic comes from
+# claude-config at the pinned tag; this repo only declares backend/arch-gates.json,
+# frontend/.dependency-cruiser.cjs and the baselines next to them.
+name: arch-gates
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  arch:
+    # Demo pin on the commit of claude-config PR #9; switched to @v2 once tagged.
+    uses: RemiAsselin42/claude-config/.github/workflows/arch-gates.yml@5beaf2f3a986cb835b72e0f09d6f27cb25d2f9b6
+    with:
+      python-config: backend/arch-gates.json
+      frontend-dir: frontend
