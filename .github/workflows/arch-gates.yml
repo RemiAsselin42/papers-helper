@@ -9,8 +9,11 @@ on:
 permissions:
   contents: read
 jobs:
-  arch:
-    uses: RemiAsselin42/claude-config/.github/workflows/arch-gates.yml@v2
+  arch-python:
+    uses: RemiAsselin42/claude-config/.github/workflows/arch-gates-python.yml@v3
     with:
-      python-config: backend/arch-gates.json
-      frontend-dir: frontend
+      config: backend/arch-gates.json
+  arch-frontend:
+    uses: RemiAsselin42/claude-config/.github/workflows/arch-gates-frontend.yml@v3
+    with:
+      dir: frontend
