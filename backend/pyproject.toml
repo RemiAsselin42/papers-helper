@@ -46,3 +46,12 @@ select = ["E", "F", "I", "UP"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
+[tool.mutmut]
+# Gate 3, mutation testing, scoped to one module: pure, deterministic parsing logic.
+source_paths = ["app/parsers/_bibtex.py"]
+# mutmut copies what it mutates into mutants/ and runs the tests from there; the
+# tests import app.parsers (whose __init__ imports every parser), so the whole
+# package is copied along, unmutated, and only _bibtex gets instrumented.
+also_copy = ["app"]
+# Per mutant, only the tests of the target module run: test_parsers.py covers _bibtex.
+pytest_add_cli_args_test_selection = ["tests/test_parsers.py"]
