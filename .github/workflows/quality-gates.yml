@@ -1,0 +1,23 @@
+# Cyclomatic complexity and duplication may only shrink, backend and frontend. The
+# gate logic comes from claude-config at the pinned tag; this repo keeps
+# complexity-baseline.json and duplication-baseline.json next to backend/pyproject.toml
+# and frontend/package.json. The tools run with the rule imposed on the command line:
+# the repo's ruff and eslint configurations stay as they are, no noqa, no
+# eslint-disable. .quality-* (the reports) is ignored.
+name: quality-gates
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  quality-python:
+    uses: RemiAsselin42/claude-config/.github/workflows/quality-python.yml@v5
+    with:
+      dir: backend
+      package: app
+  quality-frontend:
+    uses: RemiAsselin42/claude-config/.github/workflows/quality-frontend.yml@v5
+    with:
+      dir: frontend
