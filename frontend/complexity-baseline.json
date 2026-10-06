@@ -1,0 +1,172 @@
+[
+  [
+    "src/App.tsx",
+    "Function 'renderMain'",
+    18
+  ],
+  [
+    "src/components/chat/ChatMessages.tsx",
+    "Arrow function",
+    16
+  ],
+  [
+    "src/components/chat/ChatView.tsx",
+    "Async function 'handleRegenerate'",
+    15
+  ],
+  [
+    "src/components/chat/ChatView.tsx",
+    "Async function 'send'",
+    11
+  ],
+  [
+    "src/components/chat/ChatView.tsx",
+    "Function 'ChatView'",
+    17
+  ],
+  [
+    "src/components/chat/ModelSelector.tsx",
+    "Arrow function",
+    13
+  ],
+  [
+    "src/components/citations/CitationResultCard.tsx",
+    "Function 'CitationResultCard'",
+    21
+  ],
+  [
+    "src/components/citations/CitationsView.tsx",
+    "Async arrow function",
+    12
+  ],
+  [
+    "src/components/citations/CitationsView.tsx",
+    "Function 'CitationsView'",
+    25
+  ],
+  [
+    "src/components/graph/GraphCanvas.styles.ts",
+    "Function 'formatCslName'",
+    13
+  ],
+  [
+    "src/components/graph/GraphView.tsx",
+    "Arrow function",
+    11
+  ],
+  [
+    "src/components/graph/GraphView.tsx",
+    "Function 'GraphView'",
+    48
+  ],
+  [
+    "src/components/layout/ProjectSwitcher.tsx",
+    "Function 'ProjectSwitcher'",
+    15
+  ],
+  [
+    "src/components/layout/Sidebar.tsx",
+    "Function 'Sidebar'",
+    18
+  ],
+  [
+    "src/components/modals/OllamaSetupModal.tsx",
+    "Function 'OllamaSetupModal'",
+    24
+  ],
+  [
+    "src/components/problematique/ProblematiqueRead.tsx",
+    "Function 'ProblematiqueRead'",
+    15
+  ],
+  [
+    "src/components/settings/SettingsView.tsx",
+    "Function 'SettingsView'",
+    22
+  ],
+  [
+    "src/components/sources/DropZone.tsx",
+    "Arrow function",
+    17
+  ],
+  [
+    "src/components/sources/DropZone.tsx",
+    "Function 'DropZone'",
+    19
+  ],
+  [
+    "src/components/sources/ImportProgressToast.tsx",
+    "Arrow function",
+    14
+  ],
+  [
+    "src/components/sources/ImportProgressToast.tsx",
+    "Arrow function #2",
+    38
+  ],
+  [
+    "src/components/sources/MetadataModal.tsx",
+    "Function 'MetadataModal'",
+    22
+  ],
+  [
+    "src/components/sources/MetadataModal.tsx",
+    "Function 'progressLines'",
+    17
+  ],
+  [
+    "src/components/sources/SourceCard.tsx",
+    "Function 'SourceCard'",
+    23
+  ],
+  [
+    "src/components/sources/SourceList.filters.test.ts",
+    "Function 'mk'",
+    16
+  ],
+  [
+    "src/components/sources/SourceList.filters.ts",
+    "Arrow function",
+    18
+  ],
+  [
+    "src/components/sources/SourceList.tsx",
+    "Arrow function",
+    11
+  ],
+  [
+    "src/components/sources/SourceList.tsx",
+    "Function 'SourceList'",
+    21
+  ],
+  [
+    "src/components/writing/WritingView.tsx",
+    "Function 'WritingView'",
+    22
+  ],
+  [
+    "src/hooks/useAutoEnrich.ts",
+    "Async arrow function",
+    21
+  ],
+  [
+    "src/hooks/useIndexingPass.ts",
+    "Arrow function",
+    14
+  ],
+  [
+    "src/hooks/useMentionPicker.ts",
+    "Arrow function",
+    11
+  ],
+  [
+    "src/test/SourceList.filters.author.test.ts",
+    "Function 'mk'",
+    16
+  ],
+  [
+    "src/test/writing.test.tsx",
+    "Arrow function",
+    16
+  ]
+]
