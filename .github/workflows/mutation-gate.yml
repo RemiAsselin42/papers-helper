@@ -3,10 +3,13 @@
 # what to mutate ([tool.mutmut] in backend/pyproject.toml) and keeps
 # backend/mutation-baseline.json. mutmut refuses native Windows: this job is where
 # the gate runs.
+#
+# No paths filter on pull_request: the check is required on main, and a required
+# check that never reports leaves the PR "Expected", blocked for good. The run takes
+# about ten seconds; it is cheaper than a PR nobody can merge.
 name: mutation-gate
 on:
   pull_request:
-    paths: ["backend/**"]
   push:
     branches: [main]
     paths: ["backend/**"]
