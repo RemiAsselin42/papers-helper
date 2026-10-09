@@ -9,4 +9,4 @@ permissions:
   pull-requests: write
 jobs:
   ratchet:
-    uses: RemiAsselin42/claude-config/.github/workflows/baseline-ratchet.yml@v1
+    uses: RemiAsselin42/claude-config/.github/workflows/baseline-ratchet.yml@v6
