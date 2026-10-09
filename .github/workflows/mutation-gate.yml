@@ -17,6 +17,6 @@ permissions:
   contents: read
 jobs:
   mutation:
-    uses: RemiAsselin42/claude-config/.github/workflows/mutation-gate.yml@v4
+    uses: RemiAsselin42/claude-config/.github/workflows/mutation-gate.yml@v6
     with:
       dir: backend

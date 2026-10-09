@@ -13,11 +13,11 @@ permissions:
   contents: read
 jobs:
   quality-python:
-    uses: RemiAsselin42/claude-config/.github/workflows/quality-python.yml@v5
+    uses: RemiAsselin42/claude-config/.github/workflows/quality-python.yml@v6
     with:
       dir: backend
       package: app
   quality-frontend:
-    uses: RemiAsselin42/claude-config/.github/workflows/quality-frontend.yml@v5
+    uses: RemiAsselin42/claude-config/.github/workflows/quality-frontend.yml@v6
     with:
       dir: frontend
